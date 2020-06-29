@@ -80,11 +80,13 @@ case class GpuShuffledHashJoinExec(
     left: SparkPlan,
     right: SparkPlan) extends BinaryExecNode with GpuHashJoin {
 
-  val buildSide: org.apache.spark.sql.execution.joins.BuildSide = {
-    org.apache.spark.sql.execution.joins.BuildRight
-  }
+  val buildSide = {
+    gpuBuildSide match {
+      case GpuBuildRight => org.apache.spark.sql.execution.joins.BuildRight
+      case GpuBuildLeft => org.apache.spark.sql.execution.joins.BuildLeft
+    }
 
-  type GpuBuildSide = org.apache.spark.sql.execution.joins.BuildSide
+  }
 
   override lazy val additionalMetrics: Map[String, SQLMetric] = Map(
     "buildDataSize" -> SQLMetrics.createSizeMetric(sparkContext, "build side size"),

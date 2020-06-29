@@ -15,8 +15,6 @@
  */
 package com.nvidia.spark.rapids
 
-import scala.reflect.runtime.universe._
-
 import ai.rapids.cudf.{NvtxColor, Table}
 
 import org.apache.spark.TaskContext
@@ -26,6 +24,11 @@ import org.apache.spark.sql.catalyst.plans.{ExistenceJoin, FullOuter, Inner, Inn
 import org.apache.spark.sql.execution.joins.HashJoin
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
+
+trait GpuOverHashJoin extends GpuExec with HashJoin {
+  // val buildSide = org.apache.spark.sql.execution.joins.BuildRight
+}
+
 
 object GpuHashJoin {
   def tagJoin(
@@ -58,7 +61,7 @@ case object GpuBuildRight extends GpuBuildSide
 case object GpuBuildLeft extends GpuBuildSide
 
 
-trait GpuHashJoin extends GpuExec with HashJoin with Logging {
+trait GpuHashJoin extends GpuOverHashJoin with Logging {
 
   def getBuildSide: GpuBuildSide = {
     buildSide match {
