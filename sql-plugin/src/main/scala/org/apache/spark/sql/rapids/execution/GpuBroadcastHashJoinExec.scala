@@ -90,7 +90,7 @@ class GpuBroadcastHashJoinMeta(
     GpuBroadcastHashJoinExec(
       leftKeys.map(_.convertToGpu()),
       rightKeys.map(_.convertToGpu()),
-      join.joinType, join.buildSide,
+      join.joinType, getBuildSide(join),
       condition.map(_.convertToGpu()),
       left, right)
   }
