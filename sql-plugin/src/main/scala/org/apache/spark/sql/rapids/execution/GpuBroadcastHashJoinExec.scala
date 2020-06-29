@@ -46,12 +46,25 @@ class GpuBroadcastHashJoinMeta(
 
   override val childExprs: Seq[BaseExprMeta[_]] = leftKeys ++ rightKeys ++ condition
 
+  private def getBuildSide(join: BroadcastHashJoinExec): GpuBuildSide = {
+    join.buildSide match {
+      case e: join.buildSide.type if e.toString.contains("BuildRight") => {
+        GpuBuildRight
+      }
+      case l: join.buildSide.type if l.toString.contains("BuildLeft") => {
+        GpuBuildLeft
+      }
+      case _ => throw new Exception("unknown buildSide Type")
+    }
+  }
+
+
   override def tagPlanForGpu(): Unit = {
     GpuHashJoin.tagJoin(this, join.joinType, join.leftKeys, join.rightKeys, join.condition)
 
-    val buildSide = join.buildSide match {
-      case BuildLeft => childPlans(0)
-      case BuildRight => childPlans(1)
+    val buildSide = getBuildSide(join) match {
+      case GpuBuildLeft => childPlans(0)
+      case GpuBuildRight => childPlans(1)
     }
 
     if (!buildSide.canThisBeReplaced) {
@@ -67,9 +80,9 @@ class GpuBroadcastHashJoinMeta(
     val left = childPlans(0).convertIfNeeded()
     val right = childPlans(1).convertIfNeeded()
     // The broadcast part of this must be a BroadcastExchangeExec
-    val buildSide = join.buildSide match {
-      case BuildLeft => left
-      case BuildRight => right
+    val buildSide = getBuildSide(join) match {
+      case GpuBuildLeft => left
+      case GpuBuildRight => right
     }
     if (!buildSide.isInstanceOf[GpuBroadcastExchangeExec]) {
       throw new IllegalStateException("the broadcast must be on the GPU too")
@@ -87,7 +100,7 @@ case class GpuBroadcastHashJoinExec(
     leftKeys: Seq[Expression],
     rightKeys: Seq[Expression],
     joinType: JoinType,
-    buildSide: BuildSide,
+    gpuBuildSide: GpuBuildSide,
     condition: Option[Expression],
     left: SparkPlan,
     right: SparkPlan) extends BinaryExecNode with GpuHashJoin {
@@ -99,10 +112,10 @@ case class GpuBroadcastHashJoinExec(
 
   override def requiredChildDistribution: Seq[Distribution] = {
     val mode = HashedRelationBroadcastMode(buildKeys)
-    buildSide match {
-      case BuildLeft =>
+    gpuBuildSide match {
+      case  GpuBuildLeft =>
         BroadcastDistribution(mode) :: UnspecifiedDistribution :: Nil
-      case BuildRight =>
+      case GpuBuildRight =>
         UnspecifiedDistribution :: BroadcastDistribution(mode) :: Nil
     }
   }

@@ -23,7 +23,6 @@ import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.{ExistenceJoin, FullOuter, Inner, InnerLike, JoinType, LeftAnti, LeftExistence, LeftOuter, LeftSemi, RightOuter}
-// import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, HashJoin}
 import org.apache.spark.sql.execution.joins.HashJoin
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
@@ -61,10 +60,7 @@ case object GpuBuildLeft extends GpuBuildSide
 
 trait GpuHashJoin extends GpuExec with HashJoin with Logging {
 
-  def getType[T: TypeTag](obj: T) = typeOf[T]
-
   def getBuildSide: GpuBuildSide = {
-    logInfo("Tom in get build side " + getType(buildSide).toString)
     buildSide match {
       case e: buildSide.type if e.toString.contains("BuildRight") => {
         logInfo("Tom buildright " + e)
@@ -76,14 +72,9 @@ trait GpuHashJoin extends GpuExec with HashJoin with Logging {
       }
       case _ => throw new Exception("unknown buildSide Type")
     }
-   /* if (getType(buildSide).toString.contains("BuildRight")) {
-      logInfo("Tom in build side Right")
-      GpuBuildRight
-    } else {
-      logInfo("Tom in build side Left")
-      GpuBuildLeft
-    } */
   }
+
+  def buildSide: Any = throw new Exception("Shouldn't use this")
 
   override def output: Seq[Attribute] = {
     joinType match {

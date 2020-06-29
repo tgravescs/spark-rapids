@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.physical.{Distribution, HashClusteredDistribution}
 import org.apache.spark.sql.execution.{BinaryExecNode, SparkPlan}
-import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, BuildSide, ShuffledHashJoinExec}
+import org.apache.spark.sql.execution.joins.ShuffledHashJoinExec
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -48,12 +48,24 @@ class GpuShuffledHashJoinMeta(
     GpuHashJoin.tagJoin(this, join.joinType, join.leftKeys, join.rightKeys, join.condition)
   }
 
+  def getBuildSide(join: ShuffledHashJoinExec): GpuBuildSide = {
+    join.buildSide match {
+      case e: join.buildSide.type if e.toString.contains("BuildRight") => {
+        GpuBuildRight
+      }
+      case l: join.buildSide.type if l.toString.contains("BuildLeft") => {
+        GpuBuildLeft
+      }
+      case _ => throw new Exception("unknown buildSide Type")
+    }
+  }
+
   override def convertToGpu(): GpuExec =
     GpuShuffledHashJoinExec(
       leftKeys.map(_.convertToGpu()),
       rightKeys.map(_.convertToGpu()),
       join.joinType,
-      join.buildSide,
+      getBuildSide(join),
       condition.map(_.convertToGpu()),
       childPlans(0).convertIfNeeded(),
       childPlans(1).convertIfNeeded())
@@ -63,7 +75,7 @@ case class GpuShuffledHashJoinExec(
     leftKeys: Seq[Expression],
     rightKeys: Seq[Expression],
     joinType: JoinType,
-    buildSide: BuildSide,
+    gpuBuildSide: GpuBuildSide,
     condition: Option[Expression],
     left: SparkPlan,
     right: SparkPlan) extends BinaryExecNode with GpuHashJoin {
@@ -83,9 +95,9 @@ case class GpuShuffledHashJoinExec(
       "GpuShuffledHashJoin does not support the execute() code path.")
   }
 
-  override def childrenCoalesceGoal: Seq[CoalesceGoal] = buildSide match {
-    case BuildLeft => Seq(RequireSingleBatch, null)
-    case BuildRight => Seq(null, RequireSingleBatch)
+  override def childrenCoalesceGoal: Seq[CoalesceGoal] = gpuBuildSide match {
+    case GpuBuildLeft => Seq(RequireSingleBatch, null)
+    case GpuBuildRight => Seq(null, RequireSingleBatch)
   }
 
   override def doExecuteColumnar() : RDD[ColumnarBatch] = {

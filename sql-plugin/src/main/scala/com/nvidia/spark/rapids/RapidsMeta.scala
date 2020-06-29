@@ -27,7 +27,7 @@ import org.apache.spark.sql.connector.read.Scan
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
-import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BuildLeft, BuildRight, ShuffledHashJoinExec, SortMergeJoinExec}
+import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, ShuffledHashJoinExec, SortMergeJoinExec}
 import org.apache.spark.sql.types.{CalendarIntervalType, DataType, DataTypes, StringType}
 
 trait ConfKeysAndIncompat {
@@ -410,12 +410,24 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     wrapped.withNewChildren(childPlans.map(_.convertIfNeeded()))
   }
 
+  private def getBuildSide(join: BroadcastHashJoinExec): GpuBuildSide = {
+    join.buildSide match {
+      case e: join.buildSide.type if e.toString.contains("BuildRight") => {
+        GpuBuildRight
+      }
+      case l: join.buildSide.type if l.toString.contains("BuildLeft") => {
+        GpuBuildLeft
+      }
+      case _ => throw new Exception("unknown buildSide Type")
+    }
+  }
+
   private def findShuffleExchanges(): Seq[SparkPlanMeta[ShuffleExchangeExec]] = wrapped match {
     case _: ShuffleExchangeExec =>
       this.asInstanceOf[SparkPlanMeta[ShuffleExchangeExec]] :: Nil
-    case bkj: BroadcastHashJoinExec => bkj.buildSide match {
-      case BuildLeft => childPlans(1).findShuffleExchanges()
-      case BuildRight => childPlans(0).findShuffleExchanges()
+    case bkj: BroadcastHashJoinExec => getBuildSide(bkj) match {
+      case GpuBuildLeft => childPlans(1).findShuffleExchanges()
+      case GpuBuildRight => childPlans(0).findShuffleExchanges()
     }
     case _ => childPlans.flatMap(_.findShuffleExchanges())
   }
