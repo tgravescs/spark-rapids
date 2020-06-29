@@ -73,9 +73,7 @@ trait GpuHashJoin extends GpuExec with HashJoin with Logging {
       case _ => throw new Exception("unknown buildSide Type")
     }
   }
-
-  def buildSide: Any = throw new Exception("Shouldn't use this")
-
+  
   override def output: Seq[Attribute] = {
     joinType match {
       case _: InnerLike =>

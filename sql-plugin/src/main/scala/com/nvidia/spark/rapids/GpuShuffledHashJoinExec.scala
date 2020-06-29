@@ -80,6 +80,8 @@ case class GpuShuffledHashJoinExec(
     left: SparkPlan,
     right: SparkPlan) extends BinaryExecNode with GpuHashJoin {
 
+  def buildSide: Any = throw new Exception("Shouldn't use this")
+
   override lazy val additionalMetrics: Map[String, SQLMetric] = Map(
     "buildDataSize" -> SQLMetrics.createSizeMetric(sparkContext, "build side size"),
     "buildTime" -> SQLMetrics.createNanoTimingMetric(sparkContext, "build time"),

@@ -105,6 +105,8 @@ case class GpuBroadcastHashJoinExec(
     left: SparkPlan,
     right: SparkPlan) extends BinaryExecNode with GpuHashJoin {
 
+  def buildSide: Any = throw new Exception("Shouldn't use this")
+
   override lazy val additionalMetrics: Map[String, SQLMetric] = Map(
     "joinOutputRows" -> SQLMetrics.createMetric(sparkContext, "join output rows"),
     "joinTime" -> SQLMetrics.createNanoTimingMetric(sparkContext, "join time"),
