@@ -15,12 +15,16 @@
  */
 package com.nvidia.spark.rapids
 
+import scala.reflect.runtime.universe._
+
 import ai.rapids.cudf.{NvtxColor, Table}
 
 import org.apache.spark.TaskContext
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.{ExistenceJoin, FullOuter, Inner, InnerLike, JoinType, LeftAnti, LeftExistence, LeftOuter, LeftSemi, RightOuter}
-import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, HashJoin}
+// import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, HashJoin}
+import org.apache.spark.sql.execution.joins.HashJoin
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 
@@ -48,7 +52,38 @@ object GpuHashJoin {
   }
 }
 
-trait GpuHashJoin extends GpuExec with HashJoin {
+sealed abstract class GpuBuildSide
+
+case object GpuBuildRight extends GpuBuildSide
+
+case object GpuBuildLeft extends GpuBuildSide
+
+
+trait GpuHashJoin extends GpuExec with HashJoin with Logging {
+
+  def getType[T: TypeTag](obj: T) = typeOf[T]
+
+  def getBuildSide: GpuBuildSide = {
+    logInfo("Tom in get build side " + getType(buildSide).toString)
+    buildSide match {
+      case e: buildSide.type if e.toString.contains("BuildRight") => {
+        logInfo("Tom buildright " + e)
+        GpuBuildRight
+      }
+      case l: buildSide.type if l.toString.contains("BuildLeft") => {
+        logInfo("Tom buildleft "+ l)
+        GpuBuildLeft
+      }
+      case _ => throw new Exception("unknown buildSide Type")
+    }
+   /* if (getType(buildSide).toString.contains("BuildRight")) {
+      logInfo("Tom in build side Right")
+      GpuBuildRight
+    } else {
+      logInfo("Tom in build side Left")
+      GpuBuildLeft
+    } */
+  }
 
   override def output: Seq[Attribute] = {
     joinType match {
@@ -74,9 +109,9 @@ trait GpuHashJoin extends GpuExec with HashJoin {
       "Join keys from two sides should have same types")
     val lkeys = GpuBindReferences.bindGpuReferences(leftKeys, left.output)
     val rkeys = GpuBindReferences.bindGpuReferences(rightKeys, right.output)
-    buildSide match {
-      case BuildLeft => (lkeys, rkeys)
-      case BuildRight => (rkeys, lkeys)
+    getBuildSide match {
+      case GpuBuildLeft => (lkeys, rkeys)
+      case GpuBuildRight => (rkeys, lkeys)
     }
   }
 
@@ -193,9 +228,9 @@ trait GpuHashJoin extends GpuExec with HashJoin {
 
     val nvtxRange = new NvtxWithMetrics("hash join", NvtxColor.ORANGE, joinTime)
     val joined = try {
-      buildSide match {
-        case BuildLeft => doJoinLeftRight(builtTable, streamedTable)
-        case BuildRight => doJoinLeftRight(streamedTable, builtTable)
+      getBuildSide match {
+        case GpuBuildLeft => doJoinLeftRight(builtTable, streamedTable)
+        case GpuBuildRight => doJoinLeftRight(streamedTable, builtTable)
       }
     } finally {
       streamedTable.close()
