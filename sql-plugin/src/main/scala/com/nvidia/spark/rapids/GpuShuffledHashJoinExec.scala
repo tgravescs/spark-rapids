@@ -25,16 +25,17 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.physical.{Distribution, HashClusteredDistribution}
 import org.apache.spark.sql.execution.{BinaryExecNode, SparkPlan}
-import org.apache.spark.sql.execution.joins.ShuffledHashJoinExec
+import org.apache.spark.sql.execution.joins._
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.vectorized.ColumnarBatch
+import org.apache.spark.internal.Logging
 
 class GpuShuffledHashJoinMeta(
     join: ShuffledHashJoinExec,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat)
-  extends SparkPlanMeta[ShuffledHashJoinExec](join, conf, parent, rule) {
+  extends SparkPlanMeta[ShuffledHashJoinExec](join, conf, parent, rule) with Logging {
   val leftKeys: Seq[BaseExprMeta[_]] =
     join.leftKeys.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
   val rightKeys: Seq[BaseExprMeta[_]] =
@@ -59,34 +60,43 @@ class GpuShuffledHashJoinMeta(
       case _ => throw new Exception("unknown buildSide Type")
     }
   }
+  println("Tom 3 gpu build side is: " + join.buildSide.toString)
 
-  override def convertToGpu(): GpuExec =
+  override def convertToGpu(): GpuExec = {
+    println("Tom 2 gpu build side is: " + join.buildSide.toString)
     GpuShuffledHashJoinExec(
       leftKeys.map(_.convertToGpu()),
       rightKeys.map(_.convertToGpu()),
       join.joinType,
-      getBuildSide(join),
+      join.buildSide,
       condition.map(_.convertToGpu()),
       childPlans(0).convertIfNeeded(),
       childPlans(1).convertIfNeeded())
+  }
 }
 
 case class GpuShuffledHashJoinExec(
     leftKeys: Seq[Expression],
     rightKeys: Seq[Expression],
     joinType: JoinType,
-    gpuBuildSide: GpuBuildSide,
+    buildSide: org.apache.spark.sql.execution.joins.BuildSide,
     condition: Option[Expression],
     left: SparkPlan,
-    right: SparkPlan) extends BinaryExecNode with GpuHashJoin {
+    right: SparkPlan) extends BinaryExecNode with GpuHashJoin with Logging {
 
-  val buildSide = {
-    gpuBuildSide match {
+  logWarning("Tom 1 gpu build side is: " + buildSide)
+
+  /*
+  val buildSide: org.apache.spark.sql.execution.joins.BuildSide = {
+    logInfo("Tom gpu build side is: " + gpuBuildSide)
+    val res = gpuBuildSide match {
       case GpuBuildRight => org.apache.spark.sql.execution.joins.BuildRight
       case GpuBuildLeft => org.apache.spark.sql.execution.joins.BuildLeft
     }
-
+    logInfo("Tom build side is: " + res)
+    res
   }
+  */
 
   override lazy val additionalMetrics: Map[String, SQLMetric] = Map(
     "buildDataSize" -> SQLMetrics.createSizeMetric(sparkContext, "build side size"),
@@ -103,9 +113,9 @@ case class GpuShuffledHashJoinExec(
       "GpuShuffledHashJoin does not support the execute() code path.")
   }
 
-  override def childrenCoalesceGoal: Seq[CoalesceGoal] = gpuBuildSide match {
-    case GpuBuildLeft => Seq(RequireSingleBatch, null)
-    case GpuBuildRight => Seq(null, RequireSingleBatch)
+  override def childrenCoalesceGoal: Seq[CoalesceGoal] = buildSide match {
+    case buildLeft => Seq(RequireSingleBatch, null)
+    case buildRight => Seq(null, RequireSingleBatch)
   }
 
   override def doExecuteColumnar() : RDD[ColumnarBatch] = {
