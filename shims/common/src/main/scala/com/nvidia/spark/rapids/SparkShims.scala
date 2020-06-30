@@ -16,17 +16,8 @@
 
 package com.nvidia.spark.rapids.shims
 
-import org.apache.spark.{SPARK_BUILD_USER, SPARK_VERSION}
 
-object ShimLoaderScala {
+class SparkShims() {
 
- def getVersion(): String = {
-    // hack for databricks, try to find something more reliable?
-    if (SPARK_BUILD_USER.equals("Databricks")) {
-        SPARK_VERSION + "-databricks"
-    } else {
-      SPARK_VERSION
-    }
-  }
 
 }
