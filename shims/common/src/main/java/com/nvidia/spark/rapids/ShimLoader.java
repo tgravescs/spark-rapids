@@ -20,8 +20,7 @@ package com.nvidia.spark.rapids.shims;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.spark.SPARK_BUILD_USER;
-import org.apache.spark.SPARK_VERSION;
+// import com.nvidia.spark.shims.ShimLoaderScala;
 
 /**
  * ShimLoader.
@@ -56,7 +55,7 @@ public abstract class ShimLoader {
   }
 
   private static <T> T loadShims(Map<String, String> classMap, Class<T> xface) {
-    String vers = getMajorVersion();
+    String vers = "3.0.0"; // ShimLoaderScala.getVersion();
     String className = classMap.get(vers);
     return createShim(className, xface);
   }
@@ -70,6 +69,7 @@ public abstract class ShimLoader {
     }
   }
 
+  /*
   public static String getVersion() {
     String vers = SPARK_VERSION;
     String finalVer = vers;
@@ -79,6 +79,7 @@ public abstract class ShimLoader {
     }
     return finalVer;
   }
+  */
 
   private ShimLoader() {
     // prevent instantiation
