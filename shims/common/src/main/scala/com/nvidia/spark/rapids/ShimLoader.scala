@@ -19,8 +19,9 @@ package com.nvidia.spark.rapids.shims
 import scala.collection.immutable.HashMap
 
 import org.apache.spark.{SPARK_BUILD_USER, SPARK_VERSION}
+import org.apache.spark.internal.Logging
 
-object ShimLoader {
+object ShimLoader extends Logging {
 
   val SPARK30DATABRICKSSVERSIONNAME = "3.0.0-databricks"
   val SPARK30VERSIONNAME = "3.0.0"
@@ -39,26 +40,30 @@ object ShimLoader {
    * Factory method to get an instance of HadoopShims based on the
    * version of Hadoop on the classpath.
    */
-  def getSparkShims: Unit = {
+  def getSparkShims: Option[SparkShims] = {
     if (sparkShims.isEmpty) {
       sparkShims = loadShims(SPARK_SHIM_CLASSES)
     }
     sparkShims
   }
 
-  private def loadShims(classMap: Map[String, String]): SparkShim = {
+  private def loadShims(classMap: Map[String, String]): Option[SparkShims] = {
     val vers = getVersion();
     val className = classMap.get(vers)
-    className.map(createShim(_)).orElse(logWarning(s"No shim layer for $vers"))
+    if (className.isEmpty) {
+      logWarning(s"No shim layer for $vers")
+      None
+    } else {
+      Some(createShim(className.get))
+    }
   }
 
-  private def createShim(className: String): SparkShim = try {
+  private def createShim(className: String): SparkShims = try {
     val clazz = Class.forName(className)
-    val res = clazz.newInstance().asInstanceOf[SparkShim]
+    val res = clazz.newInstance().asInstanceOf[SparkShims]
     res
   } catch {
-    case e: Nothing =>
-      throw new RuntimeException("Could not load shims in class " + className, e)
+    case e: Exception => throw new RuntimeException("Could not load shims in class " + className, e)
   }
 
   def getVersion(): String = {
