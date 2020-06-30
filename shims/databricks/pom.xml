@@ -95,86 +95,10 @@
     </dependencies>
 
     <build>
-        <resources>
-          <resource>
-            <!-- Include the properties file to provide the build information. -->
-            <directory>${project.build.directory}/extra-resources</directory>
-            <filtering>true</filtering>
-          </resource>
-          <resource>
-            <directory>${project.basedir}/..</directory>
-            <targetPath>META-INF</targetPath>
-            <includes>
-              <!-- The NOTICE will be taken care of by the antrun task below -->
-              <include>LICENSE</include>
-            </includes>
-          </resource>
-        </resources>
-        <plugins>
-            <plugin>
-              <artifactId>maven-antrun-plugin</artifactId>
-              <executions>
-                <execution>
-                  <id>copy-notice</id>
-                  <goals>
-                    <goal>run</goal>
-                  </goals>
-                  <phase>process-resources</phase>
-                  <configuration>
-                    <target>
-                      <!-- copy NOTICE-binary to NOTICE -->
-                      <copy
-                          todir="${project.build.directory}/classes/META-INF/"
-                          verbose="true">
-                        <fileset dir="${project.basedir}/..">
-                          <include name="NOTICE-binary"/>
-                        </fileset>
-                        <mapper type="glob" from="*-binary" to="*"/>
-                      </copy>
-                    </target>
-                  </configuration>
-                </execution>
-              </executions>
-            </plugin>
+	<plugins>
             <plugin>
                 <groupId>net.alchim31.maven</groupId>
                 <artifactId>scala-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>update_config</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>run</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <launchers>
-                        <launcher>
-                            <id>update_rapids_config</id>
-                            <mainClass>com.nvidia.spark.rapids.RapidsConf</mainClass>
-                            <args>
-                                <arg>${project.basedir}/../docs/configs.md</arg>
-                            </args>
-                        </launcher>
-                    </launchers>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.scalastyle</groupId>
-                <artifactId>scalastyle-maven-plugin</artifactId>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.rat</groupId>
-                <artifactId>apache-rat-plugin</artifactId>
-                <configuration>
-                    <excludes>
-                        <exclude>dependency-reduced-pom.xml</exclude>
-                        <exclude>src/main/format/README.md</exclude>
-                        <exclude>src/main/java/com/nvidia/spark/rapids/format/*</exclude>
-                        <exclude>src/test/resources/**</exclude>
-                    </excludes>
-                </configuration>
             </plugin>
         </plugins>
     </build>

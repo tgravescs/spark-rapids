@@ -71,10 +71,10 @@
     </developers>
 
     <modules>
+        <module>shims</module>
         <module>dist</module>
         <module>shuffle-plugin</module>
         <module>sql-plugin</module>
-        <module>shims</module>
         <module>tests</module>
         <module>integration_tests</module>
         <module>api_validation</module>
@@ -174,6 +174,12 @@
                 <artifactId>scala-library</artifactId>
                 <version>${scala.version}</version>
                 <scope>provided</scope>
+            </dependency>
+            <dependency>
+              <groupId>org.apache.spark</groupId>
+              <artifactId>spark-core_${scala.binary.version}</artifactId>
+              <version>${spark.version}</version>
+              <scope>provided</scope>
             </dependency>
             <dependency>
               <groupId>org.apache.spark</groupId>

@@ -40,5 +40,6 @@
 
     <modules>
         <module>databricks</module>
+        <module>common</module>
     </modules>
 </project>
