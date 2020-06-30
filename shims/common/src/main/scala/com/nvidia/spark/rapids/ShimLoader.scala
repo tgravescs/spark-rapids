@@ -25,7 +25,7 @@ object ShimLoader {
   val SPARK30DATABRICKSSVERSIONNAME = "3.0.0-databricks"
   val SPARK30VERSIONNAME = "3.0.0"
 
-  private var sparkShims: SparkShims = null
+  private var sparkShims: Option[SparkShims] = None
 
   /**
    * The names of the classes for shimming Spark for each major version.
@@ -40,26 +40,26 @@ object ShimLoader {
    * version of Hadoop on the classpath.
    */
   def getSparkShims: Unit = {
-    if (sparkShims == null) {
-      sparkShims = loadShims(SPARK_SHIM_CLASSES, classOf[Nothing])
+    if (sparkShims.isEmpty) {
+      sparkShims = loadShims(SPARK_SHIM_CLASSES)
     }
     sparkShims
   }
 
-  private def loadShims[T](classMap: Map[String, String]) = {
+  private def loadShims(classMap: Map[String, String]): SparkShim = {
     val vers = getVersion();
     val className = classMap.get(vers)
-    createShim(className)
+    className.map(createShim(_)).orElse(logWarning(s"No shim layer for $vers"))
   }
 
-  private def createShim[T](className: String) = try {
+  private def createShim(className: String): SparkShim = try {
     val clazz = Class.forName(className)
-    clazz.newInstance.asInstanceOf[SparkShim]
+    val res = clazz.newInstance().asInstanceOf[SparkShim]
+    res
   } catch {
     case e: Nothing =>
       throw new RuntimeException("Could not load shims in class " + className, e)
   }
-
 
   def getVersion(): String = {
     // hack for databricks, try to find something more reliable?
