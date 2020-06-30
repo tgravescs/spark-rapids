@@ -60,10 +60,10 @@ class GpuShuffledHashJoinMeta(
       case _ => throw new Exception("unknown buildSide Type")
     }
   }
-  println("Tom 3 gpu build side is: " + join.buildSide.toString)
+  logWarning("Tom 3 gpu build side is: " + join.buildSide.toString)
 
   override def convertToGpu(): GpuExec = {
-    println("Tom 2 gpu build side is: " + join.buildSide.toString)
+    logError("Tom 2 gpu build side is: " + join.buildSide.toString)
     GpuShuffledHashJoinExec(
       leftKeys.map(_.convertToGpu()),
       rightKeys.map(_.convertToGpu()),

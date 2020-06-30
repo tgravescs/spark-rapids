@@ -64,6 +64,7 @@ class GpuSortMergeJoinMeta(
   }
 
   override def convertToGpu(): GpuExec = {
+    logWarning("Tom 5 sort merge join exec: ")
     GpuShuffledHashJoinExec(
       leftKeys.map(_.convertToGpu()),
       rightKeys.map(_.convertToGpu()),
