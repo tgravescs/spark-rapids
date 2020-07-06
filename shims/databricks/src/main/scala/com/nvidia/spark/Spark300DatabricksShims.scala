@@ -16,6 +16,7 @@
 
 package com.nvidia.spark.rapids.shims
 
+import com.nvidia.spark.rapids.{GpuBuildLeft, GpuBuildRight, GpuBuildSide}
 import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight, BuildSide}
 import org.apache.spark.internal.Logging
 
