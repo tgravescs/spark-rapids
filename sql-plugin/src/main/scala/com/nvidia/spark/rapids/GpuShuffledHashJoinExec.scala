@@ -17,6 +17,7 @@
 package com.nvidia.spark.rapids
 
 import com.nvidia.spark.rapids.GpuMetricNames._
+import com.nvidia.spark.rapids.shims.ShimLoader
 
 import org.apache.spark.TaskContext
 import org.apache.spark.rdd.RDD
@@ -48,7 +49,7 @@ class GpuShuffledHashJoinMeta(
   override def tagPlanForGpu(): Unit = {
     GpuHashJoin.tagJoin(this, join.joinType, join.leftKeys, join.rightKeys, join.condition)
   }
-
+/*
   def getBuildSide(join: ShuffledHashJoinExec): GpuBuildSide = {
     join.buildSide match {
       case e: join.buildSide.type if e.toString.contains("BuildRight") => {
@@ -60,6 +61,7 @@ class GpuShuffledHashJoinMeta(
       case _ => throw new Exception("unknown buildSide Type")
     }
   }
+  */
   logWarning("Tom 3 gpu build side is: " + join.buildSide.toString)
 
   override def convertToGpu(): GpuExec = {
@@ -68,7 +70,7 @@ class GpuShuffledHashJoinMeta(
       leftKeys.map(_.convertToGpu()),
       rightKeys.map(_.convertToGpu()),
       join.joinType,
-      join.buildSide,
+      ShimLoader.getSparkShims.getBuildSide(join.buildSide),
       condition.map(_.convertToGpu()),
       childPlans(0).convertIfNeeded(),
       childPlans(1).convertIfNeeded())
@@ -79,7 +81,7 @@ case class GpuShuffledHashJoinExec(
     leftKeys: Seq[Expression],
     rightKeys: Seq[Expression],
     joinType: JoinType,
-    buildSide: org.apache.spark.sql.execution.joins.BuildSide,
+    buildSide: GpuBuildSide,
     condition: Option[Expression],
     left: SparkPlan,
     right: SparkPlan) extends BinaryExecNode with GpuHashJoin with Logging {
@@ -114,8 +116,8 @@ case class GpuShuffledHashJoinExec(
   }
 
   override def childrenCoalesceGoal: Seq[CoalesceGoal] = buildSide match {
-    case buildLeft => Seq(RequireSingleBatch, null)
-    case buildRight => Seq(null, RequireSingleBatch)
+    case GpuBuildLeft => Seq(RequireSingleBatch, null)
+    case GpuBuildRight => Seq(null, RequireSingleBatch)
   }
 
   override def doExecuteColumnar() : RDD[ColumnarBatch] = {

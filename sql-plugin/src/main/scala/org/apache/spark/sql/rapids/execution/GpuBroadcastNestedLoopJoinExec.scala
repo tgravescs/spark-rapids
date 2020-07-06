@@ -17,7 +17,7 @@
 package org.apache.spark.sql.rapids.execution
 
 import ai.rapids.cudf.{NvtxColor, Table}
-import com.nvidia.spark.rapids.{BaseExprMeta, ConfKeysAndIncompat, GpuBindReferences, GpuColumnVector, GpuExec, GpuExpression, GpuFilter, GpuOverrides, NvtxWithMetrics, RapidsConf, RapidsMeta, SparkPlanMeta}
+import com.nvidia.spark.rapids.{BaseExprMeta, ConfKeysAndIncompat, GpuBindReferences, GpuBuildLeft, GpuBuildRight, GpuBuildSide, GpuColumnVector, GpuExec, GpuExpression, GpuFilter, GpuOverrides, NvtxWithMetrics, RapidsConf, RapidsMeta, SparkPlanMeta}
 import com.nvidia.spark.rapids.GpuMetricNames.{NUM_OUTPUT_BATCHES, NUM_OUTPUT_ROWS, TOTAL_TIME}
 
 import org.apache.spark.rdd.RDD
@@ -87,7 +87,7 @@ class GpuBroadcastNestedLoopJoinMeta(
 case class GpuBroadcastNestedLoopJoinExec(
     left: SparkPlan,
     right: SparkPlan,
-    buildSide: BuildSide,
+    gpuBuildSide: GpuBuildSide,
     joinType: JoinType,
     condition: Option[Expression],
     targetSize: Long) extends BinaryExecNode with GpuExec {
@@ -103,9 +103,9 @@ case class GpuBroadcastNestedLoopJoinExec(
     "filterTime" -> SQLMetrics.createNanoTimingMetric(sparkContext, "filter time"))
 
   /** BuildRight means the right relation <=> the broadcast relation. */
-  private val (streamed, broadcast) = buildSide match {
-    case BuildRight => (left, right)
-    case BuildLeft => (right, left)
+  private val (streamed, broadcast) = gpuBuildSide match {
+    case GpuBuildRight => (left, right)
+    case GpuBuildLeft => (right, left)
   }
 
   def broadcastExchange: GpuBroadcastExchangeExec = broadcast match {
@@ -113,10 +113,10 @@ case class GpuBroadcastNestedLoopJoinExec(
     case reused: ReusedExchangeExec => reused.child.asInstanceOf[GpuBroadcastExchangeExec]
   }
 
-  override def requiredChildDistribution: Seq[Distribution] = buildSide match {
-    case BuildLeft =>
+  override def requiredChildDistribution: Seq[Distribution] = gpuBuildSide match {
+    case GpuBuildLeft =>
       BroadcastDistribution(IdentityBroadcastMode) :: UnspecifiedDistribution :: Nil
-    case BuildRight =>
+    case GpuBuildRight =>
       UnspecifiedDistribution :: BroadcastDistribution(IdentityBroadcastMode) :: Nil
   }
 
@@ -158,9 +158,9 @@ case class GpuBroadcastNestedLoopJoinExec(
       val joined =
         withResource(new NvtxWithMetrics("join", NvtxColor.ORANGE, joinTime)) { _ =>
           val joinedTable = withResource(streamTable) { tab =>
-            buildSide match {
-              case BuildLeft => builtTable.crossJoin(tab)
-              case BuildRight => tab.crossJoin(builtTable)
+            gpuBuildSide match {
+              case GpuBuildLeft => builtTable.crossJoin(tab)
+              case GpuBuildRight => tab.crossJoin(builtTable)
             }
           }
           withResource(joinedTable) { jt =>

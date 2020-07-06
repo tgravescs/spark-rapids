@@ -16,6 +16,8 @@
 
 package com.nvidia.spark.rapids
 
+import com.nvidia.spark.rapids.GpuBuildRight
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.SortExec
 import org.apache.spark.sql.execution.joins.{BuildRight, SortMergeJoinExec}
@@ -69,7 +71,7 @@ class GpuSortMergeJoinMeta(
       leftKeys.map(_.convertToGpu()),
       rightKeys.map(_.convertToGpu()),
       join.joinType,
-      BuildRight, // just hardcode one side
+      GpuBuildRight, // just hardcode one side
       condition.map(_.convertToGpu()),
       childPlans(0).convertIfNeeded(),
       childPlans(1).convertIfNeeded())

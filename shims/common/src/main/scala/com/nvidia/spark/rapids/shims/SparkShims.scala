@@ -19,6 +19,7 @@ package com.nvidia.spark.rapids.shims
 
 trait SparkShims() {
 
-  def getBuildSide: GpuBuildSide 
+  def getBuildSide(join: ShuffledHashJoinExec): GpuBuildSide
+  def getBuildSide(join: BroadcastNestedLoopJoinExec): GpuBuildSide
 
 }

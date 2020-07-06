@@ -25,10 +25,6 @@ import org.apache.spark.sql.execution.joins.HashJoin
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 
-trait GpuOverHashJoin extends GpuExec with HashJoin {
-  // val buildSide = org.apache.spark.sql.execution.joins.BuildRight
-}
-
 
 object GpuHashJoin {
   def tagJoin(

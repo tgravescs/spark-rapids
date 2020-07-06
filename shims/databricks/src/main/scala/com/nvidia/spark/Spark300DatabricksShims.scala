@@ -19,22 +19,12 @@ package com.nvidia.spark.rapids.shims
 import com.nvidia.spark.rapids.{GpuBuildLeft, GpuBuildRight, GpuBuildSide}
 import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight, BuildSide}
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.execution.joins.BroadcastNestedLoopJoinExec
+import org.apache.spark.sql.execution.joins.ShuffledHashJoinExec
+
+
 
 class Spark300DatabricksShims extends SparkShims with Logging {
-  def getBuildSide(join: ShuffledHashJoinExec)): GpuBuildSide = {
-    val buildSide = join.buildSide
-    buildSide match {
-      case e: buildSide.type if e.toString.contains("BuildRight") => {
-        logInfo("Tom buildright " + e)
-        GpuBuildRight
-      }
-      case l: buildSide.type if l.toString.contains("BuildLeft") => {
-        logInfo("Tom buildleft "+ l)
-        GpuBuildLeft
-      }
-      case _ => throw new Exception("unknown buildSide Type")
-    }
-  }
 
   def getBuildSide(join: ShuffledHashJoinExec)): GpuBuildSide = {
     val buildSide = join.buildSide
@@ -50,6 +40,25 @@ class Spark300DatabricksShims extends SparkShims with Logging {
       case _ => throw new Exception("unknown buildSide Type")
     }
   }
+
+  def getBuildSide(join: BroadcastNestedLoopJoinExec)): GpuBuildSide = {
+    val buildSide = join.buildSide
+    buildSide match {
+      case e: buildSide.type if e.toString.contains("BuildRight") => {
+        logInfo("bnlje Tom buildright " + e)
+        GpuBuildRight
+      }
+      case l: buildSide.type if l.toString.contains("BuildLeft") => {
+        logInfo("bnlje Tom buildleft "+ l)
+        GpuBuildLeft
+      }
+      case _ => throw new Exception("unknown buildSide Type")
+    }
+  }
+}
+
+class GpuShimBuilSideHashJoin {
+  def buildSide: BuildSide
 
 }
 
