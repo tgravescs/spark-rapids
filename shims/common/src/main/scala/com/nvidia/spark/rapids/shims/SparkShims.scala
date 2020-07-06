@@ -17,7 +17,8 @@
 package com.nvidia.spark.rapids.shims
 
 
-class SparkShims() {
+trait SparkShims() {
 
+  def getBuildSide: GpuBuildSide 
 
 }
