@@ -19,6 +19,7 @@ package com.nvidia.spark.rapids
 import scala.collection.mutable
 
 import com.nvidia.spark.rapids.GpuOverrides.isStringLit
+import com.nvidia.spark.rapids.shims.{GpuBuildRight, GpuBuildLeft, GpuBuildSide}
 
 import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, ComplexTypeMergingExpression, Expression, String2TrimExpression, TernaryExpression, UnaryExpression}
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction

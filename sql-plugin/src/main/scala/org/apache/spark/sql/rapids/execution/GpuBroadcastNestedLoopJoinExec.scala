@@ -17,8 +17,9 @@
 package org.apache.spark.sql.rapids.execution
 
 import ai.rapids.cudf.{NvtxColor, Table}
-import com.nvidia.spark.rapids.{BaseExprMeta, ConfKeysAndIncompat, GpuBindReferences, GpuBuildLeft, GpuBuildRight, GpuBuildSide, GpuColumnVector, GpuExec, GpuExpression, GpuFilter, GpuOverrides, NvtxWithMetrics, RapidsConf, RapidsMeta, SparkPlanMeta}
+import com.nvidia.spark.rapids.{BaseExprMeta, ConfKeysAndIncompat, GpuBindReferences, GpuColumnVector, GpuExec, GpuExpression, GpuFilter, GpuOverrides, NvtxWithMetrics, RapidsConf, RapidsMeta, SparkPlanMeta}
 import com.nvidia.spark.rapids.GpuMetricNames.{NUM_OUTPUT_BATCHES, NUM_OUTPUT_ROWS, TOTAL_TIME}
+import com.nvidia.spark.rapids.shims.{GpuBuildRight, GpuBuildLeft, GpuBuildSide}
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -213,7 +214,7 @@ case class GpuBroadcastNestedLoopJoinExec(
       joinType match {
         case _: InnerLike => innerLikeJoin(streamedIter, builtTable, boundCondition,
           joinTime, joinOutputRows, numOutputRows, numOutputBatches, filterTime, totalTime)
-        case _ => throw new IllegalArgumentException(s"$joinType + $buildSide is not supported" +
+        case _ => throw new IllegalArgumentException(s"$joinType + $gpuBuildSide is not supported" +
             s" and should be run on the CPU")
       }
     }

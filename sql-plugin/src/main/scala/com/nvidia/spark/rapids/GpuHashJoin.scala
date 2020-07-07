@@ -16,6 +16,7 @@
 package com.nvidia.spark.rapids
 
 import ai.rapids.cudf.{NvtxColor, Table}
+import com.nvidia.spark.rapids.shims.{GpuBuildRight, GpuBuildLeft, GpuBuildSide}
 
 import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging

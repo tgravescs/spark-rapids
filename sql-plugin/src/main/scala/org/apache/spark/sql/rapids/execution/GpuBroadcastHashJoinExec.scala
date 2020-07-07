@@ -18,6 +18,7 @@ package org.apache.spark.sql.rapids.execution
 
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.GpuMetricNames._
+import com.nvidia.spark.rapids.shims.{GpuBuildRight, GpuBuildLeft, GpuBuildSide}
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -103,7 +104,7 @@ case class GpuBroadcastHashJoinExec(
     gpuBuildSide: GpuBuildSide,
     condition: Option[Expression],
     left: SparkPlan,
-    right: SparkPlan) extends BinaryExecNode with GpuHashJoin {
+    right: SparkPlan) extends BinaryExecNode with GpuHashJoin with GpuShimBuildSideHashJoin {
 
   val buildSide = {
     gpuBuildSide match {

@@ -26,7 +26,7 @@ object ShimLoader extends Logging {
   val SPARK30DATABRICKSSVERSIONNAME = "3.0.0-databricks"
   val SPARK30VERSIONNAME = "3.0.0"
 
-  private var sparkShims: Option[SparkShims] = None
+  private var sparkShims: SparkShims = null
 
   /**
    * The names of the classes for shimming Spark for each major version.
@@ -40,22 +40,20 @@ object ShimLoader extends Logging {
    * Factory method to get an instance of HadoopShims based on the
    * version of Hadoop on the classpath.
    */
-  def getSparkShims: Option[SparkShims] = {
-    if (sparkShims.isEmpty) {
+  def getSparkShims: SparkShims = {
+    if (sparkShims == null) {
       sparkShims = loadShims(SPARK_SHIM_CLASSES)
     }
     sparkShims
   }
 
-  private def loadShims(classMap: Map[String, String]): Option[SparkShims] = {
+  private def loadShims(classMap: Map[String, String]): SparkShims = {
     val vers = getVersion();
     val className = classMap.get(vers)
     if (className.isEmpty) {
-      logWarning(s"No shim layer for $vers")
-      None
-    } else {
-      Some(createShim(className.get))
-    }
+      throw new Exception(s"No shim layer for $vers")
+    } 
+    createShim(className.get)
   }
 
   private def createShim(className: String): SparkShims = try {

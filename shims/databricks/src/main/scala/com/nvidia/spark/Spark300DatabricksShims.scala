@@ -16,7 +16,8 @@
 
 package com.nvidia.spark.rapids.shims
 
-import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight, BuildSide}
+//import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight, BuildSide}
+import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, BuildSide}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.joins.BroadcastNestedLoopJoinExec
 import org.apache.spark.sql.execution.joins.ShuffledHashJoinExec
@@ -56,8 +57,10 @@ class Spark300DatabricksShims extends SparkShims with Logging {
   }
 }
 
-// class GpuShimBuilSideHashJoin {
-//   def buildSide: BuildSide
+class GpuShimBuilSideHashJoin {
+  def buildSide: BuildSide = {
+    BuildRight
+  }
 
-// }
+}
 

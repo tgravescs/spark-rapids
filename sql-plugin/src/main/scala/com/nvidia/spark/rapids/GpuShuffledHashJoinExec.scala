@@ -17,7 +17,7 @@
 package com.nvidia.spark.rapids
 
 import com.nvidia.spark.rapids.GpuMetricNames._
-import com.nvidia.spark.rapids.shims.ShimLoader
+import com.nvidia.spark.rapids.shims.{GpuBuildRight, GpuBuildLeft, GpuBuildSide, ShimLoader}
 
 import org.apache.spark.TaskContext
 import org.apache.spark.rdd.RDD
