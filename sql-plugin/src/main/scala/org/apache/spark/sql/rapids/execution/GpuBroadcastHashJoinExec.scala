@@ -104,7 +104,7 @@ case class GpuBroadcastHashJoinExec(
     gpuBuildSide: GpuBuildSide,
     condition: Option[Expression],
     left: SparkPlan,
-    right: SparkPlan) extends BinaryExecNode with GpuHashJoin with GpuShimBuildSideHashJoin {
+    right: SparkPlan) extends BinaryExecNode with GpuHashJoin {
 
   val buildSide = {
     gpuBuildSide match {

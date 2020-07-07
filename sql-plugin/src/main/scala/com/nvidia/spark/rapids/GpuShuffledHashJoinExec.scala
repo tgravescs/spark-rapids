@@ -70,7 +70,7 @@ class GpuShuffledHashJoinMeta(
       leftKeys.map(_.convertToGpu()),
       rightKeys.map(_.convertToGpu()),
       join.joinType,
-      ShimLoader.getSparkShims.getBuildSide(join.buildSide),
+      ShimLoader.getSparkShims.getBuildSide(join),
       condition.map(_.convertToGpu()),
       childPlans(0).convertIfNeeded(),
       childPlans(1).convertIfNeeded())
@@ -81,12 +81,12 @@ case class GpuShuffledHashJoinExec(
     leftKeys: Seq[Expression],
     rightKeys: Seq[Expression],
     joinType: JoinType,
-    buildSide: GpuBuildSide,
+    gpuBuildSide: GpuBuildSide,
     condition: Option[Expression],
     left: SparkPlan,
     right: SparkPlan) extends BinaryExecNode with GpuHashJoin with Logging {
 
-  logWarning("Tom 1 gpu build side is: " + buildSide)
+  logWarning("Tom 1 gpu build side is: " + gpuBuildSide)
 
   /*
   val buildSide: org.apache.spark.sql.execution.joins.BuildSide = {
@@ -115,7 +115,7 @@ case class GpuShuffledHashJoinExec(
       "GpuShuffledHashJoin does not support the execute() code path.")
   }
 
-  override def childrenCoalesceGoal: Seq[CoalesceGoal] = buildSide match {
+  override def childrenCoalesceGoal: Seq[CoalesceGoal] = gpuBuildSide match {
     case GpuBuildLeft => Seq(RequireSingleBatch, null)
     case GpuBuildRight => Seq(null, RequireSingleBatch)
   }

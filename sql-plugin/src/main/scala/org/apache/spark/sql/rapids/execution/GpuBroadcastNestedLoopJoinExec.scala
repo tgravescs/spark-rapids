@@ -19,7 +19,7 @@ package org.apache.spark.sql.rapids.execution
 import ai.rapids.cudf.{NvtxColor, Table}
 import com.nvidia.spark.rapids.{BaseExprMeta, ConfKeysAndIncompat, GpuBindReferences, GpuColumnVector, GpuExec, GpuExpression, GpuFilter, GpuOverrides, NvtxWithMetrics, RapidsConf, RapidsMeta, SparkPlanMeta}
 import com.nvidia.spark.rapids.GpuMetricNames.{NUM_OUTPUT_BATCHES, NUM_OUTPUT_ROWS, TOTAL_TIME}
-import com.nvidia.spark.rapids.shims.{GpuBuildRight, GpuBuildLeft, GpuBuildSide}
+import com.nvidia.spark.rapids.shims.{GpuBuildRight, GpuBuildLeft, GpuBuildSide, ShimLoader}
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -78,7 +78,7 @@ class GpuBroadcastNestedLoopJoinMeta(
       throw new IllegalStateException("the broadcast must be on the GPU too")
     }
     GpuBroadcastNestedLoopJoinExec(
-      left, right, join.buildSide,
+      left, right, ShimLoader.getSparkShims.getBuildSide(join),
       join.joinType,
       condition.map(_.convertToGpu()),
       conf.gpuTargetBatchSizeBytes)

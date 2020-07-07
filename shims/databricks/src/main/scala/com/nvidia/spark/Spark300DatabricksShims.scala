@@ -57,7 +57,7 @@ class Spark300DatabricksShims extends SparkShims with Logging {
   }
 }
 
-class GpuShimBuilSideHashJoin {
+class GpuShimBuildSideHashJoin {
   def buildSide: BuildSide = {
     BuildRight
   }
