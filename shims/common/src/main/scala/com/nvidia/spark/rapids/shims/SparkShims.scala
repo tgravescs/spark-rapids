@@ -16,6 +16,14 @@
 
 package com.nvidia.spark.rapids.shims
 
+import org.apache.spark.sql.execution.joins.{ShuffledHashJoinExec, BroadcastNestedLoopJoinExec}
+
+sealed abstract class GpuBuildSide
+
+case object GpuBuildRight extends GpuBuildSide
+
+case object GpuBuildLeft extends GpuBuildSide
+
 
 trait SparkShims {
 

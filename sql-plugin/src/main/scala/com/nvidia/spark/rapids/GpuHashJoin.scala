@@ -50,12 +50,6 @@ object GpuHashJoin {
   }
 }
 
-sealed abstract class GpuBuildSide
-
-case object GpuBuildRight extends GpuBuildSide
-
-case object GpuBuildLeft extends GpuBuildSide
-
 
 trait GpuHashJoin extends GpuExec with HashJoin with Logging {
 
