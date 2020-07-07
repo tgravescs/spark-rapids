@@ -27,14 +27,7 @@ class GpuSortMergeJoinMeta(
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat)
-  extends SparkPlanMeta[SortMergeJoinExec](join, conf, parent, rule) with Logging {
-
-  val leftKeys: Seq[BaseExprMeta[_]] =
-    join.leftKeys.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-  val rightKeys: Seq[BaseExprMeta[_]] =
-    join.rightKeys.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-  val condition: Option[BaseExprMeta[_]] = join.condition.map(
-    GpuOverrides.wrapExpr(_, conf, Some(this)))
+  extends GpuHashJoinBaseMeta[SortMergeJoinExec](join, conf, parent, rule) with Logging {
 
   override val childExprs: Seq[BaseExprMeta[_]] = leftKeys ++ rightKeys ++ condition
 

@@ -18,8 +18,6 @@ package com.nvidia.spark.rapids
 
 import java.time.ZoneId
 
-import scala.reflect.ClassTag
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions._
@@ -504,7 +502,14 @@ object GpuOverrides {
     expr[WindowSpecDefinition](
       "specification of a window function, indicating the partitioning-expression, the row " +
         "ordering, and the width of the window",
-      (windowSpec, conf, p, r) => new GpuWindowSpecDefinitionMeta(windowSpec, conf, p, r)),
+      (windowSpec, conf, p, r) => new GpuWindowSpecDefinitionMeta(windowSpec, conf, p, r) {
+        val partitionSpec: Seq[BaseExprMeta[Expression]] =
+          windowSpec.partitionSpec.map(wrapExpr(_, conf, Some(this)))
+        val orderSpec: Seq[BaseExprMeta[SortOrder]] =
+          windowSpec.orderSpec.map(wrapExpr(_, conf, Some(this)))
+        val windowFrame: BaseExprMeta[WindowFrame] =
+          wrapExpr(windowSpec.frameSpecification, conf, Some(this))
+      }),
     expr[CurrentRow.type](
       "Special boundary for a window frame, indicating stopping at the current row",
       (currentRow, conf, p, r) => new ExprMeta[CurrentRow.type](currentRow, conf, p, r) {
@@ -1612,6 +1617,32 @@ object GpuOverrides {
             proj.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
           override val childExprs: Seq[BaseExprMeta[_]] =
             proj.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+          private def exprsFromArray(data: ArrayData, dataType: DataType): Seq[BaseExprMeta[Expression]] = {
+            (0 until data.numElements()).map { i =>
+              Literal(data.get(i, dataType), dataType).asInstanceOf[Expression]
+            }.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+          }
+
+          private val arrayExprs =  gen.generator match {
+            case PosExplode(CreateArray(exprs, _)) =>
+              // This bypasses the check to see if we can support an array or not.
+              // and the posexplode/explode which is going to be built into this one...
+              exprs.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+            case PosExplode(Literal(data, ArrayType(baseType, _))) =>
+              exprsFromArray(data.asInstanceOf[ArrayData], baseType)
+            case PosExplode(Alias(Literal(data, ArrayType(baseType, _)), _)) =>
+              exprsFromArray(data.asInstanceOf[ArrayData], baseType)
+            case Explode(CreateArray(exprs, _)) =>
+              exprs.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+            case Explode(Literal(data, ArrayType(baseType, _))) =>
+              exprsFromArray(data.asInstanceOf[ArrayData], baseType)
+            case Explode(Alias(Literal(data, ArrayType(baseType, _)), _)) =>
+              exprsFromArray(data.asInstanceOf[ArrayData], baseType)
+            case _ => Seq.empty
+          }
+
+          override val childExprs: Seq[BaseExprMeta[_]] = arrayExprs
+
           override def convertToGpu(): GpuExec =
             GpuProjectExec(childExprs.map(_.convertToGpu()), childPlans(0).convertIfNeeded())
         }
@@ -1707,7 +1738,10 @@ object GpuOverrides {
         }),
     exec[CollectLimitExec](
       "Reduce to single partition and apply limit",
-      (collectLimitExec, conf, p, r) => new GpuCollectLimitMeta(collectLimitExec, conf, p, r)),
+      (collectLimitExec, conf, p, r) => new GpuCollectLimitMeta(collectLimitExec, conf, p, r) {
+        override val childParts: scala.Seq[PartMeta[_]] =
+          Seq(GpuOverrides.wrapPart(collectLimit.outputPartitioning, conf, Some(this)))
+      }),
     exec[FilterExec](
       "The backend for most filter statements",
       (filter, conf, p, r) => new SparkPlanMeta[FilterExec](filter, conf, p, r) {
@@ -1720,7 +1754,10 @@ object GpuOverrides {
       }),
     exec[ShuffleExchangeExec](
       "The backend for most data being exchanged between processes",
-      (shuffle, conf, p, r) => new GpuShuffleMeta(shuffle, conf, p, r)),
+      (shuffle, conf, p, r) => new GpuShuffleMeta(shuffle, conf, p, r) {
+        override val childParts: scala.Seq[PartMeta[_]] =
+          Seq(GpuOverrides.wrapPart(shuffle.outputPartitioning, conf, Some(this)))
+      }),
     exec[UnionExec](
       "The backend for the union operator",
       (union, conf, p, r) => new SparkPlanMeta[UnionExec](union, conf, p, r) {
@@ -1746,30 +1783,97 @@ object GpuOverrides {
       }),
     exec[ShuffledHashJoinExec](
       "Implementation of join using hashed shuffled data",
-      (join, conf, p, r) => new GpuShuffledHashJoinMeta(join, conf, p, r)),
+      (join, conf, p, r) => new GpuShuffledHashJoinMeta(join, conf, p, r) {
+        val leftKeys: Seq[BaseExprMeta[_]] =
+          join.leftKeys.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        val rightKeys: Seq[BaseExprMeta[_]] =
+          join.rightKeys.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        val condition: Option[BaseExprMeta[_]] =
+          join.condition.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+      }),
     exec[BroadcastNestedLoopJoinExec](
       "Implementation of join using brute force",
-      (join, conf, p, r) => new GpuBroadcastNestedLoopJoinMeta(join, conf, p, r))
+      (join, conf, p, r) => new GpuBroadcastNestedLoopJoinMeta(join, conf, p, r) {
+        val condition: Option[BaseExprMeta[_]] =
+          join.condition.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+
+        override val childExprs: Seq[BaseExprMeta[_]] = condition.toSeq
+      })
         .disabledByDefault("large joins can cause out of memory errors"),
     exec[SortMergeJoinExec](
       "Sort merge join, replacing with shuffled hash join",
-      (join, conf, p, r) => new GpuSortMergeJoinMeta(join, conf, p, r)),
+      (join, conf, p, r) => new GpuSortMergeJoinMeta(join, conf, p, r) {
+        val leftKeys: Seq[BaseExprMeta[_]] =
+          join.leftKeys.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        val rightKeys: Seq[BaseExprMeta[_]] =
+          join.rightKeys.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        val condition: Option[BaseExprMeta[_]] = join.condition.map(
+          GpuOverrides.wrapExpr(_, conf, Some(this)))
+      }),
     exec[HashAggregateExec](
       "The backend for hash based aggregations",
-      (agg, conf, p, r) => new GpuHashAggregateMeta(agg, conf, p, r)),
+      (agg, conf, p, r) => new GpuHashAggregateMeta(agg, conf, p, r) {
+        private val requiredChildDistributionExpressions: Option[Seq[BaseExprMeta[_]]] =
+          agg.requiredChildDistributionExpressions.map(_.map(GpuOverrides.wrapExpr(_, conf, Some(this))))
+        private val groupingExpressions: Seq[BaseExprMeta[_]] =
+          agg.groupingExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        private val aggregateExpressions: Seq[BaseExprMeta[_]] =
+          agg.aggregateExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        private val aggregateAttributes: Seq[BaseExprMeta[_]] =
+          agg.aggregateAttributes.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        private val resultExpressions: Seq[BaseExprMeta[_]] =
+          agg.resultExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+
+        override val childExprs: Seq[BaseExprMeta[_]] =
+          requiredChildDistributionExpressions.getOrElse(Seq.empty) ++
+            groupingExpressions ++
+            aggregateExpressions ++
+            aggregateAttributes ++
+            resultExpressions
+
+      }),
     exec[SortAggregateExec](
       "The backend for sort based aggregations",
-      (agg, conf, p, r) => new GpuSortAggregateMeta(agg, conf, p, r)),
+      (agg, conf, p, r) => new GpuSortAggregateMeta(agg, conf, p, r) {
+        private val requiredChildDistributionExpressions: Option[Seq[BaseExprMeta[_]]] =
+          agg.requiredChildDistributionExpressions.map(_.map(GpuOverrides.wrapExpr(_, conf, Some(this))))
+        private val groupingExpressions: Seq[BaseExprMeta[_]] =
+          agg.groupingExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        private val aggregateExpressions: Seq[BaseExprMeta[_]] =
+          agg.aggregateExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        private val aggregateAttributes: Seq[BaseExprMeta[_]] =
+          agg.aggregateAttributes.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        private val resultExpressions: Seq[BaseExprMeta[_]] =
+          agg.resultExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+
+        override val childExprs: Seq[BaseExprMeta[_]] =
+          requiredChildDistributionExpressions.getOrElse(Seq.empty) ++
+            groupingExpressions ++
+            aggregateExpressions ++
+            aggregateAttributes ++
+            resultExpressions
+      }),
     exec[SortExec](
       "The backend for the sort operator",
       (sort, conf, p, r) => new GpuSortMeta(sort, conf, p, r)),
     exec[ExpandExec](
       "The backend for the expand operator",
-      (expand, conf, p, r) => new GpuExpandExecMeta(expand, conf, p, r)),
+      (expand, conf, p, r) => new GpuExpandExecMeta(expand, conf, p, r) {
+        private val gpuProjections: Seq[Seq[BaseExprMeta[_]]] =
+          expand.projections.map(_.map(GpuOverrides.wrapExpr(_, conf, Some(this))))
+
+        private val outputAttributes: Seq[BaseExprMeta[_]] =
+          expand.output.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+
+        override val childExprs: Seq[BaseExprMeta[_]] = gpuProjections.flatten ++ outputAttributes
+      }),
     exec[WindowExec](
       "Window-operator backend",
       (windowOp, conf, p, r) =>
-        new GpuWindowExecMeta(windowOp, conf, p, r)
+        new GpuWindowExecMeta(windowOp, conf, p, r) {
+          val windowExpressions: Seq[BaseExprMeta[NamedExpression]] =
+            inputWindowExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        }
     )
   ).map(r => (r.getClassFor.asSubclass(classOf[SparkPlan]), r)).toMap
 }

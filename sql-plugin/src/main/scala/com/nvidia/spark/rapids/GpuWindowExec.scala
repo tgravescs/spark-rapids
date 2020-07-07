@@ -34,7 +34,7 @@ class GpuWindowExecMeta(windowExec: WindowExec,
                         conf: RapidsConf,
                         parent: Option[RapidsMeta[_, _, _]],
                         rule: ConfKeysAndIncompat)
-  extends SparkPlanMeta[WindowExec](windowExec, conf, parent, rule) {
+  extends WindowExecBaseMeta[WindowExec](windowExec, conf, parent, rule) {
 
   /**
    * Fetches WindowExpressions in input `windowExec`, via reflection.
@@ -66,8 +66,7 @@ class GpuWindowExecMeta(windowExec: WindowExec,
 
   private val (inputWindowExpressions, resultColumnsOnly) = getWindowExpression
 
-  val windowExpressions: Seq[BaseExprMeta[NamedExpression]] =
-    inputWindowExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+
 
   override def tagPlanForGpu(): Unit = {
 

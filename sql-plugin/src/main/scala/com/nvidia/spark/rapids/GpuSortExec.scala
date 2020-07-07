@@ -41,7 +41,7 @@ class GpuSortMeta(
       childPlans(0).convertIfNeeded())
 
   override def tagPlanForGpu(): Unit = {
-    if (GpuOverrides.isAnyStringLit(sort.sortOrder)) {
+    if (RapidsMeta.isAnyStringLit(sort.sortOrder)) {
       willNotWorkOnGpu("string literal values are not supported in a sort")
     }
   }

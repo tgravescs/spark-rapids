@@ -19,10 +19,8 @@ package com.nvidia.spark.rapids
 import java.time.ZoneId
 
 import scala.collection.mutable
-
-import com.nvidia.spark.rapids.shims.{GpuBuildRight, GpuBuildLeft, GpuBuildSide}
-
-import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, ComplexTypeMergingExpression, Expression, String2TrimExpression, TernaryExpression, UnaryExpression}
+import com.nvidia.spark.rapids.shims.{GpuBuildLeft, GpuBuildRight, GpuBuildSide}
+import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, ComplexTypeMergingExpression, Expression, NamedExpression, SortOrder, String2TrimExpression, TernaryExpression, UnaryExpression, WindowFrame}
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.connector.read.Scan
@@ -72,6 +70,19 @@ object RapidsMeta {
 
   def isStringLit(exp: Expression): Boolean =
     isOfType(extractLit(exp), StringType)
+
+  /**
+   * Checks to see if any expressions are a String Literal
+   */
+  def isAnyStringLit(expressions: Seq[Expression]): Boolean =
+    expressions.exists(isStringLit)
+
+  def extractStringLit(exp: Expression): Option[String] = extractLit(exp) match {
+    case Some(Literal(v: UTF8String, StringType)) =>
+      val s = if (v == null) null else v.toString
+      Some(s)
+    case _ => None
+  }
 
 }
 
@@ -592,7 +603,7 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
   }
 }
 
-abstract class GpuBroadcastHashJoinBaseMeta[INPUT <: SparkPlan](
+abstract class GpuHashJoinBaseMeta[INPUT <: SparkPlan](
     plan: INPUT,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]])
@@ -601,6 +612,16 @@ abstract class GpuBroadcastHashJoinBaseMeta[INPUT <: SparkPlan](
     val rightKeys: Seq[BaseExprMeta[_]]
     val condition: Option[BaseExprMeta[_]]
 }
+
+
+abstract class WindowExecBaseMeta[INPUT <: SparkPlan](
+    plan: INPUT,
+    conf: RapidsConf,
+    parent: Option[RapidsMeta[_, _, _]])
+  extends SparkPlanMeta[INPUT](plan, conf, parent, new NoRuleConfKeysAndIncompat) {
+  val windowExpressions: Seq[BaseExprMeta[NamedExpression]]
+}
+
 
 /**
  * Metadata for `SparkPlan` with no rule found
@@ -674,6 +695,19 @@ abstract class ExprMeta[INPUT <: Expression](
 
   override def convertToGpu(): GpuExpression
 }
+
+abstract class WindowExprMeta[INPUT <: UnaryExpression](
+    expr: INPUT,
+    conf: RapidsConf,
+    parent: Option[RapidsMeta[_, _, _]],
+    rule: ConfKeysAndIncompat)
+  extends ExprMeta[INPUT](expr, conf, parent, rule) {
+
+  val partitionSpec: Seq[BaseExprMeta[Expression]]
+  val orderSpec: Seq[BaseExprMeta[SortOrder]]
+  val windowFrame: BaseExprMeta[WindowFrame]
+}
+
 
 /**
  * Base class for metadata around `UnaryExpression`.

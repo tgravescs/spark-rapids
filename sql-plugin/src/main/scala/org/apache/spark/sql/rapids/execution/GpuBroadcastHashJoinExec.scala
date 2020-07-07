@@ -36,7 +36,7 @@ class GpuBroadcastHashJoinMeta(
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat)
-  extends GpuBroadcastHashJoinBaseMeta[BroadcastHashJoinExec](join, conf, parent, rule) {
+  extends GpuHashJoinBaseMeta[BroadcastHashJoinExec](join, conf, parent, rule) {
 
   override val childExprs: Seq[BaseExprMeta[_]] = leftKeys ++ rightKeys ++ condition
 

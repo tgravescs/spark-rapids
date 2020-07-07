@@ -45,8 +45,6 @@ class GpuShuffleMeta(
   // Some kinds of Partitioning are a type of expression, but Partitioning itself is not
   // so don't let them leak through as expressions
   override val childExprs: scala.Seq[ExprMeta[_]] = Seq.empty
-  override val childParts: scala.Seq[PartMeta[_]] =
-    Seq(GpuOverrides.wrapPart(shuffle.outputPartitioning, conf, Some(this)))
 
   override def convertToGpu(): GpuExec =
     GpuShuffleExchangeExec(childParts(0).convertToGpu(),

@@ -36,31 +36,6 @@ class GpuGenerateExecSparkPlanMeta(
     p: Option[RapidsMeta[_, _, _]],
     r: ConfKeysAndIncompat) extends SparkPlanMeta[GenerateExec](gen, conf, p, r) {
 
-  private def exprsFromArray(data: ArrayData, dataType: DataType): Seq[BaseExprMeta[Expression]] = {
-    (0 until data.numElements()).map { i =>
-      Literal(data.get(i, dataType), dataType).asInstanceOf[Expression]
-    }.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-  }
-
-  private val arrayExprs =  gen.generator match {
-    case PosExplode(CreateArray(exprs, _)) =>
-      // This bypasses the check to see if we can support an array or not.
-      // and the posexplode/explode which is going to be built into this one...
-      exprs.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-    case PosExplode(Literal(data, ArrayType(baseType, _))) =>
-      exprsFromArray(data.asInstanceOf[ArrayData], baseType)
-    case PosExplode(Alias(Literal(data, ArrayType(baseType, _)), _)) =>
-      exprsFromArray(data.asInstanceOf[ArrayData], baseType)
-    case Explode(CreateArray(exprs, _)) =>
-      exprs.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-    case Explode(Literal(data, ArrayType(baseType, _))) =>
-      exprsFromArray(data.asInstanceOf[ArrayData], baseType)
-    case Explode(Alias(Literal(data, ArrayType(baseType, _)), _)) =>
-      exprsFromArray(data.asInstanceOf[ArrayData], baseType)
-    case _ => Seq.empty
-  }
-
-  override val childExprs: Seq[BaseExprMeta[_]] = arrayExprs
 
   override def tagPlanForGpu(): Unit = {
     // We can only run on the GPU if we are doing a posexplode of an array we are generating

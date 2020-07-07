@@ -17,7 +17,7 @@
 package org.apache.spark.sql.rapids.execution
 
 import ai.rapids.cudf.{NvtxColor, Table}
-import com.nvidia.spark.rapids.{BaseExprMeta, ConfKeysAndIncompat, GpuBindReferences, GpuColumnVector, GpuExec, GpuExpression, GpuFilter, GpuOverrides, NvtxWithMetrics, RapidsConf, RapidsMeta, SparkPlanMeta}
+import com.nvidia.spark.rapids.{BaseExprMeta, ConfKeysAndIncompat, GpuBindReferences, GpuColumnVector, GpuExec, GpuExpression, GpuFilter, NvtxWithMetrics, RapidsConf, RapidsMeta, SparkPlanMeta}
 import com.nvidia.spark.rapids.GpuMetricNames.{NUM_OUTPUT_BATCHES, NUM_OUTPUT_ROWS, TOTAL_TIME}
 import com.nvidia.spark.rapids.shims.{GpuBuildRight, GpuBuildLeft, GpuBuildSide, ShimLoader}
 
@@ -39,10 +39,6 @@ class GpuBroadcastNestedLoopJoinMeta(
     rule: ConfKeysAndIncompat)
     extends SparkPlanMeta[BroadcastNestedLoopJoinExec](join, conf, parent, rule) {
 
-  val condition: Option[BaseExprMeta[_]] =
-    join.condition.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-
-  override val childExprs: Seq[BaseExprMeta[_]] = condition.toSeq
 
   override def tagPlanForGpu(): Unit = {
     join.joinType match {

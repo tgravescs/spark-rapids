@@ -19,9 +19,9 @@ package org.apache.spark.sql.rapids
 import java.time.ZoneId
 
 import ai.rapids.cudf.{BinaryOp, ColumnVector, DType, Scalar}
-import com.nvidia.spark.rapids.{BinaryExprMeta, ConfKeysAndIncompat, DateUtils, GpuBinaryExpression, GpuColumnVector, GpuExpression, GpuOverrides, GpuScalar, GpuUnaryExpression, RapidsConf, RapidsMeta}
+import com.nvidia.spark.rapids.{BinaryExprMeta, ConfKeysAndIncompat, DateUtils, GpuBinaryExpression, GpuColumnVector, GpuExpression, GpuScalar, GpuUnaryExpression, RapidsConf, RapidsMeta}
 import com.nvidia.spark.rapids.DateUtils.TimestampFormatConversionException
-import com.nvidia.spark.rapids.GpuOverrides.extractStringLit
+import com.nvidia.spark.rapids.RapidsMeta.extractStringLit
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 
 import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, ExpectsInputTypes, Expression, ImplicitCastInputTypes, NullIntolerant, TimeZoneAwareExpression}
@@ -255,7 +255,7 @@ abstract class UnixTimeExprMeta[A <: BinaryExpression with TimeZoneAwareExpressi
    rule: ConfKeysAndIncompat) extends BinaryExprMeta[A](expr, conf, parent, rule) {
   var strfFormat: String = _
   override def tagExprForGpu(): Unit = {
-    if (ZoneId.of(expr.timeZoneId.get).normalized() != GpuOverrides.UTC_TIMEZONE_ID) {
+    if (ZoneId.of(expr.timeZoneId.get).normalized() != RapidsMeta.UTC_TIMEZONE_ID) {
       willNotWorkOnGpu("Only UTC zone id is supported")
     }
     // Date and Timestamp work too

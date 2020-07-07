@@ -17,7 +17,6 @@
 package com.nvidia.spark.rapids
 
 import ai.rapids.cudf.{DType, Table, WindowAggregate, WindowOptions}
-import com.nvidia.spark.rapids.GpuOverrides.wrapExpr
 
 import org.apache.spark.sql.catalyst.analysis.TypeCheckResult
 import org.apache.spark.sql.catalyst.analysis.TypeCheckResult.{TypeCheckFailure, TypeCheckSuccess}
@@ -359,14 +358,8 @@ class GpuWindowSpecDefinitionMeta(
     conf: RapidsConf,
     parent: Option[RapidsMeta[_,_,_]],
     rule: ConfKeysAndIncompat)
-  extends ExprMeta[WindowSpecDefinition](windowSpec, conf, parent, rule) {
+  extends WindowExprMeta[WindowSpecDefinition](windowSpec, conf, parent, rule) {
 
-  val partitionSpec: Seq[BaseExprMeta[Expression]] =
-    windowSpec.partitionSpec.map(wrapExpr(_, conf, Some(this)))
-  val orderSpec: Seq[BaseExprMeta[SortOrder]] =
-    windowSpec.orderSpec.map(wrapExpr(_, conf, Some(this)))
-  val windowFrame: BaseExprMeta[WindowFrame] =
-    wrapExpr(windowSpec.frameSpecification, conf, Some(this))
 
   override val ignoreUnsetDataTypes: Boolean = true
 

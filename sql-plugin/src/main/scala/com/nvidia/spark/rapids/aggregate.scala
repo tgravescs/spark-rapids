@@ -43,23 +43,6 @@ class GpuHashAggregateMeta(
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat)
   extends SparkPlanMeta[HashAggregateExec](agg, conf, parent, rule) {
-  private val requiredChildDistributionExpressions: Option[Seq[BaseExprMeta[_]]] =
-    agg.requiredChildDistributionExpressions.map(_.map(GpuOverrides.wrapExpr(_, conf, Some(this))))
-  private val groupingExpressions: Seq[BaseExprMeta[_]] =
-    agg.groupingExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-  private val aggregateExpressions: Seq[BaseExprMeta[_]] =
-    agg.aggregateExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-  private val aggregateAttributes: Seq[BaseExprMeta[_]] =
-    agg.aggregateAttributes.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-  private val resultExpressions: Seq[BaseExprMeta[_]] =
-    agg.resultExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-
-  override val childExprs: Seq[BaseExprMeta[_]] =
-    requiredChildDistributionExpressions.getOrElse(Seq.empty) ++
-      groupingExpressions ++
-      aggregateExpressions ++
-      aggregateAttributes ++
-      resultExpressions
 
   override def tagPlanForGpu(): Unit = {
     if (agg.groupingExpressions.isEmpty) {
@@ -126,23 +109,6 @@ class GpuSortAggregateMeta(
   parent: Option[RapidsMeta[_, _, _]],
   rule: ConfKeysAndIncompat) extends SparkPlanMeta[SortAggregateExec](agg, conf, parent, rule) {
 
-  private val requiredChildDistributionExpressions: Option[Seq[BaseExprMeta[_]]] =
-    agg.requiredChildDistributionExpressions.map(_.map(GpuOverrides.wrapExpr(_, conf, Some(this))))
-  private val groupingExpressions: Seq[BaseExprMeta[_]] =
-    agg.groupingExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-  private val aggregateExpressions: Seq[BaseExprMeta[_]] =
-    agg.aggregateExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-  private val aggregateAttributes: Seq[BaseExprMeta[_]] =
-    agg.aggregateAttributes.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-  private val resultExpressions: Seq[BaseExprMeta[_]] =
-    agg.resultExpressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-
-  override val childExprs: Seq[BaseExprMeta[_]] =
-    requiredChildDistributionExpressions.getOrElse(Seq.empty) ++
-      groupingExpressions ++
-      aggregateExpressions ++
-      aggregateAttributes ++
-      resultExpressions
 
   override def tagPlanForGpu(): Unit = {
     if (agg.groupingExpressions.isEmpty) {
@@ -152,7 +118,7 @@ class GpuSortAggregateMeta(
         willNotWorkOnGpu("First/Last reductions are not supported on GPU")
       }
     }
-    if (GpuOverrides.isAnyStringLit(agg.groupingExpressions)) {
+    if (RapidsMeta.isAnyStringLit(agg.groupingExpressions)) {
       willNotWorkOnGpu("string literal values are not supported in a hash aggregate")
     }
     val groupingExpressionTypes = agg.groupingExpressions.map(_.dataType)

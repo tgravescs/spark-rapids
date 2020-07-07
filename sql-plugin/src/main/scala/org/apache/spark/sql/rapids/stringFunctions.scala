@@ -566,7 +566,7 @@ class SubstringIndexMeta(
   private var regexp: String = _
 
   override def tagExprForGpu(): Unit = {
-    val delim = GpuOverrides.extractStringLit(expr.delimExpr).getOrElse{
+    val delim = RapidsMeta.extractStringLit(expr.delimExpr).getOrElse{
       willNotWorkOnGpu("only literal parameters supported for deliminator")
       ""
     }
@@ -575,7 +575,7 @@ class SubstringIndexMeta(
       willNotWorkOnGpu("only a single character deliminator is supported")
     }
 
-    val count = GpuOverrides.extractLit(expr.countExpr)
+    val count = RapidsMeta.extractLit(expr.countExpr)
     if (count.isEmpty) {
       willNotWorkOnGpu("only literal parameters supported for count")
     }

@@ -216,7 +216,7 @@ object GpuCSVScan {
         meta.willNotWorkOnGpu("GpuCSVScan does not support parsing timestamp types. To " +
           s"enable it please set ${RapidsConf.ENABLE_CSV_TIMESTAMPS} to true.")
       }
-      if (parsedOptions.zoneId.normalized() != GpuOverrides.UTC_TIMEZONE_ID) {
+      if (parsedOptions.zoneId.normalized() != RapidsMeta.UTC_TIMEZONE_ID) {
         meta.willNotWorkOnGpu("Only UTC zone id is supported")
       }
       val tsFormat = parsedOptions.timestampFormat
