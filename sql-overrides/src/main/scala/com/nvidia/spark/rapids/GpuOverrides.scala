@@ -371,22 +371,6 @@ object GpuOverrides {
     }
   }
 
-  def areAllSupportedTypes(types: DataType*): Boolean = types.forall(isSupportedType)
-
-  def isSupportedType(dataType: DataType): Boolean = dataType match {
-      case BooleanType => true
-      case ByteType => true
-      case ShortType => true
-      case IntegerType => true
-      case LongType => true
-      case FloatType => true
-      case DoubleType => true
-      case DateType => true
-      case TimestampType => ZoneId.systemDefault().normalized() == GpuOverrides.UTC_TIMEZONE_ID
-      case StringType => true
-      case _ => false
-    }
-
   /**
    * Checks to see if any expressions are a String Literal
    */
@@ -484,6 +468,8 @@ object GpuOverrides {
     expr[AttributeReference](
       "references an input column",
       (att, conf, p, r) => new BaseExprMeta[AttributeReference](att, conf, p, r) {
+        override val childExprs: Seq[BaseExprMeta[_]] =
+          att.children.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
         // This is the only NOOP operator.  It goes away when things are bound
         override def convertToGpu(): Expression = att
 
@@ -1176,6 +1162,8 @@ object GpuOverrides {
     expr[SortOrder](
       "sort order",
       (a, conf, p, r) => new BaseExprMeta[SortOrder](a, conf, p, r) {
+        override val childExprs: Seq[BaseExprMeta[_]] =
+          a.children.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
         // One of the few expressions that are not replaced with a GPU version
         override def convertToGpu(): Expression =
           a.withNewChildren(childExprs.map(_.convertToGpu()))
@@ -1620,6 +1608,10 @@ object GpuOverrides {
       "The backend for most select, withColumn and dropColumn statements",
       (proj, conf, p, r) => {
         new SparkPlanMeta[ProjectExec](proj, conf, p, r) {
+          override val childPlans: Seq[SparkPlanMeta[_]] =
+            proj.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
+          override val childExprs: Seq[BaseExprMeta[_]] =
+            proj.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
           override def convertToGpu(): GpuExec =
             GpuProjectExec(childExprs.map(_.convertToGpu()), childPlans(0).convertIfNeeded())
         }
@@ -1627,6 +1619,10 @@ object GpuOverrides {
     exec[BatchScanExec](
       "The backend for most file input",
       (p, conf, parent, r) => new SparkPlanMeta[BatchScanExec](p, conf, parent, r) {
+        override val childPlans: Seq[SparkPlanMeta[_]] =
+          p.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
+        override val childExprs: Seq[BaseExprMeta[_]] =
+          p.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
         override val childScans: scala.Seq[ScanMeta[_]] =
           Seq(GpuOverrides.wrapScan(p.scan, conf, Some(this)))
 
@@ -1636,12 +1632,20 @@ object GpuOverrides {
     exec[CoalesceExec](
       "The backend for the dataframe coalesce method",
       (coalesce, conf, parent, r) => new SparkPlanMeta[CoalesceExec](coalesce, conf, parent, r) {
+        override val childPlans: Seq[SparkPlanMeta[_]] =
+          coalesce.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
+        override val childExprs: Seq[BaseExprMeta[_]] =
+          coalesce.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
         override def convertToGpu(): GpuExec =
           GpuCoalesceExec(coalesce.numPartitions, childPlans.head.convertIfNeeded())
       }),
     exec[DataWritingCommandExec](
       "Writing data",
       (p, conf, parent, r) => new SparkPlanMeta[DataWritingCommandExec](p, conf, parent, r) {
+        override val childPlans: Seq[SparkPlanMeta[_]] =
+          p.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
+        override val childExprs: Seq[BaseExprMeta[_]] =
+          p.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
         override val childDataWriteCmds: scala.Seq[DataWritingCommandMeta[_]] =
           Seq(GpuOverrides.wrapDataWriteCmds(p.cmd, conf, Some(this)))
 
@@ -1652,6 +1656,10 @@ object GpuOverrides {
     exec[FileSourceScanExec](
       "Reading data from files, often from Hive tables",
       (fsse, conf, p, r) => new SparkPlanMeta[FileSourceScanExec](fsse, conf, p, r) {
+        override val childPlans: Seq[SparkPlanMeta[_]] =
+          fsse.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
+        override val childExprs: Seq[BaseExprMeta[_]] =
+          fsse.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
         // partition filters and data filters are not run on the GPU
         override val childExprs: Seq[ExprMeta[_]] = Seq.empty
 
@@ -1679,6 +1687,10 @@ object GpuOverrides {
       "Per-partition limiting of results",
       (localLimitExec, conf, p, r) =>
         new SparkPlanMeta[LocalLimitExec](localLimitExec, conf, p, r) {
+          override val childPlans: Seq[SparkPlanMeta[_]] =
+            localLimitExec.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
+          override val childExprs: Seq[BaseExprMeta[_]] =
+            localLimitExec.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
           override def convertToGpu(): GpuExec =
             GpuLocalLimitExec(localLimitExec.limit, childPlans(0).convertIfNeeded())
         }),
@@ -1686,6 +1698,10 @@ object GpuOverrides {
       "Limiting of results across partitions",
       (globalLimitExec, conf, p, r) =>
         new SparkPlanMeta[GlobalLimitExec](globalLimitExec, conf, p, r) {
+          override val childPlans: Seq[SparkPlanMeta[_]] =
+            globalLimitExec.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
+          override val childExprs: Seq[BaseExprMeta[_]] =
+            globalLimitExec.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
           override def convertToGpu(): GpuExec =
             GpuGlobalLimitExec(globalLimitExec.limit, childPlans(0).convertIfNeeded())
         }),
@@ -1695,6 +1711,10 @@ object GpuOverrides {
     exec[FilterExec](
       "The backend for most filter statements",
       (filter, conf, p, r) => new SparkPlanMeta[FilterExec](filter, conf, p, r) {
+        override val childPlans: Seq[SparkPlanMeta[_]] =
+          filter.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
+        override val childExprs: Seq[BaseExprMeta[_]] =
+          filter.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
         override def convertToGpu(): GpuExec =
           GpuFilterExec(childExprs(0).convertToGpu(), childPlans(0).convertIfNeeded())
       }),
@@ -1704,6 +1724,10 @@ object GpuOverrides {
     exec[UnionExec](
       "The backend for the union operator",
       (union, conf, p, r) => new SparkPlanMeta[UnionExec](union, conf, p, r) {
+        override val childPlans: Seq[SparkPlanMeta[_]] =
+          union.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
+        override val childExprs: Seq[BaseExprMeta[_]] =
+          union.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
         override def convertToGpu(): GpuExec =
           GpuUnionExec(childPlans.map(_.convertIfNeeded()))
       }),
@@ -1712,7 +1736,14 @@ object GpuOverrides {
       (exchange, conf, p, r) => new GpuBroadcastMeta(exchange, conf, p, r)),
     exec[BroadcastHashJoinExec](
       "Implementation of join using broadcast data",
-      (join, conf, p, r) => new GpuBroadcastHashJoinMeta(join, conf, p, r)),
+      (join, conf, p, r) => new GpuBroadcastHashJoinMeta(join, conf, p, r) {
+        val leftKeys: Seq[BaseExprMeta[_]] =
+          join.leftKeys.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        val rightKeys: Seq[BaseExprMeta[_]] =
+          join.rightKeys.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        val condition: Option[BaseExprMeta[_]] =
+          join.condition.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+      }),
     exec[ShuffledHashJoinExec](
       "Implementation of join using hashed shuffled data",
       (join, conf, p, r) => new GpuShuffledHashJoinMeta(join, conf, p, r)),

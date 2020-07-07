@@ -654,6 +654,7 @@ object RapidsConf {
 
       printToggleHeader("Expressions\n")
     }
+    /*
     GpuOverrides.expressions.values.toSeq.sortBy(_.tag.toString).foreach(_.confHelp(asTable))
     if (asTable) {
       printToggleHeader("Execution\n")
@@ -667,6 +668,7 @@ object RapidsConf {
       printToggleHeader("Partitioning\n")
     }
     GpuOverrides.parts.values.toSeq.sortBy(_.tag.toString).foreach(_.confHelp(asTable))
+    */
     if (asTable) {
       printSectionHeader("JIT Kernel Cache Path")
       println("""

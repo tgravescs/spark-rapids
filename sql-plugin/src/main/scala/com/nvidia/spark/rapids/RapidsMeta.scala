@@ -16,9 +16,10 @@
 
 package com.nvidia.spark.rapids
 
+import java.time.ZoneId
+
 import scala.collection.mutable
 
-import com.nvidia.spark.rapids.GpuOverrides.isStringLit
 import com.nvidia.spark.rapids.shims.{GpuBuildRight, GpuBuildLeft, GpuBuildSide}
 
 import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, ComplexTypeMergingExpression, Expression, String2TrimExpression, TernaryExpression, UnaryExpression}
@@ -38,6 +39,42 @@ trait ConfKeysAndIncompat {
 
   def confKey: String
 }
+
+object RapidsMeta {
+
+  val UTC_TIMEZONE_ID = ZoneId.of("UTC").normalized()
+
+  def areAllSupportedTypes(types: DataType*): Boolean = types.forall(isSupportedType)
+
+  def isSupportedType(dataType: DataType): Boolean = dataType match {
+      case BooleanType => true
+      case ByteType => true
+      case ShortType => true
+      case IntegerType => true
+      case LongType => true
+      case FloatType => true
+      case DoubleType => true
+      case DateType => true
+      case TimestampType => ZoneId.systemDefault().normalized() == RapidsMeta.UTC_TIMEZONE_ID
+      case StringType => true
+      case _ => false
+  }
+
+
+  @scala.annotation.tailrec
+  def extractLit(exp: Expression): Option[Literal] = exp match {
+    case l: Literal => Some(l)
+    case a: Alias => extractLit(a.child)
+    case _ => None
+  }
+
+  def isOfType(l: Option[Literal], t: DataType): Boolean = l.exists(_.dataType == t)
+
+  def isStringLit(exp: Expression): Boolean =
+    isOfType(extractLit(exp), StringType)
+
+}
+
 
 /**
  * A version of ConfKeysAndIncompat that is used when no replacement rule can be found.
@@ -102,7 +139,7 @@ abstract class RapidsMeta[INPUT <: BASE, BASE, OUTPUT <: BASE](
    * Check if all the types are supported in this Meta
    */
   def areAllSupportedTypes(types: DataType*): Boolean = {
-    GpuOverrides.areAllSupportedTypes(types: _*)
+    RapidsMeta.areAllSupportedTypes(types: _*)
   }
 
   /**
@@ -406,10 +443,8 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     rule: ConfKeysAndIncompat)
   extends RapidsMeta[INPUT, SparkPlan, GpuExec](plan, conf, parent, rule) {
 
-  override val childPlans: Seq[SparkPlanMeta[_]] =
-    plan.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
-  override val childExprs: Seq[BaseExprMeta[_]] =
-    plan.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+  override val childPlans: Seq[SparkPlanMeta[_]] = Seq.empty
+  override val childExprs: Seq[BaseExprMeta[_]] = Seq.empty
   override val childScans: Seq[ScanMeta[_]] = Seq.empty
   override val childParts: Seq[PartMeta[_]] = Seq.empty
   override val childDataWriteCmds: Seq[DataWritingCommandMeta[_]] = Seq.empty
@@ -557,6 +592,16 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
   }
 }
 
+abstract class GpuBroadcastHashJoinBaseMeta[INPUT <: SparkPlan](
+    plan: INPUT,
+    conf: RapidsConf,
+    parent: Option[RapidsMeta[_, _, _]])
+  extends SparkPlanMeta[INPUT](plan, conf, parent, new NoRuleConfKeysAndIncompat) {
+    val leftKeys: Seq[BaseExprMeta[_]]
+    val rightKeys: Seq[BaseExprMeta[_]]
+    val condition: Option[BaseExprMeta[_]]
+}
+
 /**
  * Metadata for `SparkPlan` with no rule found
  */
@@ -584,8 +629,7 @@ abstract class BaseExprMeta[INPUT <: Expression](
   extends RapidsMeta[INPUT, Expression, Expression](expr, conf, parent, rule) {
 
   override val childPlans: Seq[SparkPlanMeta[_]] = Seq.empty
-  override val childExprs: Seq[BaseExprMeta[_]] =
-    expr.children.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+  override val childExprs: Seq[BaseExprMeta[_]] = Seq.empty
   override val childScans: Seq[ScanMeta[_]] = Seq.empty
   override val childParts: Seq[PartMeta[_]] = Seq.empty
   override val childDataWriteCmds: Seq[DataWritingCommandMeta[_]] = Seq.empty
@@ -706,7 +750,7 @@ abstract class String2TrimExpressionMeta[INPUT <: String2TrimExpression](
     extends ExprMeta[INPUT](expr, conf, parent, rule) {
 
   override def tagExprForGpu(): Unit = {
-    if (trimStr != None && !isStringLit(trimStr.get)) {
+    if (trimStr != None && !RapidsMeta.isStringLit(trimStr.get)) {
       willNotWorkOnGpu("only literal parameters supported for string literal trimStr parameter")
     }
   }
