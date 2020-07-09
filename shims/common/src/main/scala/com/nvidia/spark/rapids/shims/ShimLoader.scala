@@ -70,13 +70,13 @@ object ShimLoader extends Logging {
   def getGpuShuffledHashJoinShims(leftKeys: Seq[Expression],
       rightKeys: Seq[Expression],
       joinType: JoinType,
-      buildSide: BuildSide,
+      join: SparkPlan,
       condition: Option[Expression],
       left: SparkPlan,
       right: SparkPlan): GpuShuffledHashJoinExecBase = {
     if (sparkShims == null) {
       gpuShuffledHashJoinShims = loadShimsHashJoin(SHUFFLED_HASH_JOIN_SHIM_CLASSES, classOf[GpuShuffledHashJoinExecBase],
-        leftKeys, rightKeys, joinType, buildSide, condition, left, right)
+        leftKeys, rightKeys, joinType, join, condition, left, right)
     }
     gpuShuffledHashJoinShims 
   }
@@ -93,7 +93,7 @@ object ShimLoader extends Logging {
   private def loadShimsHashJoin[T](classMap: Map[String, String], xface: Class[T], leftKeys: Seq[Expression],
       rightKeys: Seq[Expression],
       joinType: JoinType,
-      buildSide: BuildSide,
+      join: SparkPlan,
       condition: Option[Expression],
       left: SparkPlan,
       right: SparkPlan): T = {
@@ -102,19 +102,22 @@ object ShimLoader extends Logging {
     if (className.isEmpty) {
       throw new Exception(s"No shim layer for $vers")
     } 
-    createShimHashJoin(className.get, xface, leftKeys, rightKeys, joinType, buildSide, condition, left, right)
+    createShimHashJoin(className.get, xface, leftKeys, rightKeys, joinType, join, condition, left, right)
   }
 
   private def createShimHashJoin[T](className: String, xface: Class[T], leftKeys: Seq[Expression],
       rightKeys: Seq[Expression],
       joinType: JoinType,
-      buildSide: BuildSide,
+      join: SparkPlan,
       condition: Option[Expression],
       left: SparkPlan,
       right: SparkPlan): T = try {
     val clazz = Class.forName(className)
-    val constructors = clazz.getConstructors()
-    val res = constructors(0).newInstance(leftKeys, rightKeys, joinType, buildSide, condition, left, right).asInstanceOf[T]
+    // public static void com.nvidia.spark.rapids.shims.GpuShuffledHashJoinExec30.createInstance(scala.collection.Seq,scala.collection.Seq,org.apache.spark.sql.catalyst.plans.JoinType,org.apache.spark.sql.execution.SparkPlan,scala.Option,org.apache.spark.sql.execution.SparkPlan,org.apache.spark.sql.execution.SparkPlan)
+    val resultMethod = clazz.getDeclaredMethod("createInstance", classOf[scala.collection.Seq[org.apache.spark.sql.catalyst.expressions.Expression]],classOf[scala.collection.Seq[org.apache.spark.sql.catalyst.expressions.Expression]],classOf[org.apache.spark.sql.catalyst.plans.JoinType],classOf[org.apache.spark.sql.execution.SparkPlan], classOf[scala.Option[org.apache.spark.sql.catalyst.expressions.Expression]],classOf[org.apache.spark.sql.execution.SparkPlan],classOf[org.apache.spark.sql.execution.SparkPlan])
+    val res = resultMethod.invoke(clazz, leftKeys, rightKeys, joinType, join, condition, left, right).asInstanceOf[T]
+    // val constructors = clazz.getConstructors()
+    // val res = constructors(0).newInstance(leftKeys, rightKeys, joinType, join, condition, left, right).asInstanceOf[T]
     // val res = clazz.newInstance().asInstanceOf[T]
     res
   } catch {

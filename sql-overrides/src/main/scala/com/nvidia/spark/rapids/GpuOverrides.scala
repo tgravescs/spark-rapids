@@ -478,16 +478,12 @@ object GpuOverrides extends Logging {
       expr: INPUT,
       conf: RapidsConf,
       parent: Option[RapidsMeta[_, _, _]]): BaseExprMeta[INPUT] = {
-    logWarning("wrap Expr expr: " + expr)
     expressions.get(expr.getClass)
       .map(r => { 
-        logWarning("mapping r is: " + r)
          val t = r.wrap(expr, conf, parent, r).asInstanceOf[BaseExprMeta[INPUT]] 
-         logWarning("r wrapped is : " + t)
          t
       })
       .getOrElse {
-        logWarning("rule not found")
         new RuleNotFoundExprMeta(expr, conf, parent) }
   }
 
@@ -518,10 +514,7 @@ abstract class WrapGpuWindowSpecDefinitionMeta(
     extends UnaryExprMeta[INPUT](expr, conf, parent, rule) with Logging {
 
     override val childExprs: Seq[BaseExprMeta[_]] = {
-      logWarning("Tom unary expr children: " + expr.children)
-      val childes =  expr.children.map(GpuOverrides.wrapExpr(_, conf, Some(this))) 
-      logWarning("Tom unary expr children wrapped: " + childes)
-      childes
+      expr.children.map(GpuOverrides.wrapExpr(_, conf, Some(this))) 
     }
   }
 
@@ -1859,7 +1852,7 @@ abstract class WrapTernaryExprMeta[INPUT <: TernaryExpression](
               Literal(data.get(i, dataType), dataType).asInstanceOf[Expression]
             }.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
           }
-    logWarning("Tom new in project exec childplans: " + childPlans + " children: " + proj.children + " exprs: " + childExprs)
+    // logWarning("Tom new in project exec childplans: " + childPlans + " children: " + proj.children + " exprs: " + childExprs)
 
           override def convertToGpu(): GpuExec =
             GpuProjectExec(childExprs.map(_.convertToGpu()), childPlans(0).convertIfNeeded())
@@ -2081,7 +2074,7 @@ override val childPlans: Seq[SparkPlanMeta[_]] =
 
   override def tagPlanForGpu(): Unit = {
     
-    logWarning("Tom new in sort merge joinexec left keys: " + leftKeys + " childplans: " + childPlans + " join children: " + join.children)
+    // logWarning("Tom new in sort merge joinexec left keys: " + leftKeys + " childplans: " + childPlans + " join children: " + join.children)
     // Use conditions from Hash Join
     GpuHashJoin.tagJoin(this, join.joinType, join.leftKeys, join.rightKeys, join.condition)
 
@@ -2109,12 +2102,11 @@ override val childPlans: Seq[SparkPlanMeta[_]] =
   }
 
   override def convertToGpu(): GpuExec = {
-    logWarning("Tom 5 sort merge join exec: ")
     ShimLoader.getGpuShuffledHashJoinShims(
       leftKeys.map(_.convertToGpu()),
       rightKeys.map(_.convertToGpu()),
       join.joinType,
-      BuildRight, // just hardcode one side
+      join,
       condition.map(_.convertToGpu()),
       childPlans(0).convertIfNeeded(),
       childPlans(1).convertIfNeeded())
