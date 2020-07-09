@@ -30,62 +30,13 @@ import org.apache.spark.sql.rapids.GpuAggregateExpression
 import org.apache.spark.sql.types.IntegerType
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 
-class GpuWindowExecMeta(windowExec: WindowExec,
+abstract class GpuWindowExecMeta(windowExec: WindowExec,
                         conf: RapidsConf,
                         parent: Option[RapidsMeta[_, _, _]],
                         rule: ConfKeysAndIncompat)
   extends WindowExecBaseMeta[WindowExec](windowExec, conf, parent, rule) {
 
-  /**
-   * Fetches WindowExpressions in input `windowExec`, via reflection.
-   * As a byproduct, determines whether to return the original input columns,
-   * as part of the output.
-   *
-   * (Spark versions that use `projectList` expect result columns
-   * *not* to include the input columns.
-   * Apache Spark expects the input columns, before the aggregation output columns.)
-   *
-   * @return WindowExpressions within windowExec,
-   *         and a boolean, indicating the result column semantics
-   *         (i.e. whether result columns should be returned *without* including the
-   *         input columns).
-   */
-  def getWindowExpression: (Seq[NamedExpression], Boolean) = {
-    var resultColumnsOnly : Boolean = false
-    val expr = try {
-      val resultMethod = windowExec.getClass.getMethod("windowExpression")
-      resultMethod.invoke(windowExec).asInstanceOf[Seq[NamedExpression]]
-    } catch {
-      case e: NoSuchMethodException =>
-        resultColumnsOnly = true
-        val winExpr = windowExec.getClass.getMethod("projectList")
-        winExpr.invoke(windowExec).asInstanceOf[Seq[NamedExpression]]
-    }
-    (expr, resultColumnsOnly)
-  }
 
-  private val (inputWindowExpressions, resultColumnsOnly) = getWindowExpression
-
-
-
-  override def tagPlanForGpu(): Unit = {
-
-    // Implementation depends on receiving a `NamedExpression` wrapped WindowExpression.
-    windowExpressions.map(meta => meta.wrapped)
-      .filter(expr => !expr.isInstanceOf[NamedExpression])
-      .foreach(_ => willNotWorkOnGpu(because = "Unexpected query plan with Windowing functions; " +
-        "cannot convert for GPU execution. " +
-        "(Detail: WindowExpression not wrapped in `NamedExpression`.)"))
-
-  }
-
-  override def convertToGpu(): GpuExec = {
-    GpuWindowExec(
-      windowExpressions.map(_.convertToGpu()),
-      childPlans.head.convertIfNeeded(),
-      resultColumnsOnly
-    )
-  }
 }
 
 case class GpuWindowExec(

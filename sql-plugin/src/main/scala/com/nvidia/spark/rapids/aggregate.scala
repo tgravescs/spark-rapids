@@ -37,137 +37,21 @@ import org.apache.spark.sql.rapids.{CudfAggregate, GpuAggregateExpression, GpuDe
 import org.apache.spark.sql.types.{DoubleType, FloatType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 
-class GpuHashAggregateMeta(
+abstract class GpuHashAggregateMeta(
     agg: HashAggregateExec,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat)
   extends SparkPlanMeta[HashAggregateExec](agg, conf, parent, rule) {
 
-  override def tagPlanForGpu(): Unit = {
-    if (agg.groupingExpressions.isEmpty) {
-      // first/last reductions not supported yet
-      if (agg.aggregateExpressions.exists(e => e.aggregateFunction.isInstanceOf[First] ||
-        e.aggregateFunction.isInstanceOf[Last])) {
-        willNotWorkOnGpu("First/Last reductions are not supported on GPU")
-      }
-    }
-    if (agg.resultExpressions.isEmpty) {
-      willNotWorkOnGpu("result expressions is empty")
-    }
-    val hashAggMode = agg.aggregateExpressions.map(_.mode).distinct
-    val hashAggReplaceMode = conf.hashAggReplaceMode.toLowerCase
-    if (!hashAggReplaceMode.equals("all")) {
-      hashAggReplaceMode match {
-        case "partial" => if (hashAggMode.contains(Final) || hashAggMode.contains(Complete)) {
-          // replacing only Partial hash aggregates, so a Final or Complete one should not replace
-          willNotWorkOnGpu("Replacing Final or Complete hash aggregates disabled")
-         }
-        case "final" => if (hashAggMode.contains(Partial) || hashAggMode.contains(Complete)) {
-          // replacing only Final hash aggregates, so a Partial or Complete one should not replace
-          willNotWorkOnGpu("Replacing Partial or Complete hash aggregates disabled")
-        }
-        case "complete" => if (hashAggMode.contains(Partial) || hashAggMode.contains(Final)) {
-          // replacing only Complete hash aggregates, so a Partial or Final one should not replace
-          willNotWorkOnGpu("Replacing Partial or Final hash aggregates disabled")
-        }
-        case _ =>
-          throw new IllegalArgumentException(s"The hash aggregate replacement mode " +
-            s"$hashAggReplaceMode is not valid. Valid options are: 'partial', " +
-            s"'final', 'complete', or 'all'")
-      }
-    }
-    if (!conf.partialMergeDistinctEnabled && hashAggMode.contains(PartialMerge)) {
-      willNotWorkOnGpu("Replacing Partial Merge aggregates disabled. " +
-        s"Set ${conf.partialMergeDistinctEnabled} to true if desired")
-    }
-    if (agg.aggregateExpressions.exists(expr => expr.isDistinct)
-      && agg.aggregateExpressions.exists(expr => expr.filter.isDefined)) {
-      // Distinct with Filter is not supported on the CPU currently,
-      // this makes sure that if we end up here, the plan falls back to th CPU,
-      // which will do the right thing.
-      willNotWorkOnGpu(
-        "DISTINCT and FILTER cannot be used in aggregate functions at the same time")
-    }
-  }
-
-  override def convertToGpu(): GpuExec = {
-    GpuHashAggregateExec(
-      requiredChildDistributionExpressions.map(_.map(_.convertToGpu())),
-      groupingExpressions.map(_.convertToGpu()),
-      aggregateExpressions.map(_.convertToGpu()).asInstanceOf[Seq[GpuAggregateExpression]],
-      aggregateAttributes.map(_.convertToGpu()).asInstanceOf[Seq[Attribute]],
-      agg.initialInputBufferOffset,
-      resultExpressions.map(_.convertToGpu()).asInstanceOf[Seq[NamedExpression]],
-      childPlans(0).convertIfNeeded())
-  }
 }
 
-class GpuSortAggregateMeta(
+abstract class GpuSortAggregateMeta(
   agg: SortAggregateExec,
   conf: RapidsConf,
   parent: Option[RapidsMeta[_, _, _]],
   rule: ConfKeysAndIncompat) extends SparkPlanMeta[SortAggregateExec](agg, conf, parent, rule) {
 
-
-  override def tagPlanForGpu(): Unit = {
-    if (agg.groupingExpressions.isEmpty) {
-      // first/last reductions not supported yet
-      if (agg.aggregateExpressions.exists(e => e.aggregateFunction.isInstanceOf[First] ||
-        e.aggregateFunction.isInstanceOf[Last])) {
-        willNotWorkOnGpu("First/Last reductions are not supported on GPU")
-      }
-    }
-    if (RapidsMeta.isAnyStringLit(agg.groupingExpressions)) {
-      willNotWorkOnGpu("string literal values are not supported in a hash aggregate")
-    }
-    val groupingExpressionTypes = agg.groupingExpressions.map(_.dataType)
-    if (conf.hasNans &&
-      (groupingExpressionTypes.contains(FloatType) ||
-        groupingExpressionTypes.contains(DoubleType))) {
-      willNotWorkOnGpu("grouping expressions over floating point columns " +
-        "that may contain -0.0 and NaN are disabled. You can bypass this by setting " +
-        s"${RapidsConf.HAS_NANS}=false")
-    }
-    if (agg.resultExpressions.isEmpty) {
-      willNotWorkOnGpu("result expressions is empty")
-    }
-    val hashAggMode = agg.aggregateExpressions.map(_.mode).distinct
-    val hashAggReplaceMode = conf.hashAggReplaceMode.toLowerCase
-    if (!hashAggReplaceMode.equals("all")) {
-      hashAggReplaceMode match {
-        case "partial" => if (hashAggMode.contains(Final) || hashAggMode.contains(Complete)) {
-          // replacing only Partial hash aggregates, so a Final or Commplete one should not replace
-          willNotWorkOnGpu("Replacing Final or Complete hash aggregates disabled")
-         }
-        case "final" => if (hashAggMode.contains(Partial) || hashAggMode.contains(Complete)) {
-          // replacing only Final hash aggregates, so a Partial or Complete one should not replace
-          willNotWorkOnGpu("Replacing Partial or Complete hash aggregates disabled")
-        }
-        case "complete" => if (hashAggMode.contains(Partial) || hashAggMode.contains(Final)) {
-          // replacing only Complete hash aggregates, so a Partial or Final one should not replace
-          willNotWorkOnGpu("Replacing Partial or Final hash aggregates disabled")
-        }
-        case _ =>
-          throw new IllegalArgumentException(s"The hash aggregate replacement mode " +
-            s"${hashAggReplaceMode} is not valid. Valid options are: 'partial', 'final', " +
-            s"'complete', or 'all'")
-      }
-    }
-  }
-
-  override def convertToGpu(): GpuExec = {
-    // we simply convert to a HashAggregateExec and let GpuOverrides take care of inserting a
-    // GpuSortExec if one is needed
-    GpuHashAggregateExec(
-      requiredChildDistributionExpressions.map(_.map(_.convertToGpu())),
-      groupingExpressions.map(_.convertToGpu()),
-      aggregateExpressions.map(_.convertToGpu()).asInstanceOf[Seq[GpuAggregateExpression]],
-      aggregateAttributes.map(_.convertToGpu()).asInstanceOf[Seq[Attribute]],
-      agg.initialInputBufferOffset,
-      resultExpressions.map(_.convertToGpu()).asInstanceOf[Seq[NamedExpression]],
-      childPlans(0).convertIfNeeded())
-  }
 
 }
 

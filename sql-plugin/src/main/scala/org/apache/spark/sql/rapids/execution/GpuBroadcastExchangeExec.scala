@@ -191,7 +191,7 @@ class SerializeBatchDeserializeHostBuffer(batch: ColumnarBatch)
   }
 }
 
-class GpuBroadcastMeta(
+abstract class GpuBroadcastMeta(
     exchange: BroadcastExchangeExec,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],

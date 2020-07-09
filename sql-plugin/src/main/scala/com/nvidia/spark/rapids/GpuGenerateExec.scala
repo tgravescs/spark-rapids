@@ -30,43 +30,6 @@ import org.apache.spark.sql.execution.{GenerateExec, SparkPlan, UnaryExecNode}
 import org.apache.spark.sql.types.{ArrayType, DataType, IntegerType}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
-class GpuGenerateExecSparkPlanMeta(
-    gen: GenerateExec,
-    conf: RapidsConf,
-    p: Option[RapidsMeta[_, _, _]],
-    r: ConfKeysAndIncompat) extends SparkPlanMeta[GenerateExec](gen, conf, p, r) {
-
-
-  override def tagPlanForGpu(): Unit = {
-    // We can only run on the GPU if we are doing a posexplode of an array we are generating
-    // right now
-    gen.generator match {
-      case PosExplode(CreateArray(_, _)) => // Nothing
-      case PosExplode(Literal(_, ArrayType(_, _))) => // Nothing
-      case PosExplode(Alias(Literal(_, ArrayType(_, _)), _)) => // Nothing
-      case Explode(CreateArray(_, _)) => // Nothing
-      case Explode(Literal(_, ArrayType(_, _))) => // Nothing
-      case Explode(Alias(Literal(_, ArrayType(_, _)), _)) => // Nothing
-      case _ => willNotWorkOnGpu("Only posexplode of a created array is currently supported")
-    }
-
-    if (gen.outer) {
-      willNotWorkOnGpu("outer is not currently supported")
-    }
-  }
-
-  /**
-   * Convert what this wraps to a GPU enabled version.
-   */
-  override def convertToGpu(): GpuExec = {
-    GpuGenerateExec(
-      gen.generator.isInstanceOf[PosExplode],
-      arrayExprs.map(_.convertToGpu()),
-      gen.requiredChildOutput,
-      gen.generatorOutput,
-      childPlans.head.convertIfNeeded())
-  }
-}
 
 /**
  * Takes the place of GenerateExec(PosExplode(CreateArray(_))).  It would be great to do it in a

@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types._
 
 /** Meta-data for cast and ansi_cast. */
-class CastExprMeta[INPUT <: CastBase](
+abstract class CastExprMeta[INPUT <: CastBase](
     cast: INPUT,
     ansiEnabled: Boolean,
     conf: RapidsConf,

@@ -30,24 +30,6 @@ import org.apache.spark.sql.execution.{ExpandExec, SparkPlan, UnaryExecNode}
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
-class GpuExpandExecMeta(
-    expand: ExpandExec,
-    conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
-    rule: ConfKeysAndIncompat)
-  extends SparkPlanMeta[ExpandExec](expand, conf, parent, rule) {
-
-
-  /**
-   * Convert what this wraps to a GPU enabled version.
-   */
-  override def convertToGpu(): GpuExec = {
-    val projections = gpuProjections.map(_.map(_.convertToGpu()))
-    GpuExpandExec(projections, expand.output,
-      childPlans.head.convertIfNeeded())
-  }
-}
-
 /**
  * Apply all of the GroupExpressions to every input row, hence we will get
  * multiple output rows for an input row.

@@ -17,7 +17,7 @@
 package com.nvidia.spark.rapids.shims
 
 //import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight, BuildSide}
-import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, BuildSide}
+// import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, BuildSide}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.joins.BroadcastNestedLoopJoinExec
 import org.apache.spark.sql.execution.joins.ShuffledHashJoinExec
@@ -25,7 +25,7 @@ import org.apache.spark.sql.execution.joins.ShuffledHashJoinExec
 
 class Spark300DatabricksShims extends SparkShims with Logging {
 
-
+/*
   def getBuildSide(join: ShuffledHashJoinExec): GpuBuildSide = {
     val buildSide = join.buildSide
     buildSide match {
@@ -55,12 +55,6 @@ class Spark300DatabricksShims extends SparkShims with Logging {
       case _ => throw new Exception("unknown buildSide Type")
     }
   }
-}
-
-class GpuShimBuildSideHashJoin {
-  def buildSide: BuildSide = {
-    BuildRight
-  }
-
+  */
 }
 

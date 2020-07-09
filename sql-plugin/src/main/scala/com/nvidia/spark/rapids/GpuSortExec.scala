@@ -29,12 +29,13 @@ import org.apache.spark.sql.execution.{SortExec, SparkPlan, UnaryExecNode}
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
-class GpuSortMeta(
+abstract class GpuSortMeta(
     sort: SortExec,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat)
   extends SparkPlanMeta[SortExec](sort, conf, parent, rule) {
+
   override def convertToGpu(): GpuExec =
     GpuSortExec(childExprs.map(_.convertToGpu()).asInstanceOf[Seq[SortOrder]],
       sort.global,

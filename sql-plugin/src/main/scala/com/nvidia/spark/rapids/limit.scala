@@ -121,7 +121,7 @@ case class GpuGlobalLimitExec(limit: Int, child: SparkPlan) extends GpuBaseLimit
   override def requiredChildDistribution: List[Distribution] = AllTuples :: Nil
 }
 
-class GpuCollectLimitMeta(
+abstract class GpuCollectLimitMeta(
                       collectLimit: CollectLimitExec,
                       conf: RapidsConf,
                       parent: Option[RapidsMeta[_, _, _]],

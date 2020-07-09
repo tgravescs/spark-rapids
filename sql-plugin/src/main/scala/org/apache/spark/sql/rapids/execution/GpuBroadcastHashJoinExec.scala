@@ -18,7 +18,6 @@ package org.apache.spark.sql.rapids.execution
 
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.GpuMetricNames._
-import com.nvidia.spark.rapids.shims.{GpuBuildRight, GpuBuildLeft, GpuBuildSide}
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -31,34 +30,19 @@ import org.apache.spark.sql.execution.joins._
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
-class GpuBroadcastHashJoinMeta(
+abstract class GpuBroadcastHashJoinMeta(
     join: BroadcastHashJoinExec,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat)
   extends GpuHashJoinBaseMeta[BroadcastHashJoinExec](join, conf, parent, rule) {
 
-  override val childExprs: Seq[BaseExprMeta[_]] = leftKeys ++ rightKeys ++ condition
-
-  private def getBuildSide(join: BroadcastHashJoinExec): GpuBuildSide = {
-    join.buildSide match {
-      case e: join.buildSide.type if e.toString.contains("BuildRight") => {
-        GpuBuildRight
-      }
-      case l: join.buildSide.type if l.toString.contains("BuildLeft") => {
-        GpuBuildLeft
-      }
-      case _ => throw new Exception("unknown buildSide Type")
-    }
-  }
-
-
   override def tagPlanForGpu(): Unit = {
     GpuHashJoin.tagJoin(this, join.joinType, join.leftKeys, join.rightKeys, join.condition)
 
-    val buildSide = getBuildSide(join) match {
-      case GpuBuildLeft => childPlans(0)
-      case GpuBuildRight => childPlans(1)
+    val buildSide = join.buildSide match {
+      case BuildLeft => childPlans(0)
+      case BuildRight => childPlans(1)
     }
 
     if (!buildSide.canThisBeReplaced) {
@@ -74,9 +58,9 @@ class GpuBroadcastHashJoinMeta(
     val left = childPlans(0).convertIfNeeded()
     val right = childPlans(1).convertIfNeeded()
     // The broadcast part of this must be a BroadcastExchangeExec
-    val buildSide = getBuildSide(join) match {
-      case GpuBuildLeft => left
-      case GpuBuildRight => right
+    val buildSide = join.buildSide match {
+      case BuildLeft => left
+      case BuildRight => right
     }
     if (!buildSide.isInstanceOf[GpuBroadcastExchangeExec]) {
       throw new IllegalStateException("the broadcast must be on the GPU too")
@@ -84,7 +68,7 @@ class GpuBroadcastHashJoinMeta(
     GpuBroadcastHashJoinExec(
       leftKeys.map(_.convertToGpu()),
       rightKeys.map(_.convertToGpu()),
-      join.joinType, getBuildSide(join),
+      join.joinType, join.buildSide,
       condition.map(_.convertToGpu()),
       left, right)
   }
@@ -94,18 +78,10 @@ case class GpuBroadcastHashJoinExec(
     leftKeys: Seq[Expression],
     rightKeys: Seq[Expression],
     joinType: JoinType,
-    gpuBuildSide: GpuBuildSide,
+    buildSide: BuildSide,
     condition: Option[Expression],
     left: SparkPlan,
     right: SparkPlan) extends BinaryExecNode with GpuHashJoin {
-
-  val buildSide = {
-    gpuBuildSide match {
-      case GpuBuildRight => org.apache.spark.sql.execution.joins.BuildRight
-      case GpuBuildLeft => org.apache.spark.sql.execution.joins.BuildLeft
-    }
-
-  }
 
 
   override lazy val additionalMetrics: Map[String, SQLMetric] = Map(
@@ -115,10 +91,10 @@ case class GpuBroadcastHashJoinExec(
 
   override def requiredChildDistribution: Seq[Distribution] = {
     val mode = HashedRelationBroadcastMode(buildKeys)
-    gpuBuildSide match {
-      case  GpuBuildLeft =>
+    buildSide match {
+      case BuildLeft =>
         BroadcastDistribution(mode) :: UnspecifiedDistribution :: Nil
-      case GpuBuildRight =>
+      case BuildRight =>
         UnspecifiedDistribution :: BroadcastDistribution(mode) :: Nil
     }
   }

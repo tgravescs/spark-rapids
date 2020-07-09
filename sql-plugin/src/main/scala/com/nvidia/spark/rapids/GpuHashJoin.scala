@@ -16,7 +16,6 @@
 package com.nvidia.spark.rapids
 
 import ai.rapids.cudf.{NvtxColor, Table}
-import com.nvidia.spark.rapids.shims.{GpuBuildRight, GpuBuildLeft, GpuBuildSide}
 
 import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
@@ -25,7 +24,7 @@ import org.apache.spark.sql.catalyst.plans.{ExistenceJoin, FullOuter, InnerLike,
 import org.apache.spark.sql.execution.joins.HashJoin
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
-
+import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, BuildSide, ShuffledHashJoinExec}
 
 object GpuHashJoin {
   def tagJoin(
@@ -54,19 +53,6 @@ object GpuHashJoin {
 
 trait GpuHashJoin extends GpuExec with HashJoin with Logging {
 
-  def getBuildSide: GpuBuildSide = {
-    buildSide match {
-      case e: buildSide.type if e.toString.contains("BuildRight") => {
-        logInfo("Tom buildright " + e)
-        GpuBuildRight
-      }
-      case l: buildSide.type if l.toString.contains("BuildLeft") => {
-        logInfo("Tom buildleft "+ l)
-        GpuBuildLeft
-      }
-      case _ => throw new Exception("unknown buildSide Type")
-    }
-  }
 
   override def output: Seq[Attribute] = {
     joinType match {
@@ -92,9 +78,9 @@ trait GpuHashJoin extends GpuExec with HashJoin with Logging {
       "Join keys from two sides should have same types")
     val lkeys = GpuBindReferences.bindGpuReferences(leftKeys, left.output)
     val rkeys = GpuBindReferences.bindGpuReferences(rightKeys, right.output)
-    getBuildSide match {
-      case GpuBuildLeft => (lkeys, rkeys)
-      case GpuBuildRight => (rkeys, lkeys)
+    buildSide match {
+      case BuildLeft => (lkeys, rkeys)
+      case BuildRight => (rkeys, lkeys)
     }
   }
 
@@ -211,9 +197,9 @@ trait GpuHashJoin extends GpuExec with HashJoin with Logging {
 
     val nvtxRange = new NvtxWithMetrics("hash join", NvtxColor.ORANGE, joinTime)
     val joined = try {
-      getBuildSide match {
-        case GpuBuildLeft => doJoinLeftRight(builtTable, streamedTable)
-        case GpuBuildRight => doJoinLeftRight(streamedTable, builtTable)
+      buildSide match {
+        case BuildLeft => doJoinLeftRight(builtTable, streamedTable)
+        case BuildRight => doJoinLeftRight(streamedTable, builtTable)
       }
     } finally {
       streamedTable.close()

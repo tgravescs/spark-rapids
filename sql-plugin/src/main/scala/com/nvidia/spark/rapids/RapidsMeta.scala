@@ -19,7 +19,6 @@ package com.nvidia.spark.rapids
 import java.time.ZoneId
 
 import scala.collection.mutable
-import com.nvidia.spark.rapids.shims.{GpuBuildLeft, GpuBuildRight, GpuBuildSide}
 import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, ComplexTypeMergingExpression, Expression, NamedExpression, SortOrder, String2TrimExpression, TernaryExpression, UnaryExpression, WindowFrame}
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
@@ -27,8 +26,12 @@ import org.apache.spark.sql.connector.read.Scan
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
+import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, BuildSide, ShuffledHashJoinExec}
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, ShuffledHashJoinExec, SortMergeJoinExec}
-import org.apache.spark.sql.types.{CalendarIntervalType, DataType, DataTypes, StringType}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
+import org.apache.spark.unsafe.types._
+import org.apache.spark.sql.types._
+import org.apache.spark.internal.Logging
 
 trait ConfKeysAndIncompat {
   val operationName: String
@@ -452,36 +455,25 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat)
-  extends RapidsMeta[INPUT, SparkPlan, GpuExec](plan, conf, parent, rule) {
+  extends RapidsMeta[INPUT, SparkPlan, GpuExec](plan, conf, parent, rule) with Logging {
 
-  override val childPlans: Seq[SparkPlanMeta[_]] = Seq.empty
-  override val childExprs: Seq[BaseExprMeta[_]] = Seq.empty
   override val childScans: Seq[ScanMeta[_]] = Seq.empty
   override val childParts: Seq[PartMeta[_]] = Seq.empty
   override val childDataWriteCmds: Seq[DataWritingCommandMeta[_]] = Seq.empty
 
   override def convertToCpu(): SparkPlan = {
+    logWarning("child plans are: " + childPlans)
+    val converted = childPlans.map(_.convertIfNeeded())
+    logWarning("converted child plans are: " + converted)
     wrapped.withNewChildren(childPlans.map(_.convertIfNeeded()))
-  }
-
-  private def getBuildSide(join: BroadcastHashJoinExec): GpuBuildSide = {
-    join.buildSide match {
-      case e: join.buildSide.type if e.toString.contains("BuildRight") => {
-        GpuBuildRight
-      }
-      case l: join.buildSide.type if l.toString.contains("BuildLeft") => {
-        GpuBuildLeft
-      }
-      case _ => throw new Exception("unknown buildSide Type")
-    }
   }
 
   private def findShuffleExchanges(): Seq[SparkPlanMeta[ShuffleExchangeExec]] = wrapped match {
     case _: ShuffleExchangeExec =>
       this.asInstanceOf[SparkPlanMeta[ShuffleExchangeExec]] :: Nil
-    case bkj: BroadcastHashJoinExec => getBuildSide(bkj) match {
-      case GpuBuildLeft => childPlans(1).findShuffleExchanges()
-      case GpuBuildRight => childPlans(0).findShuffleExchanges()
+    case bkj: BroadcastHashJoinExec => bkj.buildSide match {
+      case BuildLeft => childPlans(1).findShuffleExchanges()
+      case BuildRight => childPlans(0).findShuffleExchanges()
     }
     case _ => childPlans.flatMap(_.findShuffleExchanges())
   }
@@ -606,8 +598,10 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
 abstract class GpuHashJoinBaseMeta[INPUT <: SparkPlan](
     plan: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]])
-  extends SparkPlanMeta[INPUT](plan, conf, parent, new NoRuleConfKeysAndIncompat) {
+    parent: Option[RapidsMeta[_, _, _]],
+    rule: ConfKeysAndIncompat)
+  extends SparkPlanMeta[INPUT](plan, conf, parent, rule) {
+
     val leftKeys: Seq[BaseExprMeta[_]]
     val rightKeys: Seq[BaseExprMeta[_]]
     val condition: Option[BaseExprMeta[_]]
@@ -617,27 +611,13 @@ abstract class GpuHashJoinBaseMeta[INPUT <: SparkPlan](
 abstract class WindowExecBaseMeta[INPUT <: SparkPlan](
     plan: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]])
-  extends SparkPlanMeta[INPUT](plan, conf, parent, new NoRuleConfKeysAndIncompat) {
+    parent: Option[RapidsMeta[_, _, _]],
+    rule: ConfKeysAndIncompat)
+  extends SparkPlanMeta[INPUT](plan, conf, parent, rule) {
   val windowExpressions: Seq[BaseExprMeta[NamedExpression]]
 }
 
 
-/**
- * Metadata for `SparkPlan` with no rule found
- */
-final class RuleNotFoundSparkPlanMeta[INPUT <: SparkPlan](
-    plan: INPUT,
-    conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]])
-  extends SparkPlanMeta[INPUT](plan, conf, parent, new NoRuleConfKeysAndIncompat) {
-
-  override def tagPlanForGpu(): Unit =
-    willNotWorkOnGpu(s"no GPU enabled version of operator ${plan.getClass} could be found")
-
-  override def convertToGpu(): GpuExec =
-    throw new IllegalStateException("Cannot be converted to GPU")
-}
 
 /**
  * Base class for metadata around `Expression`.
@@ -650,7 +630,6 @@ abstract class BaseExprMeta[INPUT <: Expression](
   extends RapidsMeta[INPUT, Expression, Expression](expr, conf, parent, rule) {
 
   override val childPlans: Seq[SparkPlanMeta[_]] = Seq.empty
-  override val childExprs: Seq[BaseExprMeta[_]] = Seq.empty
   override val childScans: Seq[ScanMeta[_]] = Seq.empty
   override val childParts: Seq[PartMeta[_]] = Seq.empty
   override val childDataWriteCmds: Seq[DataWritingCommandMeta[_]] = Seq.empty
@@ -696,7 +675,7 @@ abstract class ExprMeta[INPUT <: Expression](
   override def convertToGpu(): GpuExpression
 }
 
-abstract class WindowExprMeta[INPUT <: UnaryExpression](
+abstract class WindowExprMeta[INPUT <: Expression](
     expr: INPUT,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
@@ -717,10 +696,12 @@ abstract class UnaryExprMeta[INPUT <: UnaryExpression](
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat)
-  extends ExprMeta[INPUT](expr, conf, parent, rule) {
+  extends ExprMeta[INPUT](expr, conf, parent, rule) with Logging{
 
-  override final def convertToGpu(): GpuExpression =
+  override final def convertToGpu(): GpuExpression = {
+    logWarning("convert to gpu for: " + expr + " exprs: " + childExprs)  
     convertToGpu(childExprs(0).convertToGpu())
+  }
 
   def convertToGpu(child: Expression): GpuExpression
 }
@@ -816,18 +797,3 @@ abstract class ComplexTypeMergingExprMeta[INPUT <: ComplexTypeMergingExpression]
   def convertToGpu(childExprs: Seq[Expression]): GpuExpression
 }
 
-/**
- * Metadata for `Expression` with no rule found
- */
-final class RuleNotFoundExprMeta[INPUT <: Expression](
-    expr: INPUT,
-    conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]])
-  extends ExprMeta[INPUT](expr, conf, parent, new NoRuleConfKeysAndIncompat) {
-
-  override def tagExprForGpu(): Unit =
-    willNotWorkOnGpu(s"no GPU enabled version of expression ${expr.getClass} could be found")
-
-  override def convertToGpu(): GpuExpression =
-    throw new IllegalStateException("Cannot be converted to GPU")
-}

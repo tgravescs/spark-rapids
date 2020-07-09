@@ -558,7 +558,7 @@ case class GpuLike(left: Expression, right: Expression, escapeChar: Char)
   }
 }
 
-class SubstringIndexMeta(
+abstract class SubstringIndexMeta(
     expr: SubstringIndex,
     override val conf: RapidsConf,
     override val parent: Option[RapidsMeta[_, _, _]],

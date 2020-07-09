@@ -18,6 +18,20 @@ package com.nvidia.spark.rapids.shims
 
 import scala.collection.immutable.HashMap
 
+import com.nvidia.spark.rapids._
+
+import org.apache.spark.TaskContext
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.plans.JoinType
+import org.apache.spark.sql.catalyst.plans.physical.{Distribution, HashClusteredDistribution}
+import org.apache.spark.sql.execution.{BinaryExecNode, SparkPlan}
+import org.apache.spark.sql.execution.joins._
+import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
+import org.apache.spark.sql.vectorized.ColumnarBatch
+import org.apache.spark.internal.Logging
+
 import org.apache.spark.{SPARK_BUILD_USER, SPARK_VERSION}
 import org.apache.spark.internal.Logging
 
@@ -27,13 +41,14 @@ object ShimLoader extends Logging {
   val SPARK30VERSIONNAME = "3.0.0"
 
   private var sparkShims: SparkShims = null
+  private var gpuShuffledHashJoinShims: GpuShuffledHashJoinExecBase = null
 
   /**
    * The names of the classes for shimming Spark for each major version.
    */
   private val SPARK_SHIM_CLASSES = HashMap(
-    SPARK30VERSIONNAME -> "com.nvidia.spark.rapids.shims.Spark300DatabricksShims",
-    SPARK30DATABRICKSSVERSIONNAME -> "com.nvidia.spark.rapids.shims.Spark300Shims"
+    SPARK30VERSIONNAME -> "com.nvidia.spark.rapids.shims.Spark30Shims",
+    SPARK30DATABRICKSSVERSIONNAME -> "com.nvidia.spark.rapids.shims.Spark300DatabricksShims"
   )
 
   /**
@@ -42,23 +57,74 @@ object ShimLoader extends Logging {
    */
   def getSparkShims: SparkShims = {
     if (sparkShims == null) {
-      sparkShims = loadShims(SPARK_SHIM_CLASSES)
+      sparkShims = loadShims(SPARK_SHIM_CLASSES, classOf[SparkShims])
     }
     sparkShims
   }
 
-  private def loadShims(classMap: Map[String, String]): SparkShims = {
+  private val SHUFFLED_HASH_JOIN_SHIM_CLASSES = HashMap(
+    SPARK30VERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuShuffledHashJoinExec30",
+    SPARK30DATABRICKSSVERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuShuffledHashJoinExec300Databricks"
+  )
+
+  def getGpuShuffledHashJoinShims(leftKeys: Seq[Expression],
+      rightKeys: Seq[Expression],
+      joinType: JoinType,
+      buildSide: BuildSide,
+      condition: Option[Expression],
+      left: SparkPlan,
+      right: SparkPlan): GpuShuffledHashJoinExecBase = {
+    if (sparkShims == null) {
+      gpuShuffledHashJoinShims = loadShimsHashJoin(SHUFFLED_HASH_JOIN_SHIM_CLASSES, classOf[GpuShuffledHashJoinExecBase],
+        leftKeys, rightKeys, joinType, buildSide, condition, left, right)
+    }
+    gpuShuffledHashJoinShims 
+  }
+
+  private def loadShims[T](classMap: Map[String, String], xface: Class[T]): T = {
     val vers = getVersion();
     val className = classMap.get(vers)
     if (className.isEmpty) {
       throw new Exception(s"No shim layer for $vers")
     } 
-    createShim(className.get)
+    createShim(className.get, xface)
   }
 
-  private def createShim(className: String): SparkShims = try {
+  private def loadShimsHashJoin[T](classMap: Map[String, String], xface: Class[T], leftKeys: Seq[Expression],
+      rightKeys: Seq[Expression],
+      joinType: JoinType,
+      buildSide: BuildSide,
+      condition: Option[Expression],
+      left: SparkPlan,
+      right: SparkPlan): T = {
+    val vers = getVersion();
+    val className = classMap.get(vers)
+    if (className.isEmpty) {
+      throw new Exception(s"No shim layer for $vers")
+    } 
+    createShimHashJoin(className.get, xface, leftKeys, rightKeys, joinType, buildSide, condition, left, right)
+  }
+
+  private def createShimHashJoin[T](className: String, xface: Class[T], leftKeys: Seq[Expression],
+      rightKeys: Seq[Expression],
+      joinType: JoinType,
+      buildSide: BuildSide,
+      condition: Option[Expression],
+      left: SparkPlan,
+      right: SparkPlan): T = try {
     val clazz = Class.forName(className)
-    val res = clazz.newInstance().asInstanceOf[SparkShims]
+    val constructors = clazz.getConstructors()
+    val res = constructors(0).newInstance(leftKeys, rightKeys, joinType, buildSide, condition, left, right).asInstanceOf[T]
+    // val res = clazz.newInstance().asInstanceOf[T]
+    res
+  } catch {
+    case e: Exception => throw new RuntimeException("Could not load shims in class " + className, e)
+  }
+
+
+  private def createShim[T](className: String, xface: Class[T]): T = try {
+    val clazz = Class.forName(className)
+    val res = clazz.newInstance().asInstanceOf[T]
     res
   } catch {
     case e: Exception => throw new RuntimeException("Could not load shims in class " + className, e)

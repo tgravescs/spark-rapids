@@ -27,7 +27,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.unsafe.types.CalendarInterval
 
-class GpuWindowExpressionMeta(
+abstract class GpuWindowExpressionMeta(
     windowExpression: WindowExpression,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_,_,_]],
@@ -353,7 +353,7 @@ object GpuWindowExpression {
   }
 }
 
-class GpuWindowSpecDefinitionMeta(
+abstract class GpuWindowSpecDefinitionMeta(
     windowSpec: WindowSpecDefinition,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_,_,_]],
@@ -447,7 +447,7 @@ case class GpuWindowSpecDefinition(
   }
 }
 
-class GpuSpecifiedWindowFrameMeta(
+abstract class GpuSpecifiedWindowFrameMeta(
     windowFrame: SpecifiedWindowFrame,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_,_,_]],

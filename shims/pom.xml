@@ -35,11 +35,14 @@
     <profiles>
         <profile>
             <id>databricks</id>
+            <modules>
+                <module>databricks</module>
+            </modules>
         </profile>
     </profiles>
 
     <modules>
-        <module>databricks</module>
+        <module>spark30</module>
         <module>common</module>
         <module>aggregator</module>
     </modules>

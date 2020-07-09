@@ -16,57 +16,19 @@
 
 package com.nvidia.spark.rapids
 
-import com.nvidia.spark.rapids.shims.GpuBuildRight
+import org.apache.spark.sql.rapids.execution.GpuBroadcastHashJoinExec
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.SortExec
 import org.apache.spark.sql.execution.joins.{BuildRight, SortMergeJoinExec}
 
-class GpuSortMergeJoinMeta(
+abstract class GpuSortMergeJoinMeta(
     join: SortMergeJoinExec,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat)
   extends GpuHashJoinBaseMeta[SortMergeJoinExec](join, conf, parent, rule) with Logging {
 
-  override val childExprs: Seq[BaseExprMeta[_]] = leftKeys ++ rightKeys ++ condition
+    logWarning("Tom Gpu Sort merge join, left keys " + leftKeys + " right: " + rightKeys)
 
-  override def tagPlanForGpu(): Unit = {
-    // Use conditions from Hash Join
-    GpuHashJoin.tagJoin(this, join.joinType, join.leftKeys, join.rightKeys, join.condition)
-
-    if (!conf.enableReplaceSortMergeJoin) {
-      willNotWorkOnGpu(s"Not replacing sort merge join with hash join, " +
-        s"see ${RapidsConf.ENABLE_REPLACE_SORTMERGEJOIN.key}")
-    }
-
-    // make sure this is last check - if this is SortMergeJoin, the children can be Sorts and we
-    // want to validate they can run on GPU and remove them before replacing this with a
-    // ShuffleHashJoin
-    if (canThisBeReplaced) {
-      childPlans.foreach { plan =>
-        if (plan.wrapped.isInstanceOf[SortExec]) {
-          if (!plan.canThisBeReplaced) {
-            willNotWorkOnGpu(s"can't replace sortMergeJoin because one of the SortExec's before " +
-              s"can't be replaced.")
-          } else {
-            plan.shouldBeRemoved("removing SortExec as part replacing sortMergeJoin with " +
-              s"shuffleHashJoin")
-          }
-        }
-      }
-    }
-  }
-
-  override def convertToGpu(): GpuExec = {
-    logWarning("Tom 5 sort merge join exec: ")
-    GpuShuffledHashJoinExec(
-      leftKeys.map(_.convertToGpu()),
-      rightKeys.map(_.convertToGpu()),
-      join.joinType,
-      GpuBuildRight, // just hardcode one side
-      condition.map(_.convertToGpu()),
-      childPlans(0).convertIfNeeded(),
-      childPlans(1).convertIfNeeded())
-  }
 }

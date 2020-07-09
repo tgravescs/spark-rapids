@@ -72,6 +72,7 @@
 
     <modules>
         <module>shims</module>
+        <module>sql-overrides</module>
         <module>dist</module>
         <module>shuffle-plugin</module>
         <module>sql-plugin</module>
