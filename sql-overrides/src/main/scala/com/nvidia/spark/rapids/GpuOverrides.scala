@@ -24,14 +24,13 @@ import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.shims._
 import org.apache.spark.sql.rapids.execution._
 
-import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, BuildSide, ShuffledHashJoinExec}
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.optimizer.NormalizeNaNAndZero
 import org.apache.spark.sql.catalyst.plans.physical._
+import org.apache.spark.sql.catalyst.plans.{Cross, ExistenceJoin, FullOuter, Inner, InnerLike, JoinType, LeftExistence, LeftOuter, RightOuter}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.util.ArrayData
 import org.apache.spark.sql.connector.read.Scan
@@ -53,7 +52,7 @@ import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BroadcastNes
 import org.apache.spark.sql.execution.window.WindowExec
 import org.apache.spark.sql.rapids._
 import org.apache.spark.sql.rapids.catalyst.expressions.GpuRand
-import org.apache.spark.sql.rapids.execution.{GpuBroadcastHashJoinMeta, GpuBroadcastMeta, GpuBroadcastNestedLoopJoinMeta}
+import org.apache.spark.sql.rapids.execution.{GpuBroadcastHashJoinMeta, GpuBroadcastMeta}
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 
@@ -2035,27 +2034,12 @@ override val childPlans: Seq[SparkPlanMeta[_]] =
         val condition: Option[BaseExprMeta[_]] =
           join.condition.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
 
-  override val childPlans: Seq[SparkPlanMeta[_]] =
-    join.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
+        override val childPlans: Seq[SparkPlanMeta[_]] =
+          join.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
 
         override val childExprs: Seq[BaseExprMeta[_]] = condition.toSeq
-  override def convertToGpu(): GpuExec = {
-    val left = childPlans.head.convertIfNeeded()
-    val right = childPlans(1).convertIfNeeded()
-    // The broadcast part of this must be a BroadcastExchangeExec
-    val buildSide = join.buildSide match {
-      case BuildLeft => left
-      case BuildRight => right
-    }
-    if (!buildSide.isInstanceOf[GpuBroadcastExchangeExec]) {
-      throw new IllegalStateException("the broadcast must be on the GPU too")
-    }
-    GpuBroadcastNestedLoopJoinExec(
-      left, right, join.buildSide,
-      join.joinType,
-      condition.map(_.convertToGpu()),
-      conf.gpuTargetBatchSizeBytes)
-  }
+
+
       })
         .disabledByDefault("large joins can cause out of memory errors"),
     exec[SortMergeJoinExec](
@@ -2074,7 +2058,6 @@ override val childPlans: Seq[SparkPlanMeta[_]] =
 
   override def tagPlanForGpu(): Unit = {
     
-    // logWarning("Tom new in sort merge joinexec left keys: " + leftKeys + " childplans: " + childPlans + " join children: " + join.children)
     // Use conditions from Hash Join
     GpuHashJoin.tagJoin(this, join.joinType, join.leftKeys, join.rightKeys, join.condition)
 

@@ -17,6 +17,7 @@
 package com.nvidia.spark.rapids.shims
 
 import scala.collection.immutable.HashMap
+import scala.collection.JavaConverters._
 
 import com.nvidia.spark.rapids._
 
@@ -42,6 +43,7 @@ object ShimLoader extends Logging {
 
   private var sparkShims: SparkShims = null
   private var gpuShuffledHashJoinShims: GpuShuffledHashJoinExecBase = null
+  private var gpuBroadcastNestedJoinShims: GpuBroadcastNestedLoopJoinBase = null
 
   /**
    * The names of the classes for shimming Spark for each major version.
@@ -81,6 +83,24 @@ object ShimLoader extends Logging {
     gpuShuffledHashJoinShims 
   }
 
+  private val BROADCAST_NESTED_LOOP_JOIN_SHIM_CLASSES = HashMap(
+    SPARK30VERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuBroadcastNestedLoopJoinExec30",
+    SPARK30DATABRICKSSVERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuBroadcastNestedLoopJoinExec300Databricks"
+  )
+
+  def getGpuBroadcastNestedLoopJoinShims(
+      left: SparkPlan,
+      right: SparkPlan,
+      join: BroadcastNestedLoopJoinExec,
+      joinType: JoinType,
+      condition: Option[Expression]): GpuBroadcastNestedLoopJoinBase = {
+    if (sparkShims == null) {
+      gpuBroadcastNestedJoinShims = loadShimsNestedBroadcastJoin(BROADCAST_NESTED_LOOP_JOIN_SHIM_CLASSES, classOf[GpuBroadcastNestedLoopJoinBase],
+        left, right, join, joinType, condition)
+    }
+    gpuBroadcastNestedJoinShims
+  }
+
   private def loadShims[T](classMap: Map[String, String], xface: Class[T]): T = {
     val vers = getVersion();
     val className = classMap.get(vers)
@@ -113,12 +133,8 @@ object ShimLoader extends Logging {
       left: SparkPlan,
       right: SparkPlan): T = try {
     val clazz = Class.forName(className)
-    // public static void com.nvidia.spark.rapids.shims.GpuShuffledHashJoinExec30.createInstance(scala.collection.Seq,scala.collection.Seq,org.apache.spark.sql.catalyst.plans.JoinType,org.apache.spark.sql.execution.SparkPlan,scala.Option,org.apache.spark.sql.execution.SparkPlan,org.apache.spark.sql.execution.SparkPlan)
     val resultMethod = clazz.getDeclaredMethod("createInstance", classOf[scala.collection.Seq[org.apache.spark.sql.catalyst.expressions.Expression]],classOf[scala.collection.Seq[org.apache.spark.sql.catalyst.expressions.Expression]],classOf[org.apache.spark.sql.catalyst.plans.JoinType],classOf[org.apache.spark.sql.execution.SparkPlan], classOf[scala.Option[org.apache.spark.sql.catalyst.expressions.Expression]],classOf[org.apache.spark.sql.execution.SparkPlan],classOf[org.apache.spark.sql.execution.SparkPlan])
     val res = resultMethod.invoke(clazz, leftKeys, rightKeys, joinType, join, condition, left, right).asInstanceOf[T]
-    // val constructors = clazz.getConstructors()
-    // val res = constructors(0).newInstance(leftKeys, rightKeys, joinType, join, condition, left, right).asInstanceOf[T]
-    // val res = clazz.newInstance().asInstanceOf[T]
     res
   } catch {
     case e: Exception => throw new RuntimeException("Could not load shims in class " + className, e)
@@ -128,6 +144,34 @@ object ShimLoader extends Logging {
   private def createShim[T](className: String, xface: Class[T]): T = try {
     val clazz = Class.forName(className)
     val res = clazz.newInstance().asInstanceOf[T]
+    res
+  } catch {
+    case e: Exception => throw new RuntimeException("Could not load shims in class " + className, e)
+  }
+
+  private def loadShimsNestedBroadcastJoin[T](classMap: Map[String, String], xface: Class[T],
+      left: SparkPlan,
+      right: SparkPlan,
+      join: BroadcastNestedLoopJoinExec,
+      joinType: JoinType,
+      condition: Option[Expression]): T = {
+    val vers = getVersion();
+    val className = classMap.get(vers)
+    if (className.isEmpty) {
+      throw new Exception(s"No shim layer for $vers")
+    } 
+    createShimNestedBroadcastJoin(className.get, xface, left, right, join, joinType, condition)
+  }
+
+  private def createShimNestedBroadcastJoin[T](className: String, xface: Class[T],
+      left: SparkPlan,
+      right: SparkPlan,
+      join: BroadcastNestedLoopJoinExec,
+      joinType: JoinType,
+      condition: Option[Expression]): T = try {
+    val clazz = Class.forName(className)
+    val resultMethod = clazz.getDeclaredMethod("createInstance", classOf[org.apache.spark.sql.execution.SparkPlan],classOf[org.apache.spark.sql.execution.SparkPlan],classOf[org.apache.spark.sql.execution.joins.BroadcastNestedLoopJoinExec], classOf[org.apache.spark.sql.catalyst.plans.JoinType], classOf[scala.Option[org.apache.spark.sql.catalyst.expressions.Expression]])
+    val res = resultMethod.invoke(clazz, left, right, join, joinType, condition).asInstanceOf[T]
     res
   } catch {
     case e: Exception => throw new RuntimeException("Could not load shims in class " + className, e)
