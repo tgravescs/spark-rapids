@@ -43,6 +43,7 @@
 
     <modules>
         <module>spark30</module>
+        <module>spark31</module>
         <module>common</module>
         <module>aggregator</module>
     </modules>

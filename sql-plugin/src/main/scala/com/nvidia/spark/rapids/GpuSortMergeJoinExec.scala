@@ -16,8 +16,6 @@
 
 package com.nvidia.spark.rapids
 
-import org.apache.spark.sql.rapids.execution.GpuBroadcastHashJoinExec
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.SortExec
 import org.apache.spark.sql.execution.joins.SortMergeJoinExec

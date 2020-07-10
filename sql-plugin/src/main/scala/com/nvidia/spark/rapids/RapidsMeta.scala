@@ -448,6 +448,12 @@ final class RuleNotFoundDataWritingCommandMeta[INPUT <: DataWritingCommand](
     throw new IllegalStateException("Cannot be converted to GPU")
 }
 
+sealed abstract class GpuBuildSideT
+
+case object GpuBuildRightT extends GpuBuildSideT
+
+case object GpuBuildLeftT extends GpuBuildSideT
+
 /**
  * Base class for metadata around `SparkPlan`.
  */
@@ -468,11 +474,6 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     wrapped.withNewChildren(childPlans.map(_.convertIfNeeded()))
   }
 
-  sealed abstract class GpuBuildSideT
-
-  case object GpuBuildRightT extends GpuBuildSideT
-
-  case object GpuBuildLeftT extends GpuBuildSideT
 
  private def getBuildSide(join: BroadcastHashJoinExec): GpuBuildSideT = {
     join.buildSide match {

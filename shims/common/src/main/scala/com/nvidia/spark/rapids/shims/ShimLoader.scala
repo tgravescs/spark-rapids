@@ -40,9 +40,11 @@ object ShimLoader extends Logging {
 
   val SPARK30DATABRICKSSVERSIONNAME = "3.0.0-databricks"
   val SPARK30VERSIONNAME = "3.0.0"
+  val SPARK31VERSIONNAME = "3.1.0-SNAPSHOT"
 
   private var sparkShims: SparkShims = null
   private var gpuShuffledHashJoinShims: GpuShuffledHashJoinExecBase = null
+  private var gpuBroadcastHashJoinShims: GpuBroadcastHashJoinExecBase = null
   private var gpuBroadcastNestedJoinShims: GpuBroadcastNestedLoopJoinBase = null
 
   /**
@@ -50,7 +52,8 @@ object ShimLoader extends Logging {
    */
   private val SPARK_SHIM_CLASSES = HashMap(
     SPARK30VERSIONNAME -> "com.nvidia.spark.rapids.shims.Spark30Shims",
-    SPARK30DATABRICKSSVERSIONNAME -> "com.nvidia.spark.rapids.shims.Spark300DatabricksShims"
+    SPARK30DATABRICKSSVERSIONNAME -> "com.nvidia.spark.rapids.shims.Spark300DatabricksShims",
+    SPARK31VERSIONNAME -> "com.nvidia.spark.rapids.shims.Spark31Shims",
   )
 
   /**
@@ -66,7 +69,8 @@ object ShimLoader extends Logging {
 
   private val SHUFFLED_HASH_JOIN_SHIM_CLASSES = HashMap(
     SPARK30VERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuShuffledHashJoinExec30",
-    SPARK30DATABRICKSSVERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuShuffledHashJoinExec300Databricks"
+    SPARK30DATABRICKSSVERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuShuffledHashJoinExec300Databricks",
+    SPARK31VERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuShuffledHashJoinExec31",
   )
 
   def getGpuShuffledHashJoinShims(leftKeys: Seq[Expression],
@@ -83,9 +87,31 @@ object ShimLoader extends Logging {
     gpuShuffledHashJoinShims 
   }
 
+  private val BROADCAST_HASH_JOIN_SHIM_CLASSES = HashMap(
+    SPARK30VERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuBroadcastHashJoinExec30",
+    SPARK30DATABRICKSSVERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuBroadcastHashJoinExec300Databricks",
+    SPARK31VERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuBroadcastHashJoinExec31",
+  )
+
+  def getGpuBroadcastHashJoinShims(leftKeys: Seq[Expression],
+      rightKeys: Seq[Expression],
+      joinType: JoinType,
+      join: BroadcastHashJoinExec,
+      condition: Option[Expression],
+      left: SparkPlan,
+      right: SparkPlan): GpuBroadcastHashJoinExecBase = {
+    if (sparkShims == null) {
+      gpuBroadcastHashJoinShims = loadShimsBroadcastHashJoin(BROADCAST_HASH_JOIN_SHIM_CLASSES, classOf[GpuBroadcastHashJoinExecBase],
+        leftKeys, rightKeys, joinType, join, condition, left, right)
+    }
+    gpuBroadcastHashJoinShims 
+  }
+
+
   private val BROADCAST_NESTED_LOOP_JOIN_SHIM_CLASSES = HashMap(
     SPARK30VERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuBroadcastNestedLoopJoinExec30",
-    SPARK30DATABRICKSSVERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuBroadcastNestedLoopJoinExec300Databricks"
+    SPARK30DATABRICKSSVERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuBroadcastNestedLoopJoinExec300Databricks",
+    SPARK31VERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuBroadcastNestedLoopJoinExec31",
   )
 
   def getGpuBroadcastNestedLoopJoinShims(
@@ -134,6 +160,36 @@ object ShimLoader extends Logging {
       right: SparkPlan): T = try {
     val clazz = Class.forName(className)
     val resultMethod = clazz.getDeclaredMethod("createInstance", classOf[scala.collection.Seq[org.apache.spark.sql.catalyst.expressions.Expression]],classOf[scala.collection.Seq[org.apache.spark.sql.catalyst.expressions.Expression]],classOf[org.apache.spark.sql.catalyst.plans.JoinType],classOf[org.apache.spark.sql.execution.SparkPlan], classOf[scala.Option[org.apache.spark.sql.catalyst.expressions.Expression]],classOf[org.apache.spark.sql.execution.SparkPlan],classOf[org.apache.spark.sql.execution.SparkPlan])
+    val res = resultMethod.invoke(clazz, leftKeys, rightKeys, joinType, join, condition, left, right).asInstanceOf[T]
+    res
+  } catch {
+    case e: Exception => throw new RuntimeException("Could not load shims in class " + className, e)
+  }
+
+  private def loadShimsBroadcastHashJoin[T](classMap: Map[String, String], xface: Class[T], leftKeys: Seq[Expression],
+      rightKeys: Seq[Expression],
+      joinType: JoinType,
+      join: BroadcastHashJoinExec,
+      condition: Option[Expression],
+      left: SparkPlan,
+      right: SparkPlan): T = {
+    val vers = getVersion();
+    val className = classMap.get(vers)
+    if (className.isEmpty) {
+      throw new Exception(s"No shim layer for $vers")
+    } 
+    createShimBroadcastHashJoin(className.get, xface, leftKeys, rightKeys, joinType, join, condition, left, right)
+  }
+
+  private def createShimBroadcastHashJoin[T](className: String, xface: Class[T], leftKeys: Seq[Expression],
+      rightKeys: Seq[Expression],
+      joinType: JoinType,
+      join: BroadcastHashJoinExec,
+      condition: Option[Expression],
+      left: SparkPlan,
+      right: SparkPlan): T = try {
+    val clazz = Class.forName(className)
+    val resultMethod = clazz.getDeclaredMethod("createInstance", classOf[scala.collection.Seq[org.apache.spark.sql.catalyst.expressions.Expression]],classOf[scala.collection.Seq[org.apache.spark.sql.catalyst.expressions.Expression]],classOf[org.apache.spark.sql.catalyst.plans.JoinType],classOf[org.apache.spark.sql.execution.joins.BroadcastHashJoinExec], classOf[scala.Option[org.apache.spark.sql.catalyst.expressions.Expression]],classOf[org.apache.spark.sql.execution.SparkPlan],classOf[org.apache.spark.sql.execution.SparkPlan])
     val res = resultMethod.invoke(clazz, leftKeys, rightKeys, joinType, join, condition, left, right).asInstanceOf[T]
     res
   } catch {

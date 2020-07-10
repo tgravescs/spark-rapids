@@ -52,7 +52,7 @@ import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BroadcastNes
 import org.apache.spark.sql.execution.window.WindowExec
 import org.apache.spark.sql.rapids._
 import org.apache.spark.sql.rapids.catalyst.expressions.GpuRand
-import org.apache.spark.sql.rapids.execution.{GpuBroadcastHashJoinMeta, GpuBroadcastMeta}
+import org.apache.spark.sql.rapids.execution.GpuBroadcastMeta
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 
@@ -867,6 +867,7 @@ abstract class WrapTernaryExprMeta[INPUT <: TernaryExpression](
           GpuDateSub(lhs, rhs)
       }
     ),
+  /*
     expr[TimeSub](
       "Subtracts interval from timestamp",
       (a, conf, p, r) => new WrapBinaryExprMeta[TimeSub](a, conf, p, r) {
@@ -888,6 +889,7 @@ abstract class WrapTernaryExprMeta[INPUT <: TernaryExpression](
           GpuTimeSub(lhs, rhs)
       }
     ),
+  */
     expr[NaNvl](
       "evaluates to `left` iff left is not NaN, `right` otherwise.",
       (a, conf, p, r) => new WrapBinaryExprMeta[NaNvl](a, conf, p, r) {
@@ -2369,7 +2371,9 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
       if (!exp.equalsIgnoreCase("NONE")) {
         logWarning(s"\n${wrap.explain(exp.equalsIgnoreCase("ALL"))}")
       }
+      logWarning("wrap is: " + wrap)
       val convertedPlan = wrap.convertIfNeeded()
+      logWarning("converted plan is: " + convertedPlan)
       addSortsIfNeeded(convertedPlan, conf)
     } else {
       plan
