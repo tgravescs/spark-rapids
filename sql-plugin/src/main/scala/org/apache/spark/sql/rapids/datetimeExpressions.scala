@@ -156,7 +156,7 @@ case class GpuTimeSub(
           if (usToSub > 0) {
             withResource(Scalar.fromLong(usToSub)) { us_s =>
               withResource(l.getBase.castTo(DType.INT64)) { us =>
-                withResource(us.sub(us_s)) {longResult =>
+                withResource(us.add(us_s)) {longResult =>
                   GpuColumnVector.from(longResult.castTo(DType.TIMESTAMP_MICROSECONDS))
                 }
               }

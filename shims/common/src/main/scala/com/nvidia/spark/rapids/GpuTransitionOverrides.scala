@@ -173,7 +173,8 @@ class GpuTransitionOverrides extends Rule[SparkPlan] {
       // intermediate nodes that have a specified sort order. This helps with the size of
       // Parquet and Orc files
       plan match {
-        case _: GpuHashJoin | _: GpuHashAggregateExec =>
+        //case _: GpuHashJoin | _: GpuHashAggregateExec =>
+        case _: GpuHashAggregateExec =>
           val sortOrder = getOptimizedSortOrder(plan)
           GpuSortExec(sortOrder, false, plan, TargetSize(conf.gpuTargetBatchSizeBytes))
         case p =>

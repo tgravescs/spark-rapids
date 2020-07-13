@@ -19,14 +19,16 @@ package com.nvidia.spark.rapids.shims
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.GpuMetricNames._
 
-import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight, BuildSide}
+//import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight, BuildSide}
+import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, BuildSide}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.joins.BroadcastNestedLoopJoinExec
-import org.apache.spark.sql.execution.joins.ShuffledHashJoinExec
+import org.apache.spark.sql.execution.joins.BroadcastHashJoinExec
 import org.apache.spark.TaskContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.plans.physical.{BroadcastDistribution, Distribution, UnspecifiedDistribution}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.physical.{Distribution, HashClusteredDistribution}
 import org.apache.spark.sql.execution.{BinaryExecNode, SparkPlan}
@@ -37,28 +39,17 @@ import org.apache.spark.internal.Logging
 
 
 
-case class GpuShuffledHashJoinExec31 (
+case class GpuBroadcastHashJoinExec30(
     leftKeys: Seq[Expression],
     rightKeys: Seq[Expression],
     joinType: JoinType,
     buildSide: BuildSide,
     condition: Option[Expression],
     left: SparkPlan,
-    right: SparkPlan) extends GpuShuffledHashJoinExecBase31 with Logging {
+    right: SparkPlan) extends GpuBroadcastHashJoinExecBase30 with Logging {
 
 
-
-  /*
-  val buildSide: org.apache.spark.sql.execution.joins.BuildSide = {
-    logInfo("Tom gpu build side is: " + gpuBuildSide)
-    val res = gpuBuildSide match {
-      case GpuBuildRight => org.apache.spark.sql.execution.joins.BuildRight
-      case GpuBuildLeft => org.apache.spark.sql.execution.joins.BuildLeft
-    }
-    logInfo("Tom build side is: " + res)
-    res
-  }
-  */
+  logWarning("Tom in hadh join exec build side is: " + buildSide)
 
   def getBuildSide: GpuBuildSide = {
     buildSide match {
@@ -69,25 +60,18 @@ case class GpuShuffledHashJoinExec31 (
   }
 }
 
-object GpuShuffledHashJoinExec31 extends Logging {
+object GpuBroadcastHashJoinExec30 extends Logging {
 
   def createInstance(
       leftKeys: Seq[Expression],
       rightKeys: Seq[Expression],
       joinType: JoinType,
-      join: SparkPlan,
+      join: BroadcastHashJoinExec,
       condition: Option[Expression],
       left: SparkPlan,
-      right: SparkPlan): GpuShuffledHashJoinExec31 = {
-
-    val buildSide: BuildSide = if (join.isInstanceOf[ShuffledHashJoinExec]) {
-      logWarning("Tom in shuffled hash join")
-      join.asInstanceOf[ShuffledHashJoinExec].buildSide
-    } else {
-      logWarning("Tom in not shuffled hash join")
-      BuildRight
-    }
-    GpuShuffledHashJoinExec31(leftKeys, rightKeys, joinType, buildSide, condition, left, right)
+      right: SparkPlan): GpuBroadcastHashJoinExec30 = {
+    
+    GpuBroadcastHashJoinExec30(leftKeys, rightKeys, joinType, join.buildSide, condition, left, right)
   }
 
 }

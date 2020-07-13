@@ -43,8 +43,8 @@ object ShimLoader extends Logging {
   val SPARK31VERSIONNAME = "3.1.0-SNAPSHOT"
 
   private var sparkShims: SparkShims = null
-  private var gpuShuffledHashJoinShims: GpuShuffledHashJoinExecBase = null
-  private var gpuBroadcastHashJoinShims: GpuBroadcastHashJoinExecBase = null
+  //private var gpuShuffledHashJoinShims: GpuShuffledHashJoinExecBase = null
+  //private var gpuBroadcastHashJoinShims: GpuBroadcastHashJoinExecBase = null
   private var gpuBroadcastNestedJoinShims: GpuBroadcastNestedLoopJoinBase = null
 
   /**
@@ -73,6 +73,7 @@ object ShimLoader extends Logging {
     SPARK31VERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuShuffledHashJoinExec31",
   )
 
+  /*
   def getGpuShuffledHashJoinShims(leftKeys: Seq[Expression],
       rightKeys: Seq[Expression],
       joinType: JoinType,
@@ -86,6 +87,7 @@ object ShimLoader extends Logging {
     }
     gpuShuffledHashJoinShims 
   }
+  */
 
   private val BROADCAST_HASH_JOIN_SHIM_CLASSES = HashMap(
     SPARK30VERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuBroadcastHashJoinExec30",
@@ -93,6 +95,7 @@ object ShimLoader extends Logging {
     SPARK31VERSIONNAME -> "com.nvidia.spark.rapids.shims.GpuBroadcastHashJoinExec31",
   )
 
+  /*
   def getGpuBroadcastHashJoinShims(leftKeys: Seq[Expression],
       rightKeys: Seq[Expression],
       joinType: JoinType,
@@ -106,6 +109,7 @@ object ShimLoader extends Logging {
     }
     gpuBroadcastHashJoinShims 
   }
+  */
 
 
   private val BROADCAST_NESTED_LOOP_JOIN_SHIM_CLASSES = HashMap(

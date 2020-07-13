@@ -45,7 +45,7 @@ case class GpuBroadcastHashJoinExec31(
     buildSide: BuildSide,
     condition: Option[Expression],
     left: SparkPlan,
-    right: SparkPlan) extends GpuBroadcastHashJoinExecBase with Logging {
+    right: SparkPlan) extends GpuBroadcastHashJoinExecBase31 with Logging {
 
 
   logWarning("Tom in hadh join exec build side is: " + buildSide)

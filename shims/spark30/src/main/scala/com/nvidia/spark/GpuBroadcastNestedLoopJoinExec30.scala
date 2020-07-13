@@ -19,7 +19,8 @@ package com.nvidia.spark.rapids.shims
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.GpuMetricNames._
 
-import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight, BuildSide}
+//import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight, BuildSide}
+import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, BuildSide}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.joins.BroadcastNestedLoopJoinExec
 import org.apache.spark.sql.execution.joins.ShuffledHashJoinExec
@@ -37,31 +38,18 @@ import org.apache.spark.internal.Logging
 
 
 
-case class GpuShuffledHashJoinExec31 (
-    leftKeys: Seq[Expression],
-    rightKeys: Seq[Expression],
-    joinType: JoinType,
-    buildSide: BuildSide,
-    condition: Option[Expression],
+case class GpuBroadcastNestedLoopJoinExec30(
     left: SparkPlan,
-    right: SparkPlan) extends GpuShuffledHashJoinExecBase31 with Logging {
+    right: SparkPlan,
+    join: BroadcastNestedLoopJoinExec,
+    joinType: JoinType,
+    condition: Option[Expression]) extends GpuBroadcastNestedLoopJoinBase(left, right, join, joinType, condition) with Logging {
 
 
-
-  /*
-  val buildSide: org.apache.spark.sql.execution.joins.BuildSide = {
-    logInfo("Tom gpu build side is: " + gpuBuildSide)
-    val res = gpuBuildSide match {
-      case GpuBuildRight => org.apache.spark.sql.execution.joins.BuildRight
-      case GpuBuildLeft => org.apache.spark.sql.execution.joins.BuildLeft
-    }
-    logInfo("Tom build side is: " + res)
-    res
-  }
-  */
+  logWarning("Tom in broadcast nested loop join exec build side is: ")
 
   def getBuildSide: GpuBuildSide = {
-    buildSide match {
+    join.buildSide match {
       case BuildRight => GpuBuildRight
       case BuildLeft => GpuBuildLeft
       case _ => throw new Exception("unknown buildSide Type")
@@ -69,25 +57,26 @@ case class GpuShuffledHashJoinExec31 (
   }
 }
 
-object GpuShuffledHashJoinExec31 extends Logging {
+object GpuBroadcastNestedLoopJoinExec30 extends Logging {
 
   def createInstance(
-      leftKeys: Seq[Expression],
-      rightKeys: Seq[Expression],
-      joinType: JoinType,
-      join: SparkPlan,
-      condition: Option[Expression],
       left: SparkPlan,
-      right: SparkPlan): GpuShuffledHashJoinExec31 = {
-
-    val buildSide: BuildSide = if (join.isInstanceOf[ShuffledHashJoinExec]) {
+      right: SparkPlan,
+      joinType: JoinType,
+      join: BroadcastNestedLoopJoinExec,
+      condition: Option[Expression]): GpuBroadcastNestedLoopJoinBase = {
+    
+    /* val buildSide: BuildSide = if (join.isInstanceOf[ShuffledHashJoinExec]) {
       logWarning("Tom in shuffled hash join")
-      join.asInstanceOf[ShuffledHashJoinExec].buildSide
+      join.asInstanceOf[ShuffledHashJoinExec].buildSide 
     } else {
       logWarning("Tom in not shuffled hash join")
       BuildRight
-    }
-    GpuShuffledHashJoinExec31(leftKeys, rightKeys, joinType, buildSide, condition, left, right)
+    } */
+    
+    val res = GpuBroadcastNestedLoopJoinExec30 (left, right, join, joinType, condition)
+    res
   }
 
+  def createTom(): Unit = {}
 }

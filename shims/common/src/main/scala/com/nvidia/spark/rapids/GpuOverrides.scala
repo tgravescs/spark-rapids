@@ -360,6 +360,17 @@ final class InsertIntoHadoopFsRelationCommandMeta(
   }
 }
 
+abstract class WrapBinaryExprMeta[INPUT <: BinaryExpression](
+    expr: INPUT,
+    conf: RapidsConf,
+    parent: Option[RapidsMeta[_, _, _]],
+    rule: ConfKeysAndIncompat)
+  extends BinaryExprMeta[INPUT](expr, conf, parent, rule) {
+
+    override val childExprs: Seq[BaseExprMeta[_]] =
+       expr.children.map(GpuOverrides.wrapExpr(_, conf, Some(this))) 
+}
+
 object GpuOverrides extends Logging {
   val FLOAT_DIFFERS_GROUP_INCOMPAT =
     "when enabling these, there may be extra groups produced for floating point grouping " +
@@ -563,16 +574,6 @@ abstract class WrapAggExprMeta[INPUT <: AggregateFunction](
        expr.children.map(GpuOverrides.wrapExpr(_, conf, Some(this))) 
   }
 
-abstract class WrapBinaryExprMeta[INPUT <: BinaryExpression](
-    expr: INPUT,
-    conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
-    rule: ConfKeysAndIncompat)
-  extends BinaryExprMeta[INPUT](expr, conf, parent, rule) {
-
-    override val childExprs: Seq[BaseExprMeta[_]] =
-       expr.children.map(GpuOverrides.wrapExpr(_, conf, Some(this))) 
-}
 
 /**
  * Base class for metadata around `TernaryExpression`.
@@ -589,7 +590,7 @@ abstract class WrapTernaryExprMeta[INPUT <: TernaryExpression](
 }
 
 
-  val expressions: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = Seq(
+  val expressions: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = (Seq(
     expr[Literal](
       "holds a static value from the query",
       (lit, conf, p, r) => new WrapExprMeta[Literal](lit, conf, p, r) {
@@ -1635,7 +1636,7 @@ abstract class WrapTernaryExprMeta[INPUT <: TernaryExpression](
       (a, conf, p, r) => new WrapUnaryExprMeta[Length](a, conf, p, r) {
         override def convertToGpu(child: Expression): GpuExpression = GpuLength(child)
       })
-  ).map(r => (r.getClassFor.asSubclass(classOf[Expression]), r)).toMap
+  ) ++ ShimLoader.getSparkShims.getExprs).map(r => (r.getClassFor.asSubclass(classOf[Expression]), r)).toMap
 
   def wrapScan[INPUT <: Scan](
       scan: INPUT,
@@ -1778,7 +1779,7 @@ abstract class WrapTernaryExprMeta[INPUT <: TernaryExpression](
       .map(r => r.wrap(plan, conf, parent, r).asInstanceOf[SparkPlanMeta[INPUT]])
       .getOrElse(new RuleNotFoundSparkPlanMeta(plan, conf, parent))
 
-  val execs: Map[Class[_ <: SparkPlan], ExecRule[_ <: SparkPlan]] = Seq(
+  val execs: Map[Class[_ <: SparkPlan], ExecRule[_ <: SparkPlan]] = (Seq(
     exec[GenerateExec] (
       "The backend for operations that generate more output rows than input rows like explode.",
       (gen, conf, p, r) => new SparkPlanMeta(gen, conf, p, r) {
@@ -2002,6 +2003,7 @@ override val childPlans: Seq[SparkPlanMeta[_]] =
   override val childExprs: Seq[BaseExprMeta[_]] =
     exchange.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
       }),
+    /*
     exec[BroadcastHashJoinExec](
       "Implementation of join using broadcast data",
       (join, conf, p, r) => new GpuBroadcastHashJoinMeta(join, conf, p, r) {
@@ -2030,6 +2032,7 @@ override val childPlans: Seq[SparkPlanMeta[_]] =
           join.condition.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
         override val childExprs: Seq[BaseExprMeta[_]] = leftKeys ++ rightKeys ++ condition
       }),
+    */
     exec[BroadcastNestedLoopJoinExec](
       "Implementation of join using brute force",
       (join, conf, p, r) => new GpuBroadcastNestedLoopJoinMeta(join, conf, p, r) {
@@ -2044,6 +2047,7 @@ override val childPlans: Seq[SparkPlanMeta[_]] =
 
       })
         .disabledByDefault("large joins can cause out of memory errors"),
+        /*
     exec[SortMergeJoinExec](
       "Sort merge join, replacing with shuffled hash join",
       (join, conf, p, r) => new GpuHashJoinBaseMeta(join, conf, p, r) {
@@ -2097,6 +2101,7 @@ override val childPlans: Seq[SparkPlanMeta[_]] =
       childPlans(1).convertIfNeeded())
   }
       }),
+    */
     exec[HashAggregateExec](
       "The backend for hash based aggregations",
       (agg, conf, p, r) => new GpuHashAggregateMeta(agg, conf, p, r) {
@@ -2357,7 +2362,7 @@ override val childPlans: Seq[SparkPlanMeta[_]] =
   }
         }
     )
-  ).map(r => (r.getClassFor.asSubclass(classOf[SparkPlan]), r)).toMap
+  ) ++ ShimLoader.getSparkShims.getExecs).map(r => (r.getClassFor.asSubclass(classOf[SparkPlan]), r)).toMap
 }
 
 case class GpuOverrides() extends Rule[SparkPlan] with Logging {

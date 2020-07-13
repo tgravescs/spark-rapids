@@ -26,7 +26,7 @@ import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.sql.execution.joins.ShuffledHashJoinExec
 
-object GpuHashJoin {
+object GpuHashJoin31 {
   def tagJoin(
       meta: RapidsMeta[_, _, _],
       joinType: JoinType,
@@ -51,7 +51,7 @@ object GpuHashJoin {
 }
 
 
-trait GpuHashJoin extends GpuExec with HashJoin with Logging {
+trait GpuHashJoin31 extends GpuExec with HashJoin with Logging {
 
 
   override def output: Seq[Attribute] = {

@@ -16,6 +16,8 @@
 
 package com.nvidia.spark.rapids.shims
 
+import com.nvidia.spark.rapids.{ExecRule, ExprRule}
+
 import org.apache.spark.TaskContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -38,6 +40,9 @@ trait SparkShims {
 
   def getBuildSide(join: ShuffledHashJoinExec): GpuBuildSide
   def getBuildSide(join: BroadcastNestedLoopJoinExec): GpuBuildSide
+  def getBuildSide(join: BroadcastHashJoinExec): GpuBuildSide
+  def getExprs: Seq[ExprRule[_ <: Expression]]
+  def getExecs: Seq[ExecRule[_ <: SparkPlan]]
 
 }
 

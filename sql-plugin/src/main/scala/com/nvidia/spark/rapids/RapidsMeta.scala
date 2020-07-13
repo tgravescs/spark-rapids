@@ -476,15 +476,20 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
 
 
  private def getBuildSide(join: BroadcastHashJoinExec): GpuBuildSideT = {
-    join.buildSide match {
-      case e: join.buildSide.type if e.toString.contains("BuildRight") => {
-        GpuBuildRightT
-      }
-      case l: join.buildSide.type if l.toString.contains("BuildLeft") => {
-        GpuBuildLeftT
-      }
-      case _ => throw new Exception("unknown buildSide Type")
-    }
+   val buildMethod = classOf[BroadcastHashJoinExec].getMethod("buildSide")
+   /* val res = try {
+     val clazzt = Class.forName("org.apache.spark.sql.execution.joins.BuildSide")  
+     buildMethod.invoke(join).asInstanceOf[clazzt]
+   } catch {
+     case e: ClassNotFoundException=>
+       val clazz = Class.forName("org.apache.spark.sql.catalyst.optimizer.BuildSide")
+   } */
+   val buildSideString = buildMethod.invoke(join).getClass.toString
+   if (buildSideString.contains("BuildRight")) {
+     GpuBuildRightT
+   } else {
+     GpuBuildLeftT
+   }
   }
 
   private def findShuffleExchanges(): Seq[SparkPlanMeta[ShuffleExchangeExec]] = wrapped match {
@@ -598,6 +603,7 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
    */
   final def convertIfNeeded(): SparkPlan = {
     if (shouldThisBeRemoved) {
+      logWarning("convertIfNeeded 1")
       if (childPlans.isEmpty) {
         throw new IllegalStateException("can't remove when plan has no children")
       } else if (childPlans.size > 1) {
@@ -606,8 +612,10 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
       childPlans(0).convertIfNeeded()
     } else {
       if (canThisBeReplaced) {
+        logWarning("convertIfNeeded 2")
         convertToGpu()
       } else {
+        logWarning("convertIfNeeded 3")
         convertToCpu()
       }
     }
