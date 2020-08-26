@@ -504,7 +504,7 @@ abstract class FileParquetPartitionReaderBase(
       columns.foreach { column =>
         // update column metadata to reflect new position in the output file
         val offsetAdjustment = realStartOffset + totalBytesToCopy - column.getStartingPos
-        logWarning(s"offset adjustment is: $offsetAdjustment")
+        logWarning(s"offset adjustment is: $offsetAdjustment total copy $totalBytesToCopy start ${column.getStartingPos} thread ${TaskContext.get().partitionId()}")
         val newDictOffset = if (column.getDictionaryPageOffset > 0) {
           column.getDictionaryPageOffset + offsetAdjustment
         } else {
@@ -735,6 +735,7 @@ class MultiFileParquetPartitionReader(
         filesAndBlocks.foreach { case (file, blocks) =>
           val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
           val outLocal = hmb.slice(offset, fileBlockSize)
+          logWarning("coying block data size: " +  fileBlockSize +  " offset: " + offset + " task: " + TaskContext.get().partitionId())
           tasks.add(new ParquetReadRunner(file, outLocal, blocks, offset))
           offset += fileBlockSize
         }
