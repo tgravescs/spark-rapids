@@ -724,7 +724,7 @@ class MultiFileParquetPartitionReader(
       val initTotalSize = calculateParquetOutputSize(allBlocks, clippedSchema, true)
       var hmb = HostMemoryBuffer.allocate(initTotalSize)
       var out = new HostMemoryOutputStream(hmb)
-      var offset = 0
+      var offset = 0L
       val size = filesAndBlocks.size
       val tasks = new java.util.ArrayList[ParquetReadRunner]()
       try {
@@ -739,9 +739,7 @@ class MultiFileParquetPartitionReader(
         val results = threadPool.invokeAll(tasks)
         for (future <- results.asScala) {
           val result = future.get()
-          try {
-            allOutputBlocks ++= result
-          }
+          allOutputBlocks ++= result
         }
 
 
