@@ -687,7 +687,9 @@ class MultiFileParquetPartitionReader(
       .setDaemon(true)
       .setNameFormat("parquet reader task worker-%d")
       .build()
-    Executors.newCachedThreadPool(threadFactory)
+    // Executors.newCachedThreadPool(threadFactory)
+
+    Executors.newFixedThreadPool(1)
   }
 
   class ParquetReadRunner(
@@ -743,7 +745,7 @@ class MultiFileParquetPartitionReader(
         }
         val lenLeft = initTotalSize - offset
         val finalizehmb = hmb.slice(offset, lenLeft)
-        var out = new HostMemoryOutputStream(finalizehmb)
+        out = new HostMemoryOutputStream(finalizehmb)
 
 
         // The footer size can change vs the initial estimated because we are combining more blocks
