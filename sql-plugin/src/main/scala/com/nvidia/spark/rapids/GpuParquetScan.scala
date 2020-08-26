@@ -724,11 +724,11 @@ class MultiFileParquetPartitionReader(
       val initTotalSize = calculateParquetOutputSize(allBlocks, clippedSchema, true)
       var hmb = HostMemoryBuffer.allocate(initTotalSize)
       var out = new HostMemoryOutputStream(hmb)
-      var offset = 0L
       val size = filesAndBlocks.size
       val tasks = new java.util.ArrayList[ParquetReadRunner]()
       try {
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
+        var offset = out.getPos
         val allOutputBlocks = scala.collection.mutable.ArrayBuffer[BlockMetaData]()
         filesAndBlocks.foreach { case (file, blocks) =>
           val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
@@ -741,6 +741,9 @@ class MultiFileParquetPartitionReader(
           val result = future.get()
           allOutputBlocks ++= result
         }
+        val lenLeft = initTotalSize - offset
+        val finalizehmb = hmb.slice(offset, lenLeft)
+        var out = new HostMemoryOutputStream(finalizehmb)
 
 
         // The footer size can change vs the initial estimated because we are combining more blocks
@@ -748,7 +751,7 @@ class MultiFileParquetPartitionReader(
         // Not sure how expensive this is, we could throw exception instead if the written
         // size comes out > then the estimated size.
         val actualFooterSize = calculateParquetFooterSize(allOutputBlocks, clippedSchema)
-        val footerPos = out.getPos
+        val footerPos = offset
         // 4 + 4 is for writing size and the ending PARQUET_MAGIC.
         val bufferSizeReq = footerPos + actualFooterSize + 4 + 4
         val bufferSize = if (bufferSizeReq > initTotalSize) {
