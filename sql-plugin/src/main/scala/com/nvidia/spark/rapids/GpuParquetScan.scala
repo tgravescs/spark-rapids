@@ -707,11 +707,7 @@ class MultiFileParquetPartitionReader(
     override def call(): Seq[BlockMetaData] = {
       var out = new HostMemoryOutputStream(outhmb)
       val res = withResource(file.getFileSystem(conf).open(file)) { in =>
-        logWarning("copyingblocks data")
-
-        val finalblocks = copyBlocksData(in, out, blocks, offset)
-        logWarning("copyingblocks data done")
-        finalblocks
+        copyBlocksData(in, out, blocks, offset)
       }
       outhmb.close()
       res
