@@ -509,7 +509,6 @@ abstract class FileParquetPartitionReaderBase(
         // update column metadata to reflect new position in the output file
         val startPosCol = column.getStartingPos
         val offsetAdjustment = realStartOffset + totalBytesToCopy - startPosCol
-        logWarning(s" start offset $realStartOffset offset adjustment is: $offsetAdjustment total copy $totalBytesToCopy start ${startPosCol}")
         val newDictOffset = if (column.getDictionaryPageOffset > 0) {
           column.getDictionaryPageOffset + offsetAdjustment
         } else {
@@ -745,7 +744,7 @@ class MultiFileParquetPartitionReader(
           if (useThreads == true) {
             val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
             val outLocal = hmb.slice(offset, fileBlockSize)
-            logWarning("coying block data size: " + fileBlockSize + " offset: " + offset + " task: " + TaskContext.get().partitionId())
+            // logWarning("coying block data size: " + fileBlockSize + " offset: " + offset + " task: " + TaskContext.get().partitionId())
             tasks.add(new ParquetReadRunner(file, outLocal, blocks, offset))
             offset += fileBlockSize
             logWarning(s"new offset is $offset")
@@ -754,15 +753,15 @@ class MultiFileParquetPartitionReader(
               val startInner = System.nanoTime()
               val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
               offset += fileBlockSize
-              logWarning("coying block data at: " + out.getPos + " size: " + fileBlockSize + " loc: " + (out.getPos + fileBlockSize) + " offset: " + offset + " task: " + TaskContext.get().partitionId())
+              // logWarning("coying block data at: " + out.getPos + " size: " + fileBlockSize + " loc: " + (out.getPos + fileBlockSize) + " offset: " + offset + " task: " + TaskContext.get().partitionId())
               val retBlocks = copyBlocksData(in, out, blocks, out.getPos)
-              logWarning("copying realy position after is : " + out.getPos + " task: " + TaskContext.get().partitionId())
-              logWarning("copy blocks after open: " + (System.nanoTime() - startInner) + " part: " + TaskContext.get().partitionId())
+              // logWarning("copying realy position after is : " + out.getPos + " task: " + TaskContext.get().partitionId())
+              // logWarning("copy blocks after open: " + (System.nanoTime() - startInner) + " part: " + TaskContext.get().partitionId())
               allOutputBlocks ++= retBlocks
             }
           }
         }
-        if (useThreads == true) {
+        val finalizehmb =  if (useThreads == true) {
 
           val results = threadPool.invokeAll(tasks)
           for (future <- results.asScala) {
@@ -771,11 +770,14 @@ class MultiFileParquetPartitionReader(
           }
 
           val lenLeft = initTotalSize - offset
-          logWarning(s"offset to slice for footer is $offset left is $lenLeft")
-          val finalizehmb = hmb.slice(offset, lenLeft)
+          // logWarning(s"offset to slice for footer is $offset left is $lenLeft")
+          val sliced = hmb.slice(offset, lenLeft)
           out.close()
-          out = new HostMemoryOutputStream(finalizehmb)
-          logWarning(s"footer position after slice buffer ${out.getPos}")
+          out = new HostMemoryOutputStream(sliced)
+          // logWarning(s"footer position after slice buffer ${out.getPos}")
+          sliced
+        } else {
+          null
         }
 
 
@@ -808,9 +810,7 @@ class MultiFileParquetPartitionReader(
           initTotalSize
         } */
         val bufferSize = initTotalSize
-        logWarning(s"footer pos is $footerPos")
         writeFooter(out, allOutputBlocks, clippedSchema)
-        logWarning(s"footer pos after write is ${out.getPos} plus ${out.getPos + footerPos}")
 
         val footerSize = if (useThreads == true) {
           (out.getPos - 0).toInt
@@ -832,8 +832,10 @@ class MultiFileParquetPartitionReader(
           } else {
             out.getPos
           }
-        logWarning(s"datasize is $datasize")
-        (hmb, datasize)
+        if (finalizehmb != null) {
+          finalizehmb.close()
+        }
+         (hmb, datasize)
       } finally {
         if (!succeeded) {
           hmb.close()
@@ -1060,9 +1062,7 @@ class ParquetPartitionReader(
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
           val outputBlocks = copyBlocksData(in, out, blocks, out.getPos)
           val footerPos = out.getPos
-          logWarning(s"footer pos is $footerPos")
           writeFooter(out, outputBlocks, clippedParquetSchema)
-          logWarning(s"footer pos after write is ${out.getPos}")
 
           BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
