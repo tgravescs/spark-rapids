@@ -771,6 +771,7 @@ class MultiFileParquetPartitionReader(
           val finalizehmb = hmb.slice(offset, lenLeft)
           out.close()
           out = new HostMemoryOutputStream(finalizehmb)
+          logWarning(s"footer position after slice buffer ${out.getPos}")
         }
 
 
@@ -811,11 +812,12 @@ class MultiFileParquetPartitionReader(
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
         succeeded = true
         // triple check we didn't go over memory
+        // TODO - need to fix
         if (out.getPos > bufferSize) {
           throw new QueryExecutionException(s"Calculated buffer size $bufferSize is to " +
             s"small, actual written: ${out.getPos}")
         }
-        (hmb, out.getPos)
+        (hmb, footerPos + out.getPos)
       } finally {
         if (!succeeded) {
           hmb.close()
