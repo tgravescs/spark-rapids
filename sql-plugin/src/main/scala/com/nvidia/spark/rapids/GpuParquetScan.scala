@@ -744,6 +744,7 @@ class MultiFileParquetPartitionReader(
             logWarning("coying block data size: " + fileBlockSize + " offset: " + offset + " task: " + TaskContext.get().partitionId())
             tasks.add(new ParquetReadRunner(file, outLocal, blocks, offset))
             offset += fileBlockSize
+            logWarning(s"new offset is $offset")
           } else {
             withResource(file.getFileSystem(conf).open(file)) { in =>
               val startInner = System.nanoTime()
@@ -766,7 +767,9 @@ class MultiFileParquetPartitionReader(
           }
 
           val lenLeft = initTotalSize - offset
+          logWarning(s"offset to slice for footer is $offset left is $lenLeft")
           val finalizehmb = hmb.slice(offset, lenLeft)
+          out.close()
           out = new HostMemoryOutputStream(finalizehmb)
         }
 
