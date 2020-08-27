@@ -707,7 +707,11 @@ class MultiFileParquetPartitionReader(
     override def call(): Seq[BlockMetaData] = {
       var out = new HostMemoryOutputStream(outhmb)
       val res = withResource(file.getFileSystem(conf).open(file)) { in =>
+        logWarning("copyingblocks data")
+
         copyBlocksData(in, out, blocks, offset)
+        logWarning("copyingblocks data done")
+
       }
       outhmb.close()
       res
@@ -740,8 +744,11 @@ class MultiFileParquetPartitionReader(
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
         var offset = out.getPos
         val allOutputBlocks = scala.collection.mutable.ArrayBuffer[BlockMetaData]()
+        logWarning(s"number of files are: ${filesAndBlocks.size} threads are $numThreads")
+
         filesAndBlocks.foreach { case (file, blocks) =>
           if (useThreads == true) {
+
             val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
             val outLocal = hmb.slice(offset, fileBlockSize)
             // logWarning("coying block data size: " + fileBlockSize + " offset: " + offset + " task: " + TaskContext.get().partitionId())
