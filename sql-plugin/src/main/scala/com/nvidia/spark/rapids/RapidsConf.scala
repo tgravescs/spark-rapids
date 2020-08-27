@@ -451,6 +451,11 @@ object RapidsConf {
     .booleanConf
     .createWithDefault(true)
 
+  val ENABLE_SMALL_FILES_PARQUET_NUM_THREADS = conf("spark.rapids.sql.format.parquet.smallFiles.numThreads")
+    .doc("")
+    .integerConf
+    .createWithDefault(1)
+
   val ENABLE_PARQUET_READ = conf("spark.rapids.sql.format.parquet.read.enabled")
     .doc("When set to false disables parquet input acceleration")
     .booleanConf
@@ -851,6 +856,7 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val isParquetSmallFilesThreadsEnabled: Boolean = get(ENABLE_SMALL_FILES_PARQUET_THREADS)
 
+  lazy val isParquetSmallFilesNumThreads: Int = get(ENABLE_SMALL_FILES_PARQUET_NUM_THREADS)
 
   lazy val isParquetReadEnabled: Boolean = get(ENABLE_PARQUET_READ)
 

@@ -307,7 +307,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   private val filterHandler = new GpuParquetFileFilterHandler(sqlConf)
 
   private val useThreads = rapidsConf.isParquetSmallFilesThreadsEnabled
-
+  private val numThreads = rapidsConf.isParquetSmallFilesNumThreads
 
   override def supportColumnarReads(partition: InputPartition): Boolean = true
 
@@ -336,7 +336,8 @@ case class GpuParquetMultiFilePartitionReaderFactory(
 
     new MultiFileParquetPartitionReader(conf, files, clippedBlocks,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
-      maxReadBatchSizeRows, maxReadBatchSizeBytes, metrics, partitionSchema, useThreads)
+      maxReadBatchSizeRows, maxReadBatchSizeBytes, metrics, partitionSchema,
+      useThreads, numThreads)
   }
 }
 
@@ -639,7 +640,8 @@ class MultiFileParquetPartitionReader(
     maxReadBatchSizeBytes: Long,
     execMetrics: Map[String, SQLMetric],
     partitionSchema: StructType,
-    useThreads: Boolean)
+    useThreads: Boolean,
+    numThreads: Int)
   extends FileParquetPartitionReaderBase(conf, isSchemaCaseSensitive, readDataSchema,
     debugDumpPrefix, execMetrics) {
 
@@ -694,7 +696,7 @@ class MultiFileParquetPartitionReader(
       .build()
     // Executors.newCachedThreadPool(threadFactory)
 
-    Executors.newFixedThreadPool(1)
+    Executors.newFixedThreadPool(numThreads)
   }
 
   class ParquetReadRunner(
@@ -705,9 +707,11 @@ class MultiFileParquetPartitionReader(
     extends Callable[Seq[BlockMetaData]] {
     override def call(): Seq[BlockMetaData] = {
       var out = new HostMemoryOutputStream(outhmb)
-      withResource(file.getFileSystem(conf).open(file)) { in =>
+      val res = withResource(file.getFileSystem(conf).open(file)) { in =>
         copyBlocksData(in, out, blocks, offset)
       }
+      outhmb.close()
+      res
     }
   }
 
@@ -808,12 +812,12 @@ class MultiFileParquetPartitionReader(
         writeFooter(out, allOutputBlocks, clippedSchema)
         logWarning(s"footer pos after write is ${out.getPos} plus ${out.getPos + footerPos}")
 
-        val endianLoc = if (useThreads == true) {
+        val footerSize = if (useThreads == true) {
           (out.getPos - 0).toInt
         } else {
           (out.getPos - footerPos).toInt
         }
-        BytesUtils.writeIntLittleEndian(out, endianLoc)
+        BytesUtils.writeIntLittleEndian(out, footerSize)
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
         succeeded = true
         // triple check we didn't go over memory
