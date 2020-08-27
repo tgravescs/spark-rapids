@@ -325,7 +325,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   private def buildBaseColumnarParquetReader(
       files: Array[PartitionedFile]): PartitionReader[ColumnarBatch] = {
     val conf = broadcastedConf.value.value
-    logDebug(s"Number files being read: ${files.size} for task ${TaskContext.get().partitionId()}")
+    logDebug(s"Number files being read: ${files.size} for task ${TaskContext.get().partitionId()} files include ${files.map(x => x.filePath)}")
     val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
     files.map { file =>
       val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
@@ -334,6 +334,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
           singleFileInfo.schema, singleFileInfo.isCorrectedRebaseMode))
     }
 
+    val sortedFiles = files.sortBy(_.filePath)
     new MultiFileParquetPartitionReader(conf, files, clippedBlocks,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
       maxReadBatchSizeRows, maxReadBatchSizeBytes, metrics, partitionSchema,
@@ -690,9 +691,10 @@ class MultiFileParquetPartitionReader(
 
   private val threadPool = {
     val threadFactory = new ThreadFactoryBuilder()
-      .setDaemon(true)
       .setNameFormat("parquet reader task worker-%d")
       .build()
+    // .setDaemon(true)
+
     // Executors.newCachedThreadPool(threadFactory)
 
     Executors.newFixedThreadPool(numThreads)
@@ -702,13 +704,15 @@ class MultiFileParquetPartitionReader(
       file: Path,
       outhmb: HostMemoryBuffer,
       blocks: ArrayBuffer[BlockMetaData],
-      offset: Long)
+      offset: Long,
+      startTs: Long)
     extends Callable[Seq[BlockMetaData]] {
     override def call(): Seq[BlockMetaData] = {
       var out = new HostMemoryOutputStream(outhmb)
       val res = withResource(file.getFileSystem(conf).open(file)) { in =>
         copyBlocksData(in, out, blocks, offset)
       }
+      logWarning(s"time to copy data from start is ${System.nanoTime() - startTs}")
       outhmb.close()
       res
     }
@@ -736,7 +740,7 @@ class MultiFileParquetPartitionReader(
       var out = new HostMemoryOutputStream(hmb)
       val size = filesAndBlocks.size
       // val tasks = new java.util.ArrayList[ParquetReadRunner]()
-      val tasks = new java.util.ArrayList[Future[Seq[BlockMetaData]]()
+      val tasks = new java.util.ArrayList[Future[Seq[BlockMetaData]]]()
 
       try {
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
@@ -750,15 +754,13 @@ class MultiFileParquetPartitionReader(
             val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
             val outLocal = hmb.slice(offset, fileBlockSize)
             // logWarning("coying block data size: " + fileBlockSize + " offset: " + offset + " task: " + TaskContext.get().partitionId())
-            val foo = threadPool.submit(new ParquetReadRunner(file, outLocal, blocks, offset))
-            tasks.add(threadPool.submit(new ParquetReadRunner(file, outLocal, blocks, offset)))
+            tasks.add(threadPool.submit(
+              new ParquetReadRunner(file, outLocal, blocks, offset, System.nanoTime())))
             offset += fileBlockSize
             // logWarning(s"new offset is $offset")
           } else {
             withResource(file.getFileSystem(conf).open(file)) { in =>
-              val startInner = System.nanoTime()
-              val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
-              offset += fileBlockSize
+              // val startInner = System.nanoTime()
               // logWarning("coying block data at: " + out.getPos + " size: " + fileBlockSize + " loc: " + (out.getPos + fileBlockSize) + " offset: " + offset + " task: " + TaskContext.get().partitionId())
               val retBlocks = copyBlocksData(in, out, blocks, out.getPos)
               // logWarning("copying realy position after is : " + out.getPos + " task: " + TaskContext.get().partitionId())
