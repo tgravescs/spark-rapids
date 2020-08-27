@@ -806,9 +806,14 @@ class MultiFileParquetPartitionReader(
         val bufferSize = initTotalSize
         logWarning(s"footer pos is $footerPos")
         writeFooter(out, allOutputBlocks, clippedSchema)
-        logWarning(s"footer pos after write is ${out.getPos}")
+        logWarning(s"footer pos after write is ${out.getPos} plus ${out.getPos + footerPos}")
 
-        BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
+        val endianLoc = if (useThreads == true) {
+          (out.getPos - 0).toInt
+        } else {
+          (out.getPos - footerPos).toInt
+        }
+        BytesUtils.writeIntLittleEndian(out, endianLoc)
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
         succeeded = true
         // triple check we didn't go over memory
@@ -817,7 +822,14 @@ class MultiFileParquetPartitionReader(
           throw new QueryExecutionException(s"Calculated buffer size $bufferSize is to " +
             s"small, actual written: ${out.getPos}")
         }
-        (hmb, footerPos + out.getPos)
+        val datasize =
+          if (useThreads == true) {
+            footerPos + out.getPos
+          } else {
+            out.getPos
+          }
+        logWarning(s"datasize is $datasize")
+        (hmb, datasize)
       } finally {
         if (!succeeded) {
           hmb.close()
