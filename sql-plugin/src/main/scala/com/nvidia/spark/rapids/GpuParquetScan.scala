@@ -505,7 +505,7 @@ abstract class FileParquetPartitionReaderBase(
         // update column metadata to reflect new position in the output file
         val startPosCol = column.getStartingPos
         val offsetAdjustment = realStartOffset + totalBytesToCopy - startPosCol
-        logWarning(s"offset adjustment is: $offsetAdjustment total copy $totalBytesToCopy start ${startPosCol}")
+        logWarning(s" start offset $realStartOffset offset adjustment is: $offsetAdjustment total copy $totalBytesToCopy start ${startPosCol}")
         val newDictOffset = if (column.getDictionaryPageOffset > 0) {
           column.getDictionaryPageOffset + offsetAdjustment
         } else {
@@ -756,7 +756,7 @@ class MultiFileParquetPartitionReader(
         // size comes out > then the estimated size.
         val actualFooterSize = calculateParquetFooterSize(allOutputBlocks, clippedSchema)
         val footerPos = offset
-        // 4 + 4 is for writing size and the ending PARQUET_MAGIC.
+        /* // 4 + 4 is for writing size and the ending PARQUET_MAGIC.
         val bufferSizeReq = footerPos + actualFooterSize + 4 + 4
         val bufferSize = if (bufferSizeReq > initTotalSize) {
           logWarning(s"The original estimated size $initTotalSize is to small, " +
@@ -772,8 +772,12 @@ class MultiFileParquetPartitionReader(
           // we didn't change the buffer size so return the initial size which is the actual
           // size of the buffer
           initTotalSize
-        }
+        } */
+        val bufferSize = initTotalSize
+        logWarning(s"footer pos is $footerPos")
         writeFooter(out, allOutputBlocks, clippedSchema)
+        logWarning(s"footer pos after write is ${out.getPos}")
+
         BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
         succeeded = true
@@ -1009,7 +1013,10 @@ class ParquetPartitionReader(
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
           val outputBlocks = copyBlocksData(in, out, blocks, out.getPos)
           val footerPos = out.getPos
+          logWarning(s"footer pos is $footerPos")
           writeFooter(out, outputBlocks, clippedParquetSchema)
+          logWarning(s"footer pos after write is ${out.getPos}")
+
           BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
           succeeded = true
