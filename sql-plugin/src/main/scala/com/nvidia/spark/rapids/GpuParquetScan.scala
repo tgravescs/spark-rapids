@@ -306,6 +306,9 @@ case class GpuParquetMultiFilePartitionReaderFactory(
 
   private val filterHandler = new GpuParquetFileFilterHandler(sqlConf)
 
+  private val useThreads = rapidsConf.isParquetSmallFilesThreadsEnabled
+
+
   override def supportColumnarReads(partition: InputPartition): Boolean = true
 
   override def createReader(partition: InputPartition): PartitionReader[InternalRow] = {
@@ -333,7 +336,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
 
     new MultiFileParquetPartitionReader(conf, files, clippedBlocks,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
-      maxReadBatchSizeRows, maxReadBatchSizeBytes, metrics, partitionSchema)
+      maxReadBatchSizeRows, maxReadBatchSizeBytes, metrics, partitionSchema, useThreads)
   }
 }
 
@@ -635,7 +638,8 @@ class MultiFileParquetPartitionReader(
     maxReadBatchSizeRows: Integer,
     maxReadBatchSizeBytes: Long,
     execMetrics: Map[String, SQLMetric],
-    partitionSchema: StructType)
+    partitionSchema: StructType,
+    useThreads: Boolean)
   extends FileParquetPartitionReaderBase(conf, isSchemaCaseSensitive, readDataSchema,
     debugDumpPrefix, execMetrics) {
 
@@ -734,16 +738,31 @@ class MultiFileParquetPartitionReader(
         var offset = out.getPos
         val allOutputBlocks = scala.collection.mutable.ArrayBuffer[BlockMetaData]()
         filesAndBlocks.foreach { case (file, blocks) =>
-          val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
-          val outLocal = hmb.slice(offset, fileBlockSize)
-          logWarning("coying block data size: " +  fileBlockSize +  " offset: " + offset + " task: " + TaskContext.get().partitionId())
-          tasks.add(new ParquetReadRunner(file, outLocal, blocks, offset))
-          offset += fileBlockSize
+          if (useThreads == true) {
+            val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
+            val outLocal = hmb.slice(offset, fileBlockSize)
+            logWarning("coying block data size: " + fileBlockSize + " offset: " + offset + " task: " + TaskContext.get().partitionId())
+            tasks.add(new ParquetReadRunner(file, outLocal, blocks, offset))
+            offset += fileBlockSize
+          } else {
+            withResource(file.getFileSystem(conf).open(file)) { in =>
+              val startInner = System.nanoTime()
+              val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
+              offset += fileBlockSize
+              logWarning("coying block data at: " + out.getPos + " size: " +  fileBlockSize + " loc: " + (out.getPos + fileBlockSize) + " offset: " + offset + " task: " + TaskContext.get().partitionId())
+              val retBlocks = copyBlocksData(in, out, blocks, out.getPos)
+              logWarning("copying realy position after is : " + out.getPos + " task: " + TaskContext.get().partitionId())
+              logWarning("copy blocks after open: " + (System.nanoTime() - startInner) + " part: " + TaskContext.get().partitionId())
+              allOutputBlocks ++= retBlocks
+          }
         }
-        val results = threadPool.invokeAll(tasks)
-        for (future <- results.asScala) {
-          val result = future.get()
-          allOutputBlocks ++= result
+        if (useThreads == true) {
+
+          val results = threadPool.invokeAll(tasks)
+          for (future <- results.asScala) {
+            val result = future.get()
+            allOutputBlocks ++= result
+          }
         }
         val lenLeft = initTotalSize - offset
         val finalizehmb = hmb.slice(offset, lenLeft)
