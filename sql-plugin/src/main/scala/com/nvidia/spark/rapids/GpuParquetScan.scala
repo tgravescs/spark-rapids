@@ -503,8 +503,9 @@ abstract class FileParquetPartitionReaderBase(
       val outputColumns = new ArrayBuffer[ColumnChunkMetaData](columns.length)
       columns.foreach { column =>
         // update column metadata to reflect new position in the output file
-        val offsetAdjustment = realStartOffset + totalBytesToCopy - column.getStartingPos
-        logWarning(s"offset adjustment is: $offsetAdjustment total copy $totalBytesToCopy start ${column.getStartingPos} thread ${TaskContext.get().partitionId()}")
+        val startPosCol = column.getStartingPos
+        val offsetAdjustment = realStartOffset + totalBytesToCopy - startPosCol
+        logWarning(s"offset adjustment is: $offsetAdjustment total copy $totalBytesToCopy start ${startPosCol} thread ${TaskContext.get().partitionId()}")
         val newDictOffset = if (column.getDictionaryPageOffset > 0) {
           column.getDictionaryPageOffset + offsetAdjustment
         } else {
