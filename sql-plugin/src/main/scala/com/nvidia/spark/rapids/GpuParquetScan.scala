@@ -505,7 +505,7 @@ abstract class FileParquetPartitionReaderBase(
         // update column metadata to reflect new position in the output file
         val startPosCol = column.getStartingPos
         val offsetAdjustment = realStartOffset + totalBytesToCopy - startPosCol
-        logWarning(s"offset adjustment is: $offsetAdjustment total copy $totalBytesToCopy start ${startPosCol} thread ${TaskContext.get().partitionId()}")
+        logWarning(s"offset adjustment is: $offsetAdjustment total copy $totalBytesToCopy start ${startPosCol}")
         val newDictOffset = if (column.getDictionaryPageOffset > 0) {
           column.getDictionaryPageOffset + offsetAdjustment
         } else {
