@@ -749,11 +749,12 @@ class MultiFileParquetPartitionReader(
               val startInner = System.nanoTime()
               val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
               offset += fileBlockSize
-              logWarning("coying block data at: " + out.getPos + " size: " +  fileBlockSize + " loc: " + (out.getPos + fileBlockSize) + " offset: " + offset + " task: " + TaskContext.get().partitionId())
+              logWarning("coying block data at: " + out.getPos + " size: " + fileBlockSize + " loc: " + (out.getPos + fileBlockSize) + " offset: " + offset + " task: " + TaskContext.get().partitionId())
               val retBlocks = copyBlocksData(in, out, blocks, out.getPos)
               logWarning("copying realy position after is : " + out.getPos + " task: " + TaskContext.get().partitionId())
               logWarning("copy blocks after open: " + (System.nanoTime() - startInner) + " part: " + TaskContext.get().partitionId())
               allOutputBlocks ++= retBlocks
+            }
           }
         }
         if (useThreads == true) {
@@ -763,10 +764,11 @@ class MultiFileParquetPartitionReader(
             val result = future.get()
             allOutputBlocks ++= result
           }
+
+          val lenLeft = initTotalSize - offset
+          val finalizehmb = hmb.slice(offset, lenLeft)
+          out = new HostMemoryOutputStream(finalizehmb)
         }
-        val lenLeft = initTotalSize - offset
-        val finalizehmb = hmb.slice(offset, lenLeft)
-        out = new HostMemoryOutputStream(finalizehmb)
 
 
         // The footer size can change vs the initial estimated because we are combining more blocks
@@ -774,7 +776,12 @@ class MultiFileParquetPartitionReader(
         // Not sure how expensive this is, we could throw exception instead if the written
         // size comes out > then the estimated size.
         val actualFooterSize = calculateParquetFooterSize(allOutputBlocks, clippedSchema)
-        val footerPos = offset
+        val footerPos = if (useThreads == true) {
+          offset
+        } else {
+          out.getPos
+        }
+
         /* // 4 + 4 is for writing size and the ending PARQUET_MAGIC.
         val bufferSizeReq = footerPos + actualFooterSize + 4 + 4
         val bufferSize = if (bufferSizeReq > initTotalSize) {
