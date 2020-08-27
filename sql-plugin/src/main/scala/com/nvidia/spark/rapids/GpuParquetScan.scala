@@ -19,7 +19,7 @@ package com.nvidia.spark.rapids
 import java.io.OutputStream
 import java.net.URI
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.{Callable, ExecutorCompletionService, Executors, ThreadPoolExecutor}
+import java.util.concurrent.{Callable, ExecutorCompletionService, Executors, Future, ThreadPoolExecutor}
 import java.util.{Collections, Locale}
 
 import scala.annotation.tailrec
@@ -735,7 +735,9 @@ class MultiFileParquetPartitionReader(
       var hmb = HostMemoryBuffer.allocate(initTotalSize)
       var out = new HostMemoryOutputStream(hmb)
       val size = filesAndBlocks.size
-      val tasks = new java.util.ArrayList[ParquetReadRunner]()
+      // val tasks = new java.util.ArrayList[ParquetReadRunner]()
+      val tasks = new java.util.ArrayList[Future[Seq[BlockMetaData]]()
+
       try {
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
         var offset = out.getPos
@@ -748,7 +750,8 @@ class MultiFileParquetPartitionReader(
             val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
             val outLocal = hmb.slice(offset, fileBlockSize)
             // logWarning("coying block data size: " + fileBlockSize + " offset: " + offset + " task: " + TaskContext.get().partitionId())
-            tasks.add(new ParquetReadRunner(file, outLocal, blocks, offset))
+            val foo = threadPool.submit(new ParquetReadRunner(file, outLocal, blocks, offset))
+            tasks.add(threadPool.submit(new ParquetReadRunner(file, outLocal, blocks, offset)))
             offset += fileBlockSize
             // logWarning(s"new offset is $offset")
           } else {
@@ -766,8 +769,9 @@ class MultiFileParquetPartitionReader(
         }
         val finalizehmb =  if (useThreads == true) {
 
-          val results = threadPool.invokeAll(tasks)
-          for (future <- results.asScala) {
+          // val results = threadPool.invokeAll(tasks)
+          // for (future <- results.asScala) {
+          for (future <- tasks.asScala) {
             val result = future.get()
             allOutputBlocks ++= result
           }
