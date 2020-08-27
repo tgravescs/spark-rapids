@@ -709,9 +709,9 @@ class MultiFileParquetPartitionReader(
       val res = withResource(file.getFileSystem(conf).open(file)) { in =>
         logWarning("copyingblocks data")
 
-        copyBlocksData(in, out, blocks, offset)
+        val finalblocks = copyBlocksData(in, out, blocks, offset)
         logWarning("copyingblocks data done")
-
+        finalblocks
       }
       outhmb.close()
       res
@@ -745,7 +745,7 @@ class MultiFileParquetPartitionReader(
         var offset = out.getPos
         val allOutputBlocks = scala.collection.mutable.ArrayBuffer[BlockMetaData]()
         logWarning(s"number of files are: ${filesAndBlocks.size} threads are $numThreads")
-
+        val start = System.nanoTime()
         filesAndBlocks.foreach { case (file, blocks) =>
           if (useThreads == true) {
 
@@ -786,6 +786,7 @@ class MultiFileParquetPartitionReader(
         } else {
           null
         }
+        logWarning(s"done waiting on copys ${System.nanoTime() - start}")
 
 
         // The footer size can change vs the initial estimated because we are combining more blocks
