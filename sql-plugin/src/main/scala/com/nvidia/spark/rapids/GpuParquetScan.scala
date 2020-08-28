@@ -653,8 +653,12 @@ class MultiFileParquetPartitionReader(
   override def get(): ColumnarBatch = {
     if (useThreads) {
       val ret = if (batchesToRead > 0) {
+        logWarning(s"get called number batches is" +
+          s" $batchesToRead ${TaskContext.get().partitionId()}" +
+          s" batches available is ${batches.size}")
         val retBatch = batches.take()
         batch = readBufferToTable(retBatch)
+        logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()}")
         batchesToRead -= 1
         if (batch.isDefined) {
           batch.get
@@ -718,12 +722,13 @@ class MultiFileParquetPartitionReader(
 
   private val batchesProcessed: AtomicInteger = new AtomicInteger(0)
 
-  class ReadBatchRunner(meta: BatchesMetaData) extends Callable[Boolean] {
+  class ReadBatchRunner(meta: BatchesMetaData) extends Callable[Boolean] with Logging {
 
     override def call(): Boolean = {
       val result = readToHostMemBuffer(meta)
       batches.put(result)
       batchesProcessed.incrementAndGet()
+      logWarning("done read host mem bufer")
       true
     }
   }
@@ -963,7 +968,7 @@ class MultiFileParquetPartitionReader(
         } else {
           null
         }
-        logWarning(s"done waiting on copys ${System.nanoTime() - start}")
+        // logWarning(s"done waiting on copys ${System.nanoTime() - start}")
 
 
         // The footer size can change vs the initial estimated because we are combining more blocks
