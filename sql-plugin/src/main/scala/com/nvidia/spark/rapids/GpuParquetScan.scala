@@ -617,6 +617,20 @@ abstract class FileParquetPartitionReaderBase(
   }
 }
 
+object MultiFileThreadPoolFactory {
+  // TODO - make singleton?
+  val threadPool = {
+    val threadFactory = new ThreadFactoryBuilder()
+      .setNameFormat("parquet reader task worker-%d")
+      .build()
+    // .setDaemon(true)
+
+    // Executors.newCachedThreadPool(threadFactory)
+
+    Executors.newFixedThreadPool(20)
+  }
+}
+
 /**
  * A PartitionReader that can read multiple Parquet files up to the certain size.
  *
@@ -712,7 +726,7 @@ class MultiFileParquetPartitionReader(
   }
 
   // TODO - make singleton?
-  private val threadPool = {
+ /* private val threadPool = {
     val threadFactory = new ThreadFactoryBuilder()
       .setNameFormat("parquet reader task worker-%d")
       .build()
@@ -721,7 +735,7 @@ class MultiFileParquetPartitionReader(
     // Executors.newCachedThreadPool(threadFactory)
 
     Executors.newFixedThreadPool(numThreads)
-  }
+  }*/
 
   private val batchesProcessed: AtomicInteger = new AtomicInteger(0)
 
@@ -755,7 +769,7 @@ class MultiFileParquetPartitionReader(
 
         for (batchMeta <- batchesMetaData) {
           // tasks.add(threadPool.submit(new ReadBatchRunner(batchMeta)))
-          threadPool.submit(new ReadBatchRunner(batchMeta))
+          MultiFileThreadPoolFactory.threadPool.submit(new ReadBatchRunner(batchMeta))
         }
         isInitted = true
       }
