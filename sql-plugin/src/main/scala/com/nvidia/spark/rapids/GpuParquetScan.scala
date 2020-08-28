@@ -656,13 +656,15 @@ class MultiFileParquetPartitionReader(
         logWarning(s"get called number batches is" +
           s" $batchesToRead ${TaskContext.get().partitionId()}" +
           s" batches available is ${batches.size}")
-        val retBatch = batches.take()
         batch.foreach(_.close())
+        val retBatch = batches.take()
         batch = readBufferToTable(retBatch)
         logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()}")
         batchesToRead -= 1
         if (batch.isDefined) {
-          batch.get
+          val batchToRet = batch.get
+          batch = None
+          batchToRet
         } else {
           // TODO - is this ok to handle None case?
           get()
