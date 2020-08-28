@@ -679,9 +679,9 @@ class MultiFileParquetPartitionReader(
 
   override def close(): Unit = {
     if (useThreads) {
-      // TODO - double check cleanup
-      batches.asScala.foreach(_.hostbuffer.close())
-      batches.clear()
+      // TODO - double check cleanup - how do we do batches?
+      // batches.asScala.foreach(_.hostbuffer.close())
+      // batches.clear()
       batch.foreach(_.close())
       batch = None
       isExhausted = true
