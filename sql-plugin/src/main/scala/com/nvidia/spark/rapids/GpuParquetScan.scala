@@ -657,6 +657,7 @@ class MultiFileParquetPartitionReader(
           s" $batchesToRead ${TaskContext.get().partitionId()}" +
           s" batches available is ${batches.size}")
         val retBatch = batches.take()
+        batch.foreach(_.close())
         batch = readBufferToTable(retBatch)
         logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()}")
         batchesToRead -= 1
