@@ -618,16 +618,33 @@ abstract class FileParquetPartitionReaderBase(
 }
 
 object MultiFileThreadPoolFactory {
-  // TODO - make singleton?
-  val threadPool = {
-    val threadFactory = new ThreadFactoryBuilder()
-      .setNameFormat("parquet reader task worker-%d")
-      .build()
-    // .setDaemon(true)
 
-    // Executors.newCachedThreadPool(threadFactory)
+  var threadPool: Option[ThreadPoolExecutor] = None
 
-    Executors.newFixedThreadPool(20)
+  private def initThreadPool(
+      maxThreads: Int = 20,
+      keepAliveSeconds: Long = 60): ThreadPoolExecutor = {
+    if (threadPool == null) {
+      val threadFactory = new ThreadFactoryBuilder()
+        .setNameFormat("parquet reader worker-%d")
+        .setDaemon(true)
+        .build()
+
+      threadPool = Some(new ThreadPoolExecutor(
+        maxThreads, // corePoolSize: max number of threads to create before queuing the tasks
+        maxThreads, // maximumPoolSize: because we use LinkedBlockingDeque, this is not used
+        keepAliveSeconds,
+        TimeUnit.SECONDS,
+        new LinkedBlockingQueue[Runnable],
+        threadFactory))
+      threadPool.get.allowCoreThreadTimeOut(true)
+    }
+    threadPool.get
+  }
+
+  def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = {
+    val pool = threadPool.getOrElse(initThreadPool(numThreads))
+    pool.submit(task)
   }
 }
 
@@ -725,18 +742,6 @@ class MultiFileParquetPartitionReader(
     }
   }
 
-  // TODO - make singleton?
- /* private val threadPool = {
-    val threadFactory = new ThreadFactoryBuilder()
-      .setNameFormat("parquet reader task worker-%d")
-      .build()
-    // .setDaemon(true)
-
-    // Executors.newCachedThreadPool(threadFactory)
-
-    Executors.newFixedThreadPool(numThreads)
-  }*/
-
   private val batchesProcessed: AtomicInteger = new AtomicInteger(0)
 
   class ReadBatchRunner(meta: BatchesMetaData) extends Callable[Boolean] with Logging {
@@ -769,15 +774,10 @@ class MultiFileParquetPartitionReader(
 
         for (batchMeta <- batchesMetaData) {
           // tasks.add(threadPool.submit(new ReadBatchRunner(batchMeta)))
-          MultiFileThreadPoolFactory.threadPool.submit(new ReadBatchRunner(batchMeta))
+          MultiFileThreadPoolFactory.submitToThreadPool(new ReadBatchRunner(batchMeta), numThreads)
         }
         isInitted = true
       }
-      /* tasks.asScala.head.get()
-      for (future <- tasks.asScala) {
-        val result = future.get()
-      }
-      */
 
 
       // This is odd, but some operators return data even when there is no input so we need to
@@ -951,8 +951,8 @@ class MultiFileParquetPartitionReader(
             val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
             val outLocal = hmb.slice(offset, fileBlockSize)
             // logWarning("coying block data size: " + fileBlockSize + " offset: " + offset + " task: " + TaskContext.get().partitionId())
-            tasks.add(threadPool.submit(
-              new ParquetReadRunner(file, outLocal, blocks, offset, System.nanoTime())))
+            tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
+              new ParquetReadRunner(file, outLocal, blocks, offset, System.nanoTime()), numThreads))
             offset += fileBlockSize
             // logWarning(s"new offset is $offset")
           } else {
