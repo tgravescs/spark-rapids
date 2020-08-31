@@ -19,20 +19,19 @@ package com.nvidia.spark.rapids
 import java.io.OutputStream
 import java.net.URI
 import java.nio.charset.StandardCharsets
-import java.util.concurrent._
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Locale}
+import java.util.concurrent._
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, LinkedHashMap}
 import scala.math.max
+
 import ai.rapids.cudf._
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.nvidia.spark.RebaseHelper
 import com.nvidia.spark.rapids.GpuMetricNames._
 import com.nvidia.spark.rapids.ParquetPartitionReader.CopyRange
-import com.nvidia.spark.rapids.RapidsConf.ENABLE_SMALL_FILES_PARQUET
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import org.apache.commons.io.IOUtils
 import org.apache.commons.io.output.{CountingOutputStream, NullOutputStream}
@@ -45,6 +44,7 @@ import org.apache.parquet.format.converter.ParquetMetadataConverter
 import org.apache.parquet.hadoop.{ParquetFileReader, ParquetInputFormat}
 import org.apache.parquet.hadoop.metadata._
 import org.apache.parquet.schema.{GroupType, MessageType, Types}
+
 import org.apache.spark.TaskContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.Logging
@@ -52,9 +52,9 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader, PartitionReaderFactory}
 import org.apache.spark.sql.execution.QueryExecutionException
-import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile, PartitioningAwareFileIndex}
+import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFilters, ParquetReadSupport}
-import org.apache.spark.sql.execution.datasources.v2.{FilePartitionReaderFactory, FileScan}
+import org.apache.spark.sql.execution.datasources.v2.{FilePartitionReaderFactory}
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.internal.SQLConf
@@ -62,7 +62,7 @@ import org.apache.spark.sql.rapids.execution.TrampolineUtil
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{StringType, StructType, TimestampType}
 import org.apache.spark.sql.vectorized.ColumnarBatch
-import org.apache.spark.util.{SerializableConfiguration, UninterruptibleThread}
+import org.apache.spark.util.SerializableConfiguration
 
 abstract class GpuParquetScanBase(
     sparkSession: SparkSession,
@@ -326,7 +326,8 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   private def buildBaseColumnarParquetReader(
       files: Array[PartitionedFile]): PartitionReader[ColumnarBatch] = {
     val conf = broadcastedConf.value.value
-    logDebug(s"Number files being read: ${files.size} for task ${TaskContext.get().partitionId()} " +
+    logDebug(s"Number files being read: ${files.size} for task" +
+      s" ${TaskContext.get().partitionId()} " +
       s"files include ${files.map(x => x.filePath)}")
     val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
     files.map { file =>
@@ -336,7 +337,6 @@ case class GpuParquetMultiFilePartitionReaderFactory(
           singleFileInfo.schema, singleFileInfo.isCorrectedRebaseMode))
     }
 
-    val sortedFiles = files.sortBy(_.filePath)
     new MultiFileParquetPartitionReader(conf, files, clippedBlocks,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
       maxReadBatchSizeRows, maxReadBatchSizeBytes, metrics, partitionSchema,
@@ -496,8 +496,7 @@ abstract class FileParquetPartitionReaderBase(
   protected def copyBlocksData(
       in: FSDataInputStream,
       out: HostMemoryOutputStream,
-      blocks: Seq[BlockMetaData],
-      realStartOffset: Long): Seq[BlockMetaData] = {
+      blocks: Seq[BlockMetaData]): Seq[BlockMetaData] = {
     var totalRows: Long = 0
     val outputBlocks = new ArrayBuffer[BlockMetaData](blocks.length)
     val copyRanges = new ArrayBuffer[CopyRange]
@@ -510,8 +509,7 @@ abstract class FileParquetPartitionReaderBase(
       val outputColumns = new ArrayBuffer[ColumnChunkMetaData](columns.length)
       columns.foreach { column =>
         // update column metadata to reflect new position in the output file
-        val startPosCol = column.getStartingPos
-        val offsetAdjustment = realStartOffset + totalBytesToCopy - startPosCol
+        val offsetAdjustment = out.getPos + totalBytesToCopy - column.getStartingPos
         val newDictOffset = if (column.getDictionaryPageOffset > 0) {
           column.getDictionaryPageOffset + offsetAdjustment
         } else {
@@ -624,7 +622,7 @@ object MultiFileThreadPoolFactory {
   private def initThreadPool(
       maxThreads: Int = 20,
       keepAliveSeconds: Long = 60): ThreadPoolExecutor = {
-    if (threadPool == null) {
+    if (!threadPool.isDefined) {
       val threadFactory = new ThreadFactoryBuilder()
         .setNameFormat("parquet reader worker-%d")
         .setDaemon(true)
@@ -727,7 +725,7 @@ class MultiFileParquetPartitionReader(
   }
 
   private val blockIterator: BufferedIterator[ParquetFileInfoWithSingleBlockMeta] =
-    clippedBlocks.iterator.buffered
+    clippedBlocks.sortBy(_.filePath).iterator.buffered
 
   private def addPartitionValues(
       batch: Option[ColumnarBatch],
@@ -742,14 +740,11 @@ class MultiFileParquetPartitionReader(
     }
   }
 
-  private val batchesProcessed: AtomicInteger = new AtomicInteger(0)
-
   class ReadBatchRunner(meta: BatchesMetaData) extends Callable[Boolean] with Logging {
 
     override def call(): Boolean = {
       val result = readToHostMemBuffer(meta)
       batches.put(result)
-      batchesProcessed.incrementAndGet()
       logWarning("done read host mem bufer")
       true
     }
@@ -778,7 +773,6 @@ class MultiFileParquetPartitionReader(
         }
         isInitted = true
       }
-
 
       // This is odd, but some operators return data even when there is no input so we need to
       // be sure that we grab the GPU
@@ -809,6 +803,8 @@ class MultiFileParquetPartitionReader(
       val batchMeta = populateCurrentBlockChunk()
       batchesMetaData += batchMeta
     }
+    logWarning(s"calcualted batches sorted ${TaskContext.get().partitionId()}" +
+      s" are: ${batchesMetaData.map(_.seqPathsAndBlocks).mkString(",")}")
   }
 
   private def readToHostMemBuffer(batchMeta: BatchesMetaData): HostMemoryBufferWithMetaData = {
@@ -895,25 +891,6 @@ class MultiFileParquetPartitionReader(
     }
   }
 
-  class ParquetReadRunner(
-      file: Path,
-      outhmb: HostMemoryBuffer,
-      blocks: ArrayBuffer[BlockMetaData],
-      offset: Long,
-      startTs: Long)
-    extends Callable[Seq[BlockMetaData]] {
-    override def call(): Seq[BlockMetaData] = {
-      var out = new HostMemoryOutputStream(outhmb)
-      val res = withResource(file.getFileSystem(conf).open(file)) { in =>
-        copyBlocksData(in, out, blocks, offset)
-      }
-      logWarning(s"time to copy data from start is ${System.nanoTime() - startTs}")
-      outhmb.close()
-      res
-    }
-  }
-
-
   private def readPartFiles(
       blocks: Seq[(Path, BlockMetaData)],
       clippedSchema: MessageType): (HostMemoryBuffer, Long) = {
@@ -934,72 +911,23 @@ class MultiFileParquetPartitionReader(
       val initTotalSize = calculateParquetOutputSize(allBlocks, clippedSchema, true)
       var hmb = HostMemoryBuffer.allocate(initTotalSize)
       var out = new HostMemoryOutputStream(hmb)
-      val size = filesAndBlocks.size
-      // val tasks = new java.util.ArrayList[ParquetReadRunner]()
-      val tasks = new java.util.ArrayList[Future[Seq[BlockMetaData]]]()
-
-      val useThreadsReadPart = false
       try {
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
-        var offset = out.getPos
         val allOutputBlocks = scala.collection.mutable.ArrayBuffer[BlockMetaData]()
-        logWarning(s"number of files are: ${filesAndBlocks.size} threads are $numThreads")
-        val start = System.nanoTime()
         filesAndBlocks.foreach { case (file, blocks) =>
-          if (useThreadsReadPart == true) {
-
-            val fileBlockSize = blocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
-            val outLocal = hmb.slice(offset, fileBlockSize)
-            // logWarning("coying block data size: " + fileBlockSize + " offset: " + offset + " task: " + TaskContext.get().partitionId())
-            tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
-              new ParquetReadRunner(file, outLocal, blocks, offset, System.nanoTime()), numThreads))
-            offset += fileBlockSize
-            // logWarning(s"new offset is $offset")
-          } else {
-            withResource(file.getFileSystem(conf).open(file)) { in =>
-              // val startInner = System.nanoTime()
-              // logWarning("coying block data at: " + out.getPos + " size: " + fileBlockSize + " loc: " + (out.getPos + fileBlockSize) + " offset: " + offset + " task: " + TaskContext.get().partitionId())
-              val retBlocks = copyBlocksData(in, out, blocks, out.getPos)
-              // logWarning("copying realy position after is : " + out.getPos + " task: " + TaskContext.get().partitionId())
-              // logWarning("copy blocks after open: " + (System.nanoTime() - startInner) + " part: " + TaskContext.get().partitionId())
-              allOutputBlocks ++= retBlocks
-            }
+          withResource(file.getFileSystem(conf).open(file)) { in =>
+            val retBlocks = copyBlocksData(in, out, blocks)
+            allOutputBlocks ++= retBlocks
           }
         }
-        val finalizehmb =  if (useThreadsReadPart == true) {
-
-          // val results = threadPool.invokeAll(tasks)
-          // for (future <- results.asScala) {
-          for (future <- tasks.asScala) {
-            val result = future.get()
-            allOutputBlocks ++= result
-          }
-
-          val lenLeft = initTotalSize - offset
-          // logWarning(s"offset to slice for footer is $offset left is $lenLeft")
-          val sliced = hmb.slice(offset, lenLeft)
-          out.close()
-          out = new HostMemoryOutputStream(sliced)
-          // logWarning(s"footer position after slice buffer ${out.getPos}")
-          sliced
-        } else {
-          null
-        }
-        // logWarning(s"done waiting on copys ${System.nanoTime() - start}")
-
-
         // The footer size can change vs the initial estimated because we are combining more blocks
         //  and offsets are larger, check to make sure we allocated enough memory before writing.
         // Not sure how expensive this is, we could throw exception instead if the written
         // size comes out > then the estimated size.
         val actualFooterSize = calculateParquetFooterSize(allOutputBlocks, clippedSchema)
-        val footerPos = if (useThreadsReadPart == true) {
-          offset
-        } else {
-          out.getPos
-        }
+        val footerPos = out.getPos
 
-        /* // 4 + 4 is for writing size and the ending PARQUET_MAGIC.
+        // 4 + 4 is for writing size and the ending PARQUET_MAGIC.
         val bufferSizeReq = footerPos + actualFooterSize + 4 + 4
         val bufferSize = if (bufferSizeReq > initTotalSize) {
           logWarning(s"The original estimated size $initTotalSize is to small, " +
@@ -1015,34 +943,17 @@ class MultiFileParquetPartitionReader(
           // we didn't change the buffer size so return the initial size which is the actual
           // size of the buffer
           initTotalSize
-        } */
-        val bufferSize = initTotalSize
-        writeFooter(out, allOutputBlocks, clippedSchema)
-
-        val footerSize = if (useThreadsReadPart == true) {
-          (out.getPos - 0).toInt
-        } else {
-          (out.getPos - footerPos).toInt
         }
-        BytesUtils.writeIntLittleEndian(out, footerSize)
+        writeFooter(out, allOutputBlocks, clippedSchema)
+        BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
         succeeded = true
         // triple check we didn't go over memory
-        // TODO - need to fix
         if (out.getPos > bufferSize) {
           throw new QueryExecutionException(s"Calculated buffer size $bufferSize is to " +
             s"small, actual written: ${out.getPos}")
         }
-        val datasize =
-          if (useThreadsReadPart == true) {
-            footerPos + out.getPos
-          } else {
-            out.getPos
-          }
-        if (finalizehmb != null) {
-          finalizehmb.close()
-        }
-         (hmb, datasize)
+        (hmb, out.getPos)
       } finally {
         if (!succeeded) {
           hmb.close()
@@ -1267,7 +1178,7 @@ class ParquetPartitionReader(
         try {
           val out = new HostMemoryOutputStream(hmb)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
-          val outputBlocks = copyBlocksData(in, out, blocks, out.getPos)
+          val outputBlocks = copyBlocksData(in, out, blocks)
           val footerPos = out.getPos
           writeFooter(out, outputBlocks, clippedParquetSchema)
 
