@@ -330,12 +330,15 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       s" ${TaskContext.get().partitionId()} " +
       s"files include ${files.map(x => x.filePath)}")
     val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
+    val start = System.nanoTime()
+
     files.map { file =>
       val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
       clippedBlocks ++= singleFileInfo.blocks.map(
         ParquetFileInfoWithSingleBlockMeta(singleFileInfo.filePath, _, file.partitionValues,
           singleFileInfo.schema, singleFileInfo.isCorrectedRebaseMode))
     }
+    logWarning(s"time to filter blocks is ${System.nanoTime() - start}")
 
     new MultiFileParquetPartitionReader(conf, files, clippedBlocks,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
@@ -723,9 +726,10 @@ class MultiFileParquetPartitionReader(
       isExhausted = true
     }
   }
-
+  // we want to sort so that if paths have a key in them we put them together so they
+  // get batched together
   private val blockIterator: BufferedIterator[ParquetFileInfoWithSingleBlockMeta] =
-    clippedBlocks.sortBy(_.filePath).iterator.buffered
+    clippedBlocks.sortBy(_.filePath.getName).iterator.buffered
 
   private def addPartitionValues(
       batch: Option[ColumnarBatch],
@@ -848,20 +852,22 @@ class MultiFileParquetPartitionReader(
           metrics(GPU_DECODE_TIME))) { _ =>
           Table.readParquet(parseOpts, meta.hostbuffer, 0, meta.dataSize)
         }
-        if (!meta.isCorrectRebaseMode) {
-          (0 until table.getNumberOfColumns).foreach { i =>
-            if (RebaseHelper.isDateTimeRebaseNeededRead(table.getColumn(i))) {
-              throw RebaseHelper.newRebaseExceptionInRead("Parquet")
+        closeOnExcept(table) { table =>
+          if (!meta.isCorrectRebaseMode) {
+            (0 until table.getNumberOfColumns).foreach { i =>
+              if (RebaseHelper.isDateTimeRebaseNeededRead(table.getColumn(i))) {
+                throw RebaseHelper.newRebaseExceptionInRead("Parquet")
+              }
             }
           }
+          maxDeviceMemory = max(GpuColumnVector.getTotalDeviceMemoryUsed(table), maxDeviceMemory)
+          if (readDataSchema.length < table.getNumberOfColumns) {
+            table.close()
+            throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
+              s"but read ${table.getNumberOfColumns} from ?????")
+          }
+          metrics(NUM_OUTPUT_BATCHES) += 1
         }
-        maxDeviceMemory = max(GpuColumnVector.getTotalDeviceMemoryUsed(table), maxDeviceMemory)
-        if (readDataSchema.length < table.getNumberOfColumns) {
-          table.close()
-          throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
-            s"but read ${table.getNumberOfColumns} from ?????")
-        }
-        metrics(NUM_OUTPUT_BATCHES) += 1
         Some(evolveSchemaIfNeededAndClose(table, splits.mkString(","), meta.clippedSchema))
       }
     } finally {

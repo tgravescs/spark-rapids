@@ -361,6 +361,4 @@ class Spark300Shims extends SparkShims {
       supportsSmallFileOpt: Boolean): GpuFileSourceScanExec = {
     scanExec.copy(supportsSmallFileOpt=supportsSmallFileOpt)
   }
-
-  override def createOrcFilters
 }
