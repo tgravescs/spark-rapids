@@ -324,51 +324,18 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     buildBaseColumnarParquetReader(files)
   }
 
-  class ReadFilterRunner(file: PartitionedFile, conf: Configuration)
-    extends Callable[ParquetFileInfoWithBlockMeta] with Logging {
-
-    override def call(): ParquetFileInfoWithBlockMeta = {
-      val start = System.nanoTime()
-      val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
-      logWarning(s"done filter blocks took: ${System.nanoTime() - start}")
-      singleFileInfo
-    }
-  }
-
   private def buildBaseColumnarParquetReader(
       files: Array[PartitionedFile]): PartitionReader[ColumnarBatch] = {
     val conf = broadcastedConf.value.value
     logDebug(s"Number files being read: ${files.size} for task" +
       s" ${TaskContext.get().partitionId()} " +
       s"files include ${files.map(x => x.filePath)}")
-    val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
-    val tasks = new java.util.ArrayList[Future[ParquetFileInfoWithBlockMeta]]()
-    val start = System.nanoTime()
-    // TODO - shoudl we multi-thread this?
-    files.map { file =>
 
-      tasks.add(MultiFileFilterThreadPoolFactory.submitToThreadPool(
-        new ReadFilterRunner(file, conf), numThreads))
 
-      // val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
-      /*clippedBlocks ++= singleFileInfo.blocks.map(
-        ParquetFileInfoWithSingleBlockMeta(singleFileInfo.filePath, _, file.partitionValues,
-          singleFileInfo.schema, singleFileInfo.isCorrectedRebaseMode))
-          */
-    }
-
-    for (future <- tasks.asScala) {
-      val result = future.get()
-      clippedBlocks ++= result.blocks.map(
-        ParquetFileInfoWithSingleBlockMeta(result.filePath, _, result.partValues,
-          result.schema, result.isCorrectedRebaseMode))
-    }
-    logWarning(s"time to filter blocks is ${System.nanoTime() - start}")
-
-    new MultiFileParquetPartitionReader(conf, files, clippedBlocks,
+    new MultiFileParquetPartitionReader(conf, files,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
       maxReadBatchSizeRows, maxReadBatchSizeBytes, metrics, partitionSchema,
-      useThreads, numThreads)
+      useThreads, numThreads, filterHandler, filters)
   }
 }
 
@@ -723,7 +690,6 @@ object MultiFileFilterThreadPoolFactory {
 class MultiFileParquetPartitionReader(
     conf: Configuration,
     splits: Array[PartitionedFile],
-    clippedBlocks: Seq[ParquetFileInfoWithSingleBlockMeta],
     isSchemaCaseSensitive: Boolean,
     readDataSchema: StructType,
     debugDumpPrefix: String,
@@ -732,16 +698,19 @@ class MultiFileParquetPartitionReader(
     execMetrics: Map[String, SQLMetric],
     partitionSchema: StructType,
     useThreads: Boolean,
-    numThreads: Int)
+    numThreads: Int,
+    filterHandler: GpuParquetFileFilterHandler,
+    filters: Array[Filter])
   extends FileParquetPartitionReaderBase(conf, isSchemaCaseSensitive, readDataSchema,
     debugDumpPrefix, execMetrics) {
 
-  // TODO - do we want an option to sort?  if multi-threaded might be better to not sort to get more batches?
+  // TODO - do we want an option to sort?
+  //  if multi-threaded might be better to not sort to get more batches?
 
   // we want to sort so that if paths have a key in them we put them together so they
   // get batched together
-  private val blockIterator: BufferedIterator[ParquetFileInfoWithSingleBlockMeta] =
-  clippedBlocks.iterator.buffered
+  // private val blockIterator: BufferedIterator[ParquetFileInfoWithSingleBlockMeta] =
+   //  clippedBlocks.iterator.buffered
   // clippedBlocks.sortBy(_.filePath.toString()).iterator.buffered
 
 
@@ -749,7 +718,6 @@ class MultiFileParquetPartitionReader(
   private var batchesToRead = 0
 
   override def get(): ColumnarBatch = {
-    if (useThreads) {
       val ret = if (batchesToRead > 0) {
         logWarning(s"get called number batches is" +
           s" $batchesToRead ${TaskContext.get().partitionId()}" +
@@ -771,26 +739,15 @@ class MultiFileParquetPartitionReader(
         throw new NoSuchElementException
       }
       ret
-    } else {
-      val ret = batch.getOrElse(throw new NoSuchElementException)
-      batch = None
-      ret
-    }
   }
 
   override def close(): Unit = {
-    if (useThreads) {
       // TODO - double check cleanup - how do we do batches?
       // batches.asScala.foreach(_.hostbuffer.close())
       // batches.clear()
       batch.foreach(_.close())
       batch = None
       isExhausted = true
-    } else {
-      batch.foreach(_.close())
-      batch = None
-      isExhausted = true
-    }
   }
 
   private def addPartitionValues(
@@ -806,12 +763,54 @@ class MultiFileParquetPartitionReader(
     }
   }
 
-  class ReadBatchRunner(meta: BatchesMetaData) extends Callable[Boolean] with Logging {
+  class ReadBatchRunner(filterHandler: GpuParquetFileFilterHandler,
+      file: PartitionedFile,
+      conf: Configuration,
+      filters: Array[Filter]) extends Callable[Boolean] with Logging {
+
+    private def readPartFile(blocks: Seq[BlockMetaData], filePath: Path,
+        clippedParquetSchema: MessageType): (HostMemoryBuffer, Long) = {
+      withResource(new NvtxWithMetrics("Buffer file split", NvtxColor.YELLOW,
+        metrics("bufferTime"))) { _ =>
+        withResource(filePath.getFileSystem(conf).open(filePath)) { in =>
+          var succeeded = false
+          val estTotalSize = calculateParquetOutputSize(blocks, clippedParquetSchema, false)
+          val hmb =
+            HostMemoryBuffer.allocate(estTotalSize)
+          try {
+            val out = new HostMemoryOutputStream(hmb)
+            out.write(ParquetPartitionReader.PARQUET_MAGIC)
+            val outputBlocks = copyBlocksData(in, out, blocks)
+            val footerPos = out.getPos
+            writeFooter(out, outputBlocks, clippedParquetSchema)
+
+            BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
+            out.write(ParquetPartitionReader.PARQUET_MAGIC)
+            succeeded = true
+            // check we didn't go over memory
+            if (out.getPos > estTotalSize) {
+              throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is to " +
+                s"small, actual written: ${out.getPos}")
+            }
+            (hmb, out.getPos)
+          } finally {
+            if (!succeeded) {
+              hmb.close()
+            }
+          }
+        }
+      }
+    }
 
     override def call(): Boolean = {
-      val result = readToHostMemBuffer(meta)
-      batches.put(result)
-      logWarning("done read host mem bufer")
+      val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
+      val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
+
+      // TODO - not doing batches here because single files - would have to add
+      val filePath = new Path(new URI(file.filePath))
+      val (buffer, size) = readPartFile(singleFileInfo.blocks, filePath, singleFileInfo.schema)
+      batches.put(HostMemoryBufferWithMetaData(singleFileInfo.isCorrectedRebaseMode,
+        singleFileInfo.schema, singleFileInfo.partValues, buffer, size))
       true
     }
   }
@@ -826,43 +825,23 @@ class MultiFileParquetPartitionReader(
   private var isInitted = false
 
   override def next(): Boolean = {
-    if (useThreads) {
-      if (isInitted == false) {
-        calculateBatches()
-        batchesToRead = batchesMetaData.size
-        // read the data in parallel using threads
-        // val tasks = new java.util.ArrayList[Future[Boolean]]()
-
-        for (batchMeta <- batchesMetaData) {
-          // tasks.add(threadPool.submit(new ReadBatchRunner(batchMeta)))
-          MultiFileThreadPoolFactory.submitToThreadPool(new ReadBatchRunner(batchMeta), numThreads)
-        }
-        isInitted = true
+    if (isInitted == false) {
+      splits.foreach { file =>
+        // tasks.add(threadPool.submit(new ReadBatchRunner(batchMeta)))
+        MultiFileThreadPoolFactory.submitToThreadPool(
+          new ReadBatchRunner(filterHandler, file, conf, filters), numThreads)
       }
-
-      // This is odd, but some operators return data even when there is no input so we need to
-      // be sure that we grab the GPU
-      GpuSemaphore.acquireIfNecessary(TaskContext.get())
-      batchesToRead > 0
-    } else {
-      batch.foreach(_.close())
-      batch = None
-      if (!isExhausted) {
-        if (!blockIterator.hasNext) {
-          isExhausted = true
-          metrics("peakDevMemory") += maxDeviceMemory
-        } else {
-          batch = readBatch()
-        }
-      }
-
-      // This is odd, but some operators return data even when there is no input so we need to
-      // be sure that we grab the GPU
-      GpuSemaphore.acquireIfNecessary(TaskContext.get())
-      batch.isDefined
+      isInitted = true
+      batchesToRead = splits.length
     }
+
+    // This is odd, but some operators return data even when there is no input so we need to
+    // be sure that we grab the GPU
+    GpuSemaphore.acquireIfNecessary(TaskContext.get())
+    batchesToRead > 0
   }
 
+  /*
   private def calculateBatches(): Unit = {
     while (blockIterator.hasNext) {
       // TODO - may need to change the way we handle max bytes/rows
@@ -871,6 +850,7 @@ class MultiFileParquetPartitionReader(
     }
   }
 
+*/
   private def readToHostMemBuffer(batchMeta: BatchesMetaData): HostMemoryBufferWithMetaData = {
 
     if (readDataSchema.isEmpty) {
@@ -1029,35 +1009,6 @@ class MultiFileParquetPartitionReader(
     }
   }
 
-  private def readBatch(): Option[ColumnarBatch] = {
-    withResource(new NvtxWithMetrics("Parquet readBatch", NvtxColor.GREEN,
-        metrics(TOTAL_TIME))) { _ =>
-      val batchMeta = populateCurrentBlockChunk()
-      if (readDataSchema.isEmpty) {
-        // not reading any data, so return a degenerate ColumnarBatch with the row count
-        val numRows = batchMeta.seqPathsAndBlocks.map(_._2.getRowCount).sum.toInt
-        if (numRows == 0) {
-          None
-        } else {
-          Some(new ColumnarBatch(Array.empty, numRows.toInt))
-        }
-      } else {
-        val table = readToTable(batchMeta.seqPathsAndBlocks, batchMeta.clippedSchema,
-          batchMeta.isCorrectRebaseMode)
-        try {
-          val maybeBatch = table.map(GpuColumnVector.from)
-          maybeBatch.foreach { batch =>
-            logDebug(s"GPU batch size: ${GpuColumnVector.getTotalDeviceMemoryUsed(batch)} bytes")
-          }
-          // we have to add partition values here for this batch, we already verified that
-          // its not different for all the blocks in this batch
-          addPartitionValues(maybeBatch, batchMeta.partValues)
-        } finally {
-          table.foreach(_.close())
-        }
-      }
-    }
-  }
 
   private def readToTable(
       currentChunkedBlocks: Seq[(Path, BlockMetaData)],
@@ -1106,6 +1057,7 @@ class MultiFileParquetPartitionReader(
     }
   }
 
+  /*
   private def populateCurrentBlockChunk(): BatchesMetaData = {
 
     val currentChunk = new ArrayBuffer[(Path, BlockMetaData)]
@@ -1182,7 +1134,9 @@ class MultiFileParquetPartitionReader(
     BatchesMetaData(currentIsCorrectRebaseMode, currentClippedSchema,
       currentPartitionValues, currentChunk)
   }
+  */
 }
+
 
 /**
  * A PartitionReader that reads a Parquet file split on the GPU.
