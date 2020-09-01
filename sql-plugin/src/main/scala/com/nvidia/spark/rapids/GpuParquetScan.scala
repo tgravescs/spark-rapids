@@ -920,6 +920,7 @@ class MultiFileParquetPartitionReader(
       try {
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
         val allOutputBlocks = scala.collection.mutable.ArrayBuffer[BlockMetaData]()
+        // TODO - could test this multi-threaded again?
         filesAndBlocks.foreach { case (file, blocks) =>
           withResource(file.getFileSystem(conf).open(file)) { in =>
             val retBlocks = copyBlocksData(in, out, blocks)
@@ -1068,7 +1069,7 @@ class MultiFileParquetPartitionReader(
         if (currentFile != blockIterator.head.filePath) {
           // We need to ensure all files we are going to combine have the same datetime rebase mode.
           if (blockIterator.head.isCorrectedRebaseMode != currentIsCorrectRebaseMode) {
-            logInfo("datetime rebase mode for the next file " +
+            logWarning("datetime rebase mode for the next file " +
               s"${blockIterator.head.filePath} is different then current file $currentFile, " +
               s"splitting into another batch.")
             return
@@ -1076,7 +1077,7 @@ class MultiFileParquetPartitionReader(
 
           // check to see if partitionValues different, then have to split it
           if (blockIterator.head.partValues != currentPartitionValues) {
-            logInfo(s"Partition values for the next file ${blockIterator.head.filePath}" +
+            logWarning(s"Partition values for the next file ${blockIterator.head.filePath}" +
               s" doesn't match current $currentFile, splitting it into another batch!")
             return
           }
@@ -1089,6 +1090,8 @@ class MultiFileParquetPartitionReader(
               s" doesn't match current $currentFile, splitting it into another batch!")
             return
           }
+          logWarning(s"switching file task: ${TaskContext.get.partitionId()} " +
+            s"file: ${blockIterator.head.filePath}")
           currentFile = blockIterator.head.filePath
           currentPartitionValues = blockIterator.head.partValues
           currentClippedSchema = blockIterator.head.schema
