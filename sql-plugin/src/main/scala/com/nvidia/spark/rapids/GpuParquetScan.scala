@@ -332,6 +332,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
     val start = System.nanoTime()
 
+    // TODO - shoudl we multi-thread this?
     files.map { file =>
       val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
       clippedBlocks ++= singleFileInfo.blocks.map(
@@ -726,10 +727,12 @@ class MultiFileParquetPartitionReader(
       isExhausted = true
     }
   }
+
+  logWarning(s"clippedblocks ${clippedBlocks} sorted is: ${clippedBlocks.sortBy(_.toString())}  ")
   // we want to sort so that if paths have a key in them we put them together so they
   // get batched together
   private val blockIterator: BufferedIterator[ParquetFileInfoWithSingleBlockMeta] =
-    clippedBlocks.sortBy(_.filePath.getName).iterator.buffered
+    clippedBlocks.sortBy(_.filePath.toString()).iterator.buffered
 
   private def addPartitionValues(
       batch: Option[ColumnarBatch],
