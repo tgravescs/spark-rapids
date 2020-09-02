@@ -392,6 +392,7 @@ abstract class FileParquetPartitionReaderBase(
   protected var isExhausted: Boolean = false
   protected var maxDeviceMemory: Long = 0
   protected var batch: Option[ColumnarBatch] = None
+
   protected val copyBufferSize = conf.getInt("parquet.read.allocation.size", 8 * 1024 * 1024)
   metrics = execMetrics
 
@@ -716,17 +717,16 @@ class MultiFileParquetPartitionReader(
 
   private val batches = new LinkedBlockingQueue[HostMemoryBufferWithMetaData]
   private var batchesToRead = 0
+  private var currentBatch: Option[HostMemoryBufferWithMetaData] = None
 
   override def get(): ColumnarBatch = {
-      val ret = if (batchesToRead > 0) {
+      val ret = if (currentBatch.isDefined) {
         logWarning(s"get called number batches is" +
           s" $batchesToRead ${TaskContext.get().partitionId()}" +
           s" batches available is ${batches.size}")
         batch.foreach(_.close())
-        val retBatch = batches.take()
-        batch = readBufferToTable(retBatch)
+        batch = readBufferToTable(currentBatch.get)
         logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()}")
-        batchesToRead -= 1
         if (batch.isDefined) {
           val batchToRet = batch.get
           batch = None
@@ -774,7 +774,7 @@ class MultiFileParquetPartitionReader(
         metrics("bufferTime"))) { _ =>
         withResource(filePath.getFileSystem(conf).open(filePath)) { in =>
           var succeeded = false
-          val estTotalSize = calculateParquetOutputSize(blocks, clippedParquetSchema, false)
+          val estTotalSize = calculateParquetOutputSize(blocks, clippedParquetSchema, true)
           val hmb =
             HostMemoryBuffer.allocate(estTotalSize)
           try {
@@ -803,14 +803,28 @@ class MultiFileParquetPartitionReader(
     }
 
     override def call(): Boolean = {
-      val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
-      val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
+      try {
+        val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
+        val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
+        if (singleFileInfo.blocks.size == 0) {
+          // no blocks so put empty
+          HostMemoryBufferWithMetaData(singleFileInfo.isCorrectedRebaseMode,
+            singleFileInfo.schema, singleFileInfo.partValues, null, 0)
+          return false
+        }
 
-      // TODO - not doing batches here because single files - would have to add
-      val filePath = new Path(new URI(file.filePath))
-      val (buffer, size) = readPartFile(singleFileInfo.blocks, filePath, singleFileInfo.schema)
-      batches.put(HostMemoryBufferWithMetaData(singleFileInfo.isCorrectedRebaseMode,
-        singleFileInfo.schema, singleFileInfo.partValues, buffer, size))
+        // TODO - not doing batches here because single files - would have to add
+        val filePath = new Path(new URI(file.filePath))
+        val (buffer, size) = readPartFile(singleFileInfo.blocks, filePath, singleFileInfo.schema)
+        if (buffer == null) {
+          logWarning(s"buffer is null for task ${TaskContext.get().partitionId()} for file: $file")
+        }
+        batches.put(HostMemoryBufferWithMetaData(singleFileInfo.isCorrectedRebaseMode,
+          singleFileInfo.schema, singleFileInfo.partValues, buffer, size))
+      } catch {
+        case e: Exception =>
+          logError(s"exception in thread, ${e.getMessage}", e)
+      }
       true
     }
   }
@@ -835,10 +849,23 @@ class MultiFileParquetPartitionReader(
       batchesToRead = splits.length
     }
 
+    currentBatch = None
+    val res = if (batchesToRead > 0) {
+      val retBatch = batches.take()
+      batchesToRead -= 1
+      if (retBatch.dataSize == 0) {
+        next()
+      } else {
+        currentBatch = Some(retBatch)
+      }
+      currentBatch.isDefined
+    } else {
+      false
+    }
     // This is odd, but some operators return data even when there is no input so we need to
     // be sure that we grab the GPU
     GpuSemaphore.acquireIfNecessary(TaskContext.get())
-    batchesToRead > 0
+    res
   }
 
   /*
