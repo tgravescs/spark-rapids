@@ -462,7 +462,7 @@ object RapidsConf {
   val ENABLE_SMALL_FILES_PARQUET_NUM_THREADS = conf("spark.rapids.sql.format.parquet.smallFiles.numThreads")
     .doc("")
     .integerConf
-    .createWithDefault(1)
+    .createWithDefault(20)
 
   val ENABLE_PARQUET_READ = conf("spark.rapids.sql.format.parquet.read.enabled")
     .doc("When set to false disables parquet input acceleration")
