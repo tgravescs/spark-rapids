@@ -715,17 +715,13 @@ class MultiFileParquetPartitionReader(
   // clippedBlocks.sortBy(_.filePath.toString()).iterator.buffered
 
 
-  private val batches = new LinkedBlockingQueue[HostMemoryBufferWithMetaData]
-  private val fileResults = new java.util.ArrayList[HostMemoryBufferWithMetaData](splits.size)
+  // private val batches = new LinkedBlockingQueue[HostMemoryBufferWithMetaData]
 
   private var batchesToRead = 0
   private var currentBatch: Option[HostMemoryBufferWithMetaData] = None
 
   override def get(): ColumnarBatch = {
       val ret = if (currentBatch.isDefined) {
-        logWarning(s"get called number batches is" +
-          s" $batchesToRead ${TaskContext.get().partitionId()}" +
-          s" batches available is ${batches.size}")
         batch.foreach(_.close())
         batch = readBufferToTable(currentBatch.get)
         logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()}")
@@ -769,7 +765,7 @@ class MultiFileParquetPartitionReader(
       file: PartitionedFile,
       conf: Configuration,
       filters: Array[Filter],
-      fileNum: Int) extends Callable[Boolean] with Logging {
+      fileNum: Int) extends Callable[HostMemoryBufferWithMetaData] with Logging {
 
     private def readPartFile(blocks: Seq[BlockMetaData], filePath: Path,
         clippedParquetSchema: MessageType): (HostMemoryBuffer, Long) = {
@@ -805,15 +801,15 @@ class MultiFileParquetPartitionReader(
       }
     }
 
-    override def call(): Boolean = {
-      try {
+    override def call(): HostMemoryBufferWithMetaData = {
+      val res = try {
         val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
         val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
         if (singleFileInfo.blocks.size == 0) {
           // no blocks so put empty
-          HostMemoryBufferWithMetaData(singleFileInfo.isCorrectedRebaseMode,
+          return HostMemoryBufferWithMetaData(singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, null, 0)
-          return false
+
         }
 
         // TODO - not doing batches here because single files - would have to add
@@ -823,20 +819,16 @@ class MultiFileParquetPartitionReader(
           logWarning(s"buffer is null for task ${TaskContext.get().partitionId()} for file: $file")
         }
         // batches.put(HostMemoryBufferWithMetaData(singleFileInfo.isCorrectedRebaseMode,
-         //  singleFileInfo.schema, singleFileInfo.partValues, buffer, size))
-        synchronized(fileResults) {
-          fileResults.add(fileNum, HostMemoryBufferWithMetaData(
-            singleFileInfo.isCorrectedRebaseMode,
-            singleFileInfo.schema, singleFileInfo.partValues, buffer, size))
-          if (currentIndex == fileNum) {
-            lock.release
-          }
-        }
+        //  singleFileInfo.schema, singleFileInfo.partValues, buffer, size))
+        HostMemoryBufferWithMetaData(
+          singleFileInfo.isCorrectedRebaseMode,
+          singleFileInfo.schema, singleFileInfo.partValues, buffer, size))
       } catch {
         case e: Exception =>
           logError(s"exception in thread, ${e.getMessage}", e)
+          return HostMemoryBufferWithMetaData(false, null, null, null, 0)
       }
-      true
+      res
     }
   }
   case class HostMemoryBufferWithMetaData(isCorrectRebaseMode: Boolean, clippedSchema: MessageType,
@@ -849,33 +841,25 @@ class MultiFileParquetPartitionReader(
 
   private var isInitted = false
 
-  private var currentIndex = 0
+  val tasks = new java.util.ArrayList[Future[HostMemoryBufferWithMetaData]]()
 
-  private val lock = new java.util.concurrent.Semaphore(1)
 
   override def next(): Boolean = {
+
     if (isInitted == false) {
       splits.zipWithIndex.foreach { case (file, fileNum) =>
         // tasks.add(threadPool.submit(new ReadBatchRunner(batchMeta)))
-        MultiFileThreadPoolFactory.submitToThreadPool(
-          new ReadBatchRunner(filterHandler, file, conf, filters, fileNum), numThreads)
+        tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
+          new ReadBatchRunner(filterHandler, file, conf, filters, fileNum), numThreads))
       }
       isInitted = true
       batchesToRead = splits.length
-      lock.acquire
-
     }
-
+    var retBatch: HostMemoryBufferWithMetaData = null
     currentBatch = None
     val res = if (batchesToRead > 0) {
-      var retBatch: HostMemoryBufferWithMetaData = null
-
-
-      lock.acquire
-      synchronized(fileResults) {
-        retBatch = fileResults.get(currentIndex)
-        currentIndex += 1
-      }
+      val future = tasks.remove(0)
+      val retBatch = future.get()
       batchesToRead -= 1
       if (retBatch.dataSize == 0) {
         next()
