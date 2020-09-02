@@ -501,8 +501,10 @@ abstract class FileParquetPartitionReaderBase(
     blocks.foreach { block =>
       totalRows += block.getRowCount
       val columns = block.getColumns.asScala
+      logWarning(s"columns is ${columns.length}")
       val outputColumns = new ArrayBuffer[ColumnChunkMetaData](columns.length)
       columns.foreach { column =>
+        logWarning(s"column is ${column.toString}")
         // update column metadata to reflect new position in the output file
         val offsetAdjustment = out.getPos + totalBytesToCopy - column.getStartingPos
         val newDictOffset = if (column.getDictionaryPageOffset > 0) {
@@ -722,6 +724,9 @@ class MultiFileParquetPartitionReader(
   override def get(): ColumnarBatch = {
       val ret = if (currentBatch.isDefined) {
         batch.foreach(_.close())
+        if (currentBatch.get.hostbuffer == null) {
+          return new ColumnarBatch(Array.empty, currentBatch.get.dataSize.toInt)
+        }
         batch = readBufferToTable(currentBatch.get)
         currentBatch = None
         logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()}")
@@ -811,16 +816,29 @@ class MultiFileParquetPartitionReader(
         }
 
         // TODO - not doing batches here because single files - would have to add
-        val filePath = new Path(new URI(file.filePath))
-        val (buffer, size) = readPartFile(singleFileInfo.blocks, filePath, singleFileInfo.schema)
-        if (buffer == null) {
-          logWarning(s"buffer is null for task ${TaskContext.get().partitionId()} for file: $file")
+        // TODO - need to handle empty schema
+        if (readDataSchema.isEmpty) {
+          val numRows = singleFileInfo.blocks.map(_.getRowCount).sum.toInt
+          // overload size to be number of rows
+          // note numrows could be 0
+          HostMemoryBufferWithMetaData(
+            singleFileInfo.isCorrectedRebaseMode,
+            singleFileInfo.schema, singleFileInfo.partValues, null, numRows)
+
+        } else {
+
+          val filePath = new Path(new URI(file.filePath))
+          val (buffer, size) = readPartFile(singleFileInfo.blocks, filePath, singleFileInfo.schema)
+          if (buffer == null) {
+            logWarning(s"buffer is null for task " +
+              s"${TaskContext.get().partitionId()} for file: $file")
+          }
+          // batches.put(HostMemoryBufferWithMetaData(singleFileInfo.isCorrectedRebaseMode,
+          //  singleFileInfo.schema, singleFileInfo.partValues, buffer, size))
+          HostMemoryBufferWithMetaData(
+            singleFileInfo.isCorrectedRebaseMode,
+            singleFileInfo.schema, singleFileInfo.partValues, buffer, size)
         }
-        // batches.put(HostMemoryBufferWithMetaData(singleFileInfo.isCorrectedRebaseMode,
-        //  singleFileInfo.schema, singleFileInfo.partValues, buffer, size))
-        HostMemoryBufferWithMetaData(
-          singleFileInfo.isCorrectedRebaseMode,
-          singleFileInfo.schema, singleFileInfo.partValues, buffer, size)
       } catch {
         case e: Exception =>
           logError(s"exception in thread, ${e.getMessage}", e)
@@ -889,6 +907,7 @@ class MultiFileParquetPartitionReader(
       // not reading any data, so return a degenerate ColumnarBatch with the row count
       val numRows = batchMeta.seqPathsAndBlocks.map(_._2.getRowCount).sum.toInt
       // note numrows could be 0
+      // overload size to be number of rows
       HostMemoryBufferWithMetaData(batchMeta.isCorrectRebaseMode, batchMeta.clippedSchema,
         batchMeta.partValues, null, numRows.toInt)
     } else {
@@ -917,6 +936,7 @@ class MultiFileParquetPartitionReader(
           .withTimeUnit(DType.TIMESTAMP_MICROSECONDS)
           .includeColumn(readDataSchema.fieldNames:_*).build()
 
+        logWarning(s"data schema is: ${readDataSchema.fieldNames.mkString(",")}")
         // about to start using the GPU
         GpuSemaphore.acquireIfNecessary(TaskContext.get())
 
