@@ -331,7 +331,6 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       s" ${TaskContext.get().partitionId()} " +
       s"files include ${files.map(x => x.filePath)}")
 
-
     new MultiFileParquetPartitionReader(conf, files,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
       maxReadBatchSizeRows, maxReadBatchSizeBytes, metrics, partitionSchema,
@@ -724,6 +723,7 @@ class MultiFileParquetPartitionReader(
       val ret = if (currentBatch.isDefined) {
         batch.foreach(_.close())
         batch = readBufferToTable(currentBatch.get)
+        currentBatch = None
         logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()}")
         if (batch.isDefined) {
           val batchToRet = batch.get
@@ -764,8 +764,7 @@ class MultiFileParquetPartitionReader(
   class ReadBatchRunner(filterHandler: GpuParquetFileFilterHandler,
       file: PartitionedFile,
       conf: Configuration,
-      filters: Array[Filter],
-      fileNum: Int) extends Callable[HostMemoryBufferWithMetaData] with Logging {
+      filters: Array[Filter]) extends Callable[HostMemoryBufferWithMetaData] with Logging {
 
     private def readPartFile(blocks: Seq[BlockMetaData], filePath: Path,
         clippedParquetSchema: MessageType): (HostMemoryBuffer, Long) = {
@@ -803,7 +802,6 @@ class MultiFileParquetPartitionReader(
 
     override def call(): HostMemoryBufferWithMetaData = {
       val res = try {
-        val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
         val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
         if (singleFileInfo.blocks.size == 0) {
           // no blocks so put empty
@@ -822,7 +820,7 @@ class MultiFileParquetPartitionReader(
         //  singleFileInfo.schema, singleFileInfo.partValues, buffer, size))
         HostMemoryBufferWithMetaData(
           singleFileInfo.isCorrectedRebaseMode,
-          singleFileInfo.schema, singleFileInfo.partValues, buffer, size))
+          singleFileInfo.schema, singleFileInfo.partValues, buffer, size)
       } catch {
         case e: Exception =>
           logError(s"exception in thread, ${e.getMessage}", e)
@@ -847,10 +845,9 @@ class MultiFileParquetPartitionReader(
   override def next(): Boolean = {
 
     if (isInitted == false) {
-      splits.zipWithIndex.foreach { case (file, fileNum) =>
-        // tasks.add(threadPool.submit(new ReadBatchRunner(batchMeta)))
+      splits.foreach { file =>
         tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
-          new ReadBatchRunner(filterHandler, file, conf, filters, fileNum), numThreads))
+          new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
       }
       isInitted = true
       batchesToRead = splits.length
