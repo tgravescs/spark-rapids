@@ -863,7 +863,8 @@ class MultiFileParquetPartitionReader(
               } else {
                 logWarning(s"compareAndSet current: $currentVal" +
                   s" est: $estTotalSize max: $maxParquetReadHostMemorySizeBytes")
-                waiting = currentHostMemoryUsed.compareAndSet(currentVal, currentVal + estTotalSize)
+                waiting = !currentHostMemoryUsed.compareAndSet(currentVal,
+                  currentVal + estTotalSize)
               }
             }
             logWarning(s"added, current host memory used is ${currentHostMemoryUsed.get}")
