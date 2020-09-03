@@ -614,13 +614,18 @@ abstract class FileParquetPartitionReaderBase(
   }
 }
 
+
+object HostMemoryTracker {
+  val currentHostMemoryUsed = new AtomicLong(0)
+}
+
 object MultiFileThreadPoolFactory {
 
-  var threadPool: Option[ThreadPoolExecutor] = None
+  private var threadPool: Option[ThreadPoolExecutor] = None
 
   private def initThreadPool(
       maxThreads: Int = 20,
-      keepAliveSeconds: Long = 60): ThreadPoolExecutor = {
+      keepAliveSeconds: Long = 60): ThreadPoolExecutor = synchronized {
     if (!threadPool.isDefined) {
       val threadFactory = new ThreadFactoryBuilder()
         .setNameFormat("parquet reader worker-%d")
@@ -676,51 +681,50 @@ class MultiFileParquetPartitionReader(
   extends FileParquetPartitionReaderBase(conf, isSchemaCaseSensitive, readDataSchema,
     debugDumpPrefix, execMetrics) {
 
-  private var currentHostMemoryUsed = new AtomicLong(0)
-
   private var batchesToRead = 0
   private var currentBatch: Option[HostMemoryBufferWithMetaData] = None
 
   override def get(): ColumnarBatch = {
-      val ret = if (currentBatch.isDefined) {
-        batch.foreach(_.close())
-        val memBufferAndSize = currentBatch.get.memBuffersAndSizes
-        val firstBuffer = memBufferAndSize.head
-        if (firstBuffer._1 == null) {
-          return new ColumnarBatch(Array.empty, firstBuffer._2.toInt)
-        }
-        val dataSize = firstBuffer._2
-        batch = readBufferToTable(currentBatch.get.isCorrectRebaseMode,
-          currentBatch.get.clippedSchema, currentBatch.get.partValues,
-          firstBuffer._1, firstBuffer._2)
-        logWarning(s"current host before is ${currentHostMemoryUsed.get}")
-
-        currentHostMemoryUsed.updateAndGet(_ - dataSize)
-        logWarning(s"current host memory removed $dataSize used is ${currentHostMemoryUsed.get}")
-        currentHostMemoryUsed.synchronized {
-          currentHostMemoryUsed.notify()
-        }
-        if (memBufferAndSize.length > 1) {
-          // we have to leave currentBatch alone but update host buffer processed
-          val prevBatch = currentBatch.get
-          val updatedBufferAndSize = memBufferAndSize.drop(1)
-          currentBatch = Some(prevBatch.copy(memBuffersAndSizes = updatedBufferAndSize))
-        } else {
-          currentBatch = None
-        }
-        logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()}")
-        if (batch.isDefined) {
-          val batchToRet = batch.get
-          batch = None
-          batchToRet
-        } else {
-          // TODO - is this ok to handle None case?
-          get()
-        }
-      } else {
-        throw new NoSuchElementException
+    val ret = if (currentBatch.isDefined) {
+      batch.foreach(_.close())
+      val memBufferAndSize = currentBatch.get.memBuffersAndSizes
+      val firstBuffer = memBufferAndSize.head
+      if (firstBuffer._1 == null) {
+        return new ColumnarBatch(Array.empty, firstBuffer._2.toInt)
       }
-      ret
+      val dataSize = firstBuffer._2
+      batch = readBufferToTable(currentBatch.get.isCorrectRebaseMode,
+        currentBatch.get.clippedSchema, currentBatch.get.partValues,
+        firstBuffer._1, firstBuffer._2)
+      logWarning(s"current host before is ${HostMemoryTracker.currentHostMemoryUsed.get}")
+
+      HostMemoryTracker.currentHostMemoryUsed.updateAndGet(_ - dataSize)
+      logWarning(s"current host memory removed $dataSize used " +
+        s"is ${HostMemoryTracker.currentHostMemoryUsed.get}")
+      HostMemoryTracker.currentHostMemoryUsed.synchronized {
+        HostMemoryTracker.currentHostMemoryUsed.notify()
+      }
+      if (memBufferAndSize.length > 1) {
+        // we have to leave currentBatch alone but update host buffer processed
+        val prevBatch = currentBatch.get
+        val updatedBufferAndSize = memBufferAndSize.drop(1)
+        currentBatch = Some(prevBatch.copy(memBuffersAndSizes = updatedBufferAndSize))
+      } else {
+        currentBatch = None
+      }
+      logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()}")
+      if (batch.isDefined) {
+        val batchToRet = batch.get
+        batch = None
+        batchToRet
+      } else {
+        // TODO - is this ok to handle None case?
+        get()
+      }
+    } else {
+      throw new NoSuchElementException
+    }
+    ret
   }
 
   override def close(): Unit = {
@@ -853,23 +857,24 @@ class MultiFileParquetPartitionReader(
 
             var waiting = true
             while (waiting) {
-              val currentVal = currentHostMemoryUsed.get()
+              val currentVal = HostMemoryTracker.currentHostMemoryUsed.get()
               if (currentVal > 0 && currentVal + estTotalSize > maxParquetReadHostMemorySizeBytes) {
                 // we want to wait til some is read before using more host memory
                 // maybe wait instead?
                 logWarning(s"waiting current: $currentVal" +
                   s" est: $estTotalSize max: $maxParquetReadHostMemorySizeBytes")
-                currentHostMemoryUsed.synchronized {
-                  currentHostMemoryUsed.wait(1000)
+                HostMemoryTracker.currentHostMemoryUsed.synchronized {
+                  HostMemoryTracker.currentHostMemoryUsed.wait(1000)
                 }
               } else {
                 logWarning(s"compareAndSet current: $currentVal" +
                   s" est: $estTotalSize max: $maxParquetReadHostMemorySizeBytes")
-                waiting = !currentHostMemoryUsed.compareAndSet(currentVal,
+                waiting = !HostMemoryTracker.currentHostMemoryUsed.compareAndSet(currentVal,
                   currentVal + estTotalSize)
               }
             }
-            logWarning(s"added $estTotalSize, current host memory used is ${currentHostMemoryUsed.get}")
+            logWarning(s"added $estTotalSize, current host " +
+              s"memory used is ${HostMemoryTracker.currentHostMemoryUsed.get}")
             val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema,
               estTotalSize)
 
