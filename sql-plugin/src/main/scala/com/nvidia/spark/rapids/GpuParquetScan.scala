@@ -695,7 +695,9 @@ class MultiFileParquetPartitionReader(
           firstBuffer._1, firstBuffer._2)
         currentHostMemoryUsed.updateAndGet(_ - dataSize)
         logWarning(s"current host memory used is ${currentHostMemoryUsed.get}")
-        currentHostMemoryUsed.notify()
+        currentHostMemoryUsed.synchronized {
+          currentHostMemoryUsed.notify()
+        }
         if (memBufferAndSize.length > 1) {
           // we have to leave currentBatch alone but update host buffer processed
           val prevBatch = currentBatch.get
@@ -855,7 +857,9 @@ class MultiFileParquetPartitionReader(
                 // maybe wait instead?
                 logWarning(s"waiting current: $currentVal" +
                   s" est: $estTotalSize max: $maxParquetReadHostMemorySizeBytes")
-                currentHostMemoryUsed.wait(1000)
+                currentHostMemoryUsed.synchronized {
+                  currentHostMemoryUsed.wait(1000)
+                }
               } else {
                 logWarning(s"compareAndSet current: $currentVal" +
                   s" est: $estTotalSize max: $maxParquetReadHostMemorySizeBytes")
