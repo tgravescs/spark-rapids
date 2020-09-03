@@ -643,38 +643,6 @@ object MultiFileThreadPoolFactory {
   }
 }
 
-
-object MultiFileFilterThreadPoolFactory {
-
-  var threadPool: Option[ThreadPoolExecutor] = None
-
-  private def initThreadPool(
-      maxThreads: Int = 20,
-      keepAliveSeconds: Long = 60): ThreadPoolExecutor = {
-    if (!threadPool.isDefined) {
-      val threadFactory = new ThreadFactoryBuilder()
-        .setNameFormat("parquet reader worker-%d")
-        .setDaemon(true)
-        .build()
-
-      threadPool = Some(new ThreadPoolExecutor(
-        maxThreads, // corePoolSize: max number of threads to create before queuing the tasks
-        maxThreads, // maximumPoolSize: because we use LinkedBlockingDeque, this is not used
-        keepAliveSeconds,
-        TimeUnit.SECONDS,
-        new LinkedBlockingQueue[Runnable],
-        threadFactory))
-      threadPool.get.allowCoreThreadTimeOut(true)
-    }
-    threadPool.get
-  }
-
-  def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = {
-    val pool = threadPool.getOrElse(initThreadPool(numThreads))
-    pool.submit(task)
-  }
-}
-
 /**
  * A PartitionReader that can read multiple Parquet files up to the certain size.
  *
