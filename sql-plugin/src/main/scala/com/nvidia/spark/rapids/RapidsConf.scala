@@ -459,11 +459,11 @@ object RapidsConf {
       .createWithDefault(20)
 
   val PARQUET_READ_MAX_HOST_MEMORY =
-    conf("spark.rapids.sql.format.parquet.smallFiles.hostMemoryBytes")
+    conf("spark.rapids.sql.format.parquet.smallFiles.hostMemoryMBytes")
       .doc("A soft limit on the maximum host memory used by the parquet " +
         "reader when reading in parallel.")
-      .bytesConf(ByteUnit.BYTE)
-      .createWithDefault(Integer.MAX_VALUE)
+      .bytesConf(ByteUnit.MiB)
+      .createWithDefault(java.lang.Long.MAX_VALUE)
 
 
   val ENABLE_PARQUET_READ = conf("spark.rapids.sql.format.parquet.read.enabled")
