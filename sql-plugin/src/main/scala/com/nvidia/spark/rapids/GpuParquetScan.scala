@@ -693,8 +693,10 @@ class MultiFileParquetPartitionReader(
         batch = readBufferToTable(currentBatch.get.isCorrectRebaseMode,
           currentBatch.get.clippedSchema, currentBatch.get.partValues,
           firstBuffer._1, firstBuffer._2)
+        logWarning(s"current host before is ${currentHostMemoryUsed.get}")
+
         currentHostMemoryUsed.updateAndGet(_ - dataSize)
-        logWarning(s"current host memory used is ${currentHostMemoryUsed.get}")
+        logWarning(s"current host memory removed $dataSize used is ${currentHostMemoryUsed.get}")
         currentHostMemoryUsed.synchronized {
           currentHostMemoryUsed.notify()
         }
@@ -867,7 +869,7 @@ class MultiFileParquetPartitionReader(
                   currentVal + estTotalSize)
               }
             }
-            logWarning(s"added, current host memory used is ${currentHostMemoryUsed.get}")
+            logWarning(s"added $estTotalSize, current host memory used is ${currentHostMemoryUsed.get}")
             val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema,
               estTotalSize)
 
