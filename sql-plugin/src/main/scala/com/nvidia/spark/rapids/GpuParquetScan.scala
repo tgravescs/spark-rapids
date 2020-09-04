@@ -650,8 +650,6 @@ abstract class FileParquetPartitionReaderBase(
         if (numRows == 0 || numRows + peekedRowGroup.getRowCount <= maxReadBatchSizeRows) {
           val estimatedBytes = GpuBatchUtils.estimateGpuMemory(readDataSchema,
             peekedRowGroup.getRowCount)
-          logWarning(s"read next batch estimated bytes: $estimatedBytes")
-
           if (numBytes == 0 || numBytes + estimatedBytes <= maxReadBatchSizeBytes) {
             currentChunk += blockIter.next()
             numRows += currentChunk.last.getRowCount
@@ -762,6 +760,7 @@ class MultiFileParquetPartitionReader(
     override def call(): HostMemoryBuffersWithMetaData = {
       val res = try {
         val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
+        logWarning(s"number of blocks after filter is: ${singleFileInfo.blocks.length}")
         if (singleFileInfo.blocks.length == 0) {
           // no blocks so put empty
           return HostMemoryBuffersWithMetaData(singleFileInfo.isCorrectedRebaseMode,
