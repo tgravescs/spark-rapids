@@ -708,6 +708,7 @@ class MultiFileParquetPartitionReader(
       // submit another task if we were limited
       val start = System.nanoTime()
       if (tasksToRun.size > 0) {
+        logWarning("queueing the next task to run")
         val runner = tasksToRun.dequeue()
         tasks.enqueue(MultiFileThreadPoolFactory.submitToThreadPool(runner, numThreads))
       }
