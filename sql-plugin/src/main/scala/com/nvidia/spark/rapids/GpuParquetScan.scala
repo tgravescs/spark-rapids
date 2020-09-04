@@ -877,6 +877,8 @@ class MultiFileParquetPartitionReader(
         case e: Exception =>
           if (isExhausted) {
             // close was called so ignore it
+            return HostMemoryBufferWithMetaData(false, null, null, Array((null, 0)),
+              file.filePath, file.start, file.length)
           } else {
             logError(s"exception in thread, ${e.getMessage}", e)
             return HostMemoryBufferWithMetaData(false, null, null, Array((null, 0)),
