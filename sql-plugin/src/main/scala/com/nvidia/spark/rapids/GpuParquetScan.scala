@@ -877,7 +877,7 @@ class MultiFileParquetPartitionReader(
               hostBuffers.foreach(x => logWarning(s"in call closing host buffer: ${x._1.toString()}"))
 
               hostBuffers.foreach(_._1.close())
-              HostMemoryBufferWithMetaData(
+              return HostMemoryBufferWithMetaData(
                 singleFileInfo.isCorrectedRebaseMode,
                 singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)),
                 file.filePath, file.start, file.length, null)
