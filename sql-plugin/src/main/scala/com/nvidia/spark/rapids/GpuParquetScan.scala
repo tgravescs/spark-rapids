@@ -785,6 +785,7 @@ class MultiFileParquetPartitionReader(
             succeeded = true
             (hmb, out.getPos)
           } finally {
+            logWarning(s"done read part file hmb ${hmb.toString} succeded $succeeded")
             if (!succeeded) {
               hmb.close()
             }
@@ -858,9 +859,10 @@ class MultiFileParquetPartitionReader(
             val blockLimited = populateCurrentBlockChunk()
             val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
             val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema)
+            logWarning(s"got buffer back readpart ${buffer.toString}")
             hostBuffers += ((buffer, size))
           }
-          logWarning(s"host buffers size is ${hostBuffers.size} ")
+          logWarning(s"host buffers size is ${hostBuffers.size}")
           HostMemoryBufferWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, hostBuffers.toArray,
@@ -909,8 +911,10 @@ class MultiFileParquetPartitionReader(
 
       batchesToRead -= 1
       val memBufAndSize = retBatch.memBuffersAndSizes
+      logWarning(s" next got host buffer: ${memBufAndSize.head.toString()}")
       // if sizes are 0 means no rows and no data so skip to next file
       if (memBufAndSize.map(_._2).sum == 0) {
+        logWarning(s"size is 0 skipping ${memBufAndSize.head.toString()}")
         next()
       } else {
         currentBatch = Some(retBatch)
