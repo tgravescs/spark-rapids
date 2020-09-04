@@ -697,13 +697,13 @@ class MultiFileParquetPartitionReader(
       }
 
       val dataSize = size
-      logWarning(s"processing host buffer ${hostbuffer.toString()}")
+      // logWarning(s"processing host buffer ${hostbuffer.toString()}")
       batch = readBufferToTable(batchReading.isCorrectRebaseMode,
         batchReading.clippedSchema, batchReading.partValues,
         hostbuffer, size)
 
       if (memBufferAndSize.length > 1) {
-        logWarning("we have multiple different buffers!")
+        // logWarning("we have multiple different buffers!")
         // we have to leave currentBatch alone but update host buffer processed
         val updatedBufferAndSize = memBufferAndSize.drop(1)
         currentBatch = Some(batchReading.copy(memBuffersAndSizes = updatedBufferAndSize))
@@ -712,14 +712,12 @@ class MultiFileParquetPartitionReader(
       }
 
       // submit another task if we were limited
-      val start = System.nanoTime()
       if (tasksToRun.size > 0) {
         // logWarning("queueing the next task to run")
         val runner = tasksToRun.dequeue()
         tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(runner, numThreads))
       }
-      logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()} " +
-        s"time ${System.nanoTime() - start}")
+
       if (batch.isDefined) {
         val batchToRet = batch.get
         batch = None
@@ -736,12 +734,17 @@ class MultiFileParquetPartitionReader(
   }
 
   override def close(): Unit = {
-      // TODO - double check cleanup - how do we do batches?
-      // batches.asScala.foreach(_.hostbuffer.close())
-      // batches.clear()
-      batch.foreach(_.close())
-      batch = None
-      isExhausted = true
+    tasks.asScala.foreach { task =>
+      if (task.isDone()) {
+        task.get.memBuffersAndSizes.foreach(_._1.close())
+      } else {
+        task.cancel(true)
+      }
+    }
+    // kill any running threads?
+    currentBatch.foreach(_.memBuffersAndSizes.foreach(_._1.close()))
+    currentBatch = None
+    isExhausted = true
   }
 
   private def addPartitionValues(
@@ -770,7 +773,7 @@ class MultiFileParquetPartitionReader(
           var succeeded = false
           val estTotalSize = calculateParquetOutputSize(blocks, clippedParquetSchema, true)
           val hmb = HostMemoryBuffer.allocate(estTotalSize)
-          logWarning(s"allocated host memory buffer ${hmb.toString}")
+          // logWarning(s"allocated host memory buffer ${hmb.toString}")
 
           try {
             val out = new HostMemoryOutputStream(hmb)
@@ -789,7 +792,7 @@ class MultiFileParquetPartitionReader(
             succeeded = true
             (hmb, out.getPos)
           } finally {
-            logWarning(s"done read part file hmb ${hmb.toString} succeded $succeeded")
+            // logWarning(s"done read part file hmb ${hmb.toString} succeded $succeeded")
             if (!succeeded) {
               hmb.close()
             }
@@ -864,11 +867,11 @@ class MultiFileParquetPartitionReader(
             val blockLimited = populateCurrentBlockChunk()
             val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
             val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema)
-            logWarning(s"got buffer back iter: $iter readpart ${buffer.toString} file ${file.filePath} start: ${file.start}")
+            // ing(s"got buffer back iter: $iter readpart ${buffer.toString} file ${file.filePath} start: ${file.start}")
             iter += 1
             hostBuffers += ((buffer, size))
           }
-          logWarning(s"host buffers size is ${hostBuffers.size}")
+          // logWarning(s"host buffers size is ${hostBuffers.size}")
           HostMemoryBufferWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, hostBuffers.toArray,
@@ -887,13 +890,13 @@ class MultiFileParquetPartitionReader(
   override def next(): Boolean = {
     if (isInitted == false) {
       // we only submit as many tasks as we limit batches
-      logWarning(s"splits are: ${splits.map(_.filePath).mkString(",")}")
+      // logWarning(s"splits are: ${splits.map(_.filePath).mkString(",")}")
       val limit = math.min(maxNumBatches, splits.length)
-      logWarning(s"next called for task limit is $limit splits size is ${splits.length} : ${TaskContext.get().partitionId()}")
+      // logWarning(s"next called for task limit is $limit splits size is ${splits.length} : ${TaskContext.get().partitionId()}")
       for (i <- 0 until limit) {
         // logWarning(s"submitting, i = $i")
         val file = splits(i)
-        logWarning(s"adding $i file ${file.filePath} start: ${file.start} task: ${TaskContext.get().partitionId()}")
+        // logWarning(s"adding $i file ${file.filePath} start: ${file.start} task: ${TaskContext.get().partitionId()}")
 
         tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
           new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
@@ -916,15 +919,15 @@ class MultiFileParquetPartitionReader(
 
       val future = tasks.poll
       val retBatch = future.get()
-      logWarning(s"file processing is ${retBatch.filePath} start: ${retBatch.fileStart}")
-      // InputFileUtils.setInputFileBlock(retBatch.filePath, retBatch.fileStart, retBatch.fileLength)
+      // logWarning(s"file processing is ${retBatch.filePath} start: ${retBatch.fileStart}")
+      InputFileUtils.setInputFileBlock(retBatch.filePath, retBatch.fileStart, retBatch.fileLength)
 
       batchesToRead -= 1
       val memBufAndSize = retBatch.memBuffersAndSizes
-      logWarning(s" next got host buffer: ${memBufAndSize.head.toString()}")
+      // logWarning(s" next got host buffer: ${memBufAndSize.head.toString()}")
       // if sizes are 0 means no rows and no data so skip to next file
       if (memBufAndSize.map(_._2).sum == 0) {
-        logWarning(s"size is 0 skipping ${memBufAndSize.head.toString()}")
+        // logWarning(s"size is 0 skipping ${memBufAndSize.head.toString()}")
         next()
       } else {
         currentBatch = Some(retBatch)
@@ -989,7 +992,7 @@ class MultiFileParquetPartitionReader(
         Some(evolveSchemaIfNeededAndClose(table, splits.mkString(","), clippedSchema))
       }
     } finally {
-      logWarning(s"freeing host buffer ${hostbuffer.toString()}")
+      // logWarning(s"freeing host buffer ${hostbuffer.toString()}")
 
       hostbuffer.close()
     }
