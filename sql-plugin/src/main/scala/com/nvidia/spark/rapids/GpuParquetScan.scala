@@ -709,7 +709,7 @@ class MultiFileParquetPartitionReader(
       // submit another task if we were limited
       val start = System.nanoTime()
       if (tasksToRun.size > 0) {
-        logWarning("queueing the next task to run")
+        // logWarning("queueing the next task to run")
         val runner = tasksToRun.dequeue()
         tasks.enqueue(MultiFileThreadPoolFactory.submitToThreadPool(runner, numThreads))
       }
@@ -853,7 +853,7 @@ class MultiFileParquetPartitionReader(
           val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
 
           while (blockChunkIter.hasNext) {
-            logWarning(s"block chunk task: ${TaskContext.get().partitionId()}!")
+            // logWarning(s"block chunk task: ${TaskContext.get().partitionId()}!")
 
             val blockLimited = populateCurrentBlockChunk()
             val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
@@ -870,7 +870,8 @@ class MultiFileParquetPartitionReader(
             }
             hostBuffers += ((buffer, size))
           }
-          logWarning(s"host buffers size is ${hostBuffers.size} task ${TaskContext.get.partitionId()}")
+          logWarning(s"host buffers size is ${hostBuffers.size} task " +
+            s"${TaskContext.get().partitionId()}")
           HostMemoryBufferWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, hostBuffers.toArray,
@@ -890,15 +891,16 @@ class MultiFileParquetPartitionReader(
     if (isInitted == false) {
       // we only submit as many tasks as we limit batches
       val limit = math.min(maxNumBatches, splits.length)
+      logWarning(s"next called for task: ${TaskContext.get().partitionId()}")
       for (i <- 0 until limit) {
-        logWarning(s"submitting, i = $i")
+        // logWarning(s"submitting, i = $i")
         val file = splits(i)
         tasks.enqueue(MultiFileThreadPoolFactory.submitToThreadPool(
           new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
       }
       // queue up any left
       for (i <- limit until splits.length) {
-        logWarning(s"queue rest, i = $i")
+        // logWarning(s"queue rest, i = $i")
         val file = splits(i)
         tasksToRun.enqueue(new ReadBatchRunner(filterHandler, file, conf, filters))
       }
