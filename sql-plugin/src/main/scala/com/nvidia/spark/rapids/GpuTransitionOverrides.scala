@@ -362,7 +362,7 @@ class GpuTransitionOverrides extends Rule[SparkPlan] {
     this.conf = new RapidsConf(plan.conf)
     if (conf.isSqlEnabled) {
       var updatedPlan = insertHashOptimizeSorts(plan)
-      updatedPlan = updateScansForInput(updatedPlan)
+      // updatedPlan = updateScansForInput(updatedPlan)
       updatedPlan = insertCoalesce(insertColumnarFromGpu(updatedPlan))
       updatedPlan = optimizeCoalesce(if (plan.conf.adaptiveExecutionEnabled) {
         optimizeAdaptiveTransitions(updatedPlan)

@@ -27,7 +27,6 @@ import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, LinkedHashMap, Queue}
 import scala.math.max
-
 import ai.rapids.cudf._
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.nvidia.spark.RebaseHelper
@@ -45,7 +44,6 @@ import org.apache.parquet.format.converter.ParquetMetadataConverter
 import org.apache.parquet.hadoop.{ParquetFileReader, ParquetInputFormat}
 import org.apache.parquet.hadoop.metadata._
 import org.apache.parquet.schema.{GroupType, MessageType, Types}
-
 import org.apache.spark.TaskContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.Logging
@@ -55,10 +53,11 @@ import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader, Par
 import org.apache.spark.sql.execution.QueryExecutionException
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFilters, ParquetReadSupport}
-import org.apache.spark.sql.execution.datasources.v2.{FilePartitionReaderFactory}
+import org.apache.spark.sql.execution.datasources.v2.FilePartitionReaderFactory
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.rapids.InputFileUtils
 import org.apache.spark.sql.rapids.execution.TrampolineUtil
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{StringType, StructType, TimestampType}
@@ -675,7 +674,8 @@ class MultiFileParquetPartitionReader(
     debugDumpPrefix, execMetrics) {
 
   case class HostMemoryBufferWithMetaData(isCorrectRebaseMode: Boolean, clippedSchema: MessageType,
-      partValues: InternalRow, memBuffersAndSizes: Array[(HostMemoryBuffer, Long)])
+      partValues: InternalRow, memBuffersAndSizes: Array[(HostMemoryBuffer, Long)],
+      filePath: String, fileStart: Long, fileLength: Long)
 
   private var batchesToRead = 0
   private var currentBatch: Option[HostMemoryBufferWithMetaData] = None
@@ -711,10 +711,12 @@ class MultiFileParquetPartitionReader(
         val runner = tasksToRun.dequeue()
         tasks.enqueue(MultiFileThreadPoolFactory.submitToThreadPool(runner, numThreads))
       }
-      logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()} time ${System.nanoTime() - start}")
+      logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()} " +
+        s"time ${System.nanoTime() - start}")
       if (batch.isDefined) {
         val batchToRet = batch.get
         batch = None
+
         batchToRet
       } else {
         // TODO - is this ok to handle None case?
@@ -831,7 +833,8 @@ class MultiFileParquetPartitionReader(
         if (singleFileInfo.blocks.length == 0) {
           // no blocks so put empty
           return HostMemoryBufferWithMetaData(singleFileInfo.isCorrectedRebaseMode,
-            singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)))
+            singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)), file.filePath,
+            file.start, file.length)
         }
         blockChunkIter = singleFileInfo.blocks.iterator.buffered
         if (readDataSchema.isEmpty) {
@@ -840,7 +843,8 @@ class MultiFileParquetPartitionReader(
           // note numrows could be 0
           HostMemoryBufferWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
-            singleFileInfo.schema, singleFileInfo.partValues, Array((null, numRows)))
+            singleFileInfo.schema, singleFileInfo.partValues, Array((null, numRows)),
+            file.filePath, file.start, file.length)
 
         } else {
           val filePath = new Path(new URI(file.filePath))
@@ -864,12 +868,14 @@ class MultiFileParquetPartitionReader(
           }
           HostMemoryBufferWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
-            singleFileInfo.schema, singleFileInfo.partValues, hostBuffers.toArray)
+            singleFileInfo.schema, singleFileInfo.partValues, hostBuffers.toArray,
+            file.filePath, file.start, file.length)
         }
       } catch {
         case e: Exception =>
           logError(s"exception in thread, ${e.getMessage}", e)
-          return HostMemoryBufferWithMetaData(false, null, null, Array((null, 0)))
+          return HostMemoryBufferWithMetaData(false, null, null, Array((null, 0)),
+            file.filePath, file.start, file.length)
       }
       res
     }
@@ -900,8 +906,11 @@ class MultiFileParquetPartitionReader(
     }
     currentBatch = None
     val res = if (batchesToRead > 0) {
+
       val future = tasks.dequeue
       val retBatch = future.get()
+      InputFileUtils.setInputFileBlock(retBatch.filePath, retBatch.fileStart, retBatch.fileLength)
+
       batchesToRead -= 1
       val memBufAndSize = retBatch.memBuffersAndSizes
       // if sizes are 0 means no rows and no data so skip to next file
