@@ -739,7 +739,7 @@ class MultiFileParquetPartitionReader(
     batch = None
     tasks.asScala.foreach { task =>
       if (task.isDone()) {
-        task.get.memBuffersAndSizes.foreach(x => logWarning(s"closing host buffer: ${x._1.toString()}"))
+        task.get.memBuffersAndSizes.foreach(x => logWarning(s"in close closing host buffer: ${x._1.toString()}"))
         task.get.memBuffersAndSizes.foreach(_._1.close())
       } else {
         // Note we are not interrupting thread here so it
@@ -874,7 +874,7 @@ class MultiFileParquetPartitionReader(
             // closed before finishing
             if (isExhausted) {
               logWarning("is exahusted closing buffers")
-              hostBuffers.foreach(x => logWarning(s"closing host buffer: ${x._1.toString()}"))
+              hostBuffers.foreach(x => logWarning(s"in call closing host buffer: ${x._1.toString()}"))
 
               hostBuffers.foreach(_._1.close())
               HostMemoryBufferWithMetaData(
