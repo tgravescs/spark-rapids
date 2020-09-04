@@ -688,16 +688,17 @@ class MultiFileParquetPartitionReader(
     val ret = if (currentBatch.isDefined) {
       batch.foreach(_.close())
       val memBufferAndSize = currentBatch.get.memBuffersAndSizes
-      val firstBuffer = memBufferAndSize.head
-      if (firstBuffer._1 == null) {
-        return new ColumnarBatch(Array.empty, firstBuffer._2.toInt)
+      val (hostbuffer, size) = memBufferAndSize.head
+      if (hostbuffer == null) {
+        return new ColumnarBatch(Array.empty, size.toInt)
       }
-      val dataSize = firstBuffer._2
+      val dataSize = size
       batch = readBufferToTable(currentBatch.get.isCorrectRebaseMode,
         currentBatch.get.clippedSchema, currentBatch.get.partValues,
-        firstBuffer._1, firstBuffer._2)
+        hostbuffer, size)
 
       if (memBufferAndSize.length > 1) {
+        logWarning("we have multiple different buffers!")
         // we have to leave currentBatch alone but update host buffer processed
         val prevBatch = currentBatch.get
         val updatedBufferAndSize = memBufferAndSize.drop(1)
@@ -852,6 +853,8 @@ class MultiFileParquetPartitionReader(
           val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
 
           while (blockChunkIter.hasNext) {
+            logWarning(s"block chunk task: ${TaskContext.get().partitionId()}!")
+
             val blockLimited = populateCurrentBlockChunk()
             val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
 
@@ -867,6 +870,7 @@ class MultiFileParquetPartitionReader(
             }
             hostBuffers += ((buffer, size))
           }
+          logWarning(s"host buffers size is ${hostBuffers.size} task ${TaskContext.get.partitionId()}")
           HostMemoryBufferWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, hostBuffers.toArray,
