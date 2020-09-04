@@ -673,6 +673,8 @@ class MultiFileParquetPartitionReader(
   extends FileParquetPartitionReaderBase(conf, isSchemaCaseSensitive, readDataSchema,
     debugDumpPrefix, execMetrics) {
 
+  logWarning(s"created splits ${splits.map(_.filePath).mkString(",")} task ${TaskContext.get().partitionId()}")
+
   case class HostMemoryBufferWithMetaData(isCorrectRebaseMode: Boolean, clippedSchema: MessageType,
       partValues: InternalRow, memBuffersAndSizes: Array[(HostMemoryBuffer, Long)],
       filePath: String, fileStart: Long, fileLength: Long)
@@ -885,12 +887,13 @@ class MultiFileParquetPartitionReader(
   override def next(): Boolean = {
     if (isInitted == false) {
       // we only submit as many tasks as we limit batches
+      logWarning(s"splits are: ${splits.map(_.filePath).mkString(",")}")
       val limit = math.min(maxNumBatches, splits.length)
       logWarning(s"next called for task limit is $limit splits size is ${splits.length} : ${TaskContext.get().partitionId()}")
       for (i <- 0 until limit) {
         // logWarning(s"submitting, i = $i")
         val file = splits(i)
-        logWarning(s"adding $i file ${file.filePath} start: ${file.start}")
+        logWarning(s"adding $i file ${file.filePath} start: ${file.start} task: ${TaskContext.get().partitionId()}")
 
         tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
           new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
@@ -914,7 +917,7 @@ class MultiFileParquetPartitionReader(
       val future = tasks.poll
       val retBatch = future.get()
       logWarning(s"file processing is ${retBatch.filePath} start: ${retBatch.fileStart}")
-      InputFileUtils.setInputFileBlock(retBatch.filePath, retBatch.fileStart, retBatch.fileLength)
+      // InputFileUtils.setInputFileBlock(retBatch.filePath, retBatch.fileStart, retBatch.fileLength)
 
       batchesToRead -= 1
       val memBufAndSize = retBatch.memBuffersAndSizes
