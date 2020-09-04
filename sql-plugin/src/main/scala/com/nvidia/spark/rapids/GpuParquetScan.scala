@@ -673,8 +673,6 @@ class MultiFileParquetPartitionReader(
   extends FileParquetPartitionReaderBase(conf, isSchemaCaseSensitive, readDataSchema,
     debugDumpPrefix, execMetrics) {
 
-  logWarning(s"created splits ${splits.map(_.filePath).mkString(",")} task ${TaskContext.get().partitionId()}")
-
   case class HostMemoryBufferWithMetaData(isCorrectRebaseMode: Boolean, clippedSchema: MessageType,
       partValues: InternalRow, memBuffersAndSizes: Array[(HostMemoryBuffer, Long)],
       filePath: String, fileStart: Long, fileLength: Long)
@@ -734,6 +732,7 @@ class MultiFileParquetPartitionReader(
   }
 
   override def close(): Unit = {
+    logWarning(s"close called!!! ${TaskContext.get().partitionId()}")
     tasks.asScala.foreach { task =>
       if (task.isDone()) {
         task.get.memBuffersAndSizes.foreach(_._1.close())
@@ -744,6 +743,8 @@ class MultiFileParquetPartitionReader(
     // kill any running threads?
     currentBatch.foreach(_.memBuffersAndSizes.foreach(_._1.close()))
     currentBatch = None
+    batch.foreach(_.close())
+    batch = None
     isExhausted = true
   }
 
