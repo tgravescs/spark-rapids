@@ -733,14 +733,23 @@ class MultiFileParquetPartitionReader(
 
   override def close(): Unit = {
     isExhausted = true
-    currentFileHostBuffer.foreach(_.memBuffersAndSizes.foreach(_._1.close()))
+    currentFileHostBuffer.foreach { info =>
+      info.memBuffersAndSizes.foreach { case (buf, size) =>
+        if (buf != null) {
+          buf.close()
+        }
+      }
+    }
     currentFileHostBuffer = None
     batch.foreach(_.close())
     batch = None
     tasks.asScala.foreach { task =>
       if (task.isDone()) {
-        task.get.memBuffersAndSizes.foreach(x => logWarning(s"in close closing host buffer: ${x._1.toString()}"))
-        task.get.memBuffersAndSizes.foreach(_._1.close())
+        task.get.memBuffersAndSizes.foreach { case (buf, size) =>
+          if (buf != null) {
+            buf.close()
+          }
+        }
       } else {
         // Note we are not interrupting thread here so it
         // will finish reading and then just discard. If we
@@ -945,9 +954,8 @@ class MultiFileParquetPartitionReader(
       InputFileUtils.setInputFileBlock(retBatch.filePath, retBatch.fileStart, retBatch.fileLength)
 
       batchesToRead -= 1
-      val memBufAndSize = retBatch.memBuffersAndSizes
       // if sizes are 0 means no rows and no data so skip to next file
-      if (memBufAndSize.map(_._2).sum == 0) {
+      if (retBatch.memBuffersAndSizes.map(_._2).sum == 0) {
         next()
       } else {
         currentFileHostBuffer = Some(retBatch)
