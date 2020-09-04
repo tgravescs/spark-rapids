@@ -882,8 +882,7 @@ class MultiFileParquetPartitionReader(
             }
             // closed before finishing
             if (isExhausted) {
-              logWarning("is exahusted closing buffers")
-              hostBuffers.foreach(x => logWarning(s"in call closing host buffer: ${x._1.toString()}"))
+              // hostBuffers.foreach(x => logWarning(s"in call closing host buffer: ${x._1.toString()}"))
 
               hostBuffers.foreach(_._1.close())
               return HostMemoryBufferWithMetaData(
@@ -897,8 +896,6 @@ class MultiFileParquetPartitionReader(
               file.filePath, file.start, file.length, null)
           }
         } else {
-          logWarning("is exahusted skipping")
-
           HostMemoryBufferWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)),
