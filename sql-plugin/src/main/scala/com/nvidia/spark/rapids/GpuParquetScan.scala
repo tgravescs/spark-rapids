@@ -853,7 +853,6 @@ class MultiFileParquetPartitionReader(
           val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
 
           while (blockChunkIter.hasNext) {
-            // logWarning(s"block chunk task: ${TaskContext.get().partitionId()}!")
 
             val blockLimited = populateCurrentBlockChunk()
             val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
@@ -870,8 +869,7 @@ class MultiFileParquetPartitionReader(
             }
             hostBuffers += ((buffer, size))
           }
-          logWarning(s"host buffers size is ${hostBuffers.size} task " +
-            s"${TaskContext.get().partitionId()}")
+          logWarning(s"host buffers size is ${hostBuffers.size} ")
           HostMemoryBufferWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, hostBuffers.toArray,
