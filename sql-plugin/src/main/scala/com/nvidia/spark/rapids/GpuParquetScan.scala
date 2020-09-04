@@ -857,11 +857,13 @@ class MultiFileParquetPartitionReader(
           val filePath = new Path(new URI(file.filePath))
           val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
 
+          var iter = 0
           while (blockChunkIter.hasNext) {
             val blockLimited = populateCurrentBlockChunk()
             val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
             val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema)
-            logWarning(s"got buffer back readpart ${buffer.toString} file ${file.filePath}")
+            logWarning(s"got buffer back iter: $iter readpart ${buffer.toString} file ${file.filePath} ${file.start}")
+            iter += 1
             hostBuffers += ((buffer, size))
           }
           logWarning(s"host buffers size is ${hostBuffers.size}")
@@ -888,7 +890,7 @@ class MultiFileParquetPartitionReader(
       for (i <- 0 until limit) {
         // logWarning(s"submitting, i = $i")
         val file = splits(i)
-        logWarning(s"adding file ${file.filePath}")
+        logWarning(s"adding file ${file.filePath} ${file.start}")
 
         tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
           new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
@@ -911,7 +913,7 @@ class MultiFileParquetPartitionReader(
 
       val future = tasks.poll
       val retBatch = future.get()
-      logWarning(s"file processing is ${retBatch.filePath}")
+      logWarning(s"file processing is ${retBatch.filePath} ${retBatch.fileStart}")
       InputFileUtils.setInputFileBlock(retBatch.filePath, retBatch.fileStart, retBatch.fileLength)
 
       batchesToRead -= 1
