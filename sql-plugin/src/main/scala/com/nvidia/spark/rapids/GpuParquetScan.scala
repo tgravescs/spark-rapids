@@ -764,6 +764,7 @@ class MultiFileParquetPartitionReader(
         withResource(filePath.getFileSystem(conf).open(filePath)) { in =>
           var succeeded = false
           val estTotalSize = calculateParquetOutputSize(blocks, clippedParquetSchema, true)
+          logWarning(s"allocated host memory buffer ${hmb.toString}")
           val hmb = HostMemoryBuffer.allocate(estTotalSize)
           try {
             val out = new HostMemoryOutputStream(hmb)
