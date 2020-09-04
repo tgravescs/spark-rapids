@@ -678,16 +678,16 @@ class MultiFileParquetPartitionReader(
       filePath: String, fileStart: Long, fileLength: Long)
 
   private var batchesToRead = 0
-  private var currentBatch: Option[HostMemoryBufferWithMetaData] = None
+  private var currentFileHostBuffer: Option[HostMemoryBufferWithMetaData] = None
 
   private var isInitted = false
   private val tasks = new ConcurrentLinkedQueue[Future[HostMemoryBufferWithMetaData]]()
   private val tasksToRun = new Queue[ReadBatchRunner]()
 
   override def get(): ColumnarBatch = {
-    val ret = if (currentBatch.isDefined) {
+    val ret = if (currentFileHostBuffer.isDefined) {
       batch.foreach(_.close())
-      val batchReading = currentBatch.get
+      val batchReading = currentFileHostBuffer.get
       val memBufferAndSize = batchReading.memBuffersAndSizes
       val (hostbuffer, size) = memBufferAndSize.head
       if (hostbuffer == null) {
@@ -702,11 +702,11 @@ class MultiFileParquetPartitionReader(
 
       if (memBufferAndSize.length > 1) {
         // logWarning("we have multiple different buffers!")
-        // we have to leave currentBatch alone but update host buffer processed
+        // we have to leave currentFileHostBuffer alone but update host buffer processed
         val updatedBufferAndSize = memBufferAndSize.drop(1)
-        currentBatch = Some(batchReading.copy(memBuffersAndSizes = updatedBufferAndSize))
+        currentFileHostBuffer = Some(batchReading.copy(memBuffersAndSizes = updatedBufferAndSize))
       } else {
-        currentBatch = None
+        currentFileHostBuffer = None
       }
 
       // submit another task if we were limited
@@ -733,6 +733,10 @@ class MultiFileParquetPartitionReader(
 
   override def close(): Unit = {
     logWarning(s"close called!!! ${TaskContext.get().partitionId()}")
+    currentFileHostBuffer.foreach(_.memBuffersAndSizes.foreach(_._1.close()))
+    currentFileHostBuffer = None
+    batch.foreach(_.close())
+    batch = None
     tasks.asScala.foreach { task =>
       if (task.isDone()) {
         task.get.memBuffersAndSizes.foreach(_._1.close())
@@ -740,11 +744,6 @@ class MultiFileParquetPartitionReader(
         task.cancel(true)
       }
     }
-    // kill any running threads?
-    currentBatch.foreach(_.memBuffersAndSizes.foreach(_._1.close()))
-    currentBatch = None
-    batch.foreach(_.close())
-    batch = None
     isExhausted = true
   }
 
@@ -862,14 +861,10 @@ class MultiFileParquetPartitionReader(
         } else {
           val filePath = new Path(new URI(file.filePath))
           val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
-
-          var iter = 0
           while (blockChunkIter.hasNext) {
             val blockLimited = populateCurrentBlockChunk()
             val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
             val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema)
-            // ing(s"got buffer back iter: $iter readpart ${buffer.toString} file ${file.filePath} start: ${file.start}")
-            iter += 1
             hostBuffers += ((buffer, size))
           }
           // logWarning(s"host buffers size is ${hostBuffers.size}")
@@ -880,9 +875,13 @@ class MultiFileParquetPartitionReader(
         }
       } catch {
         case e: Exception =>
-          logError(s"exception in thread, ${e.getMessage}", e)
-          return HostMemoryBufferWithMetaData(false, null, null, Array((null, 0)),
-            file.filePath, file.start, file.length)
+          if (isExhausted) {
+            // close was called so ignore it
+          } else {
+            logError(s"exception in thread, ${e.getMessage}", e)
+            return HostMemoryBufferWithMetaData(false, null, null, Array((null, 0)),
+              file.filePath, file.start, file.length)
+          }
       }
       res
     }
@@ -912,11 +911,11 @@ class MultiFileParquetPartitionReader(
       batchesToRead = splits.length
     }
     // if we have batch left from last read return it
-    if (currentBatch.isDefined) {
+    if (currentFileHostBuffer.isDefined) {
       true
     }
-    currentBatch = None
-    val res = if (batchesToRead > 0) {
+    currentFileHostBuffer = None
+    val res = if (batchesToRead > 0 && !isExhausted) {
 
       val future = tasks.poll
       val retBatch = future.get()
@@ -931,9 +930,9 @@ class MultiFileParquetPartitionReader(
         // logWarning(s"size is 0 skipping ${memBufAndSize.head.toString()}")
         next()
       } else {
-        currentBatch = Some(retBatch)
+        currentFileHostBuffer = Some(retBatch)
       }
-      currentBatch.isDefined
+      currentFileHostBuffer.isDefined
     } else {
       false
     }
