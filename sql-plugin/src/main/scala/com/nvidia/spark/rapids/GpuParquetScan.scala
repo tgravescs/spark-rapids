@@ -693,6 +693,7 @@ class MultiFileParquetPartitionReader(
         return new ColumnarBatch(Array.empty, size.toInt)
       }
       val dataSize = size
+      logWarning(s"processing host buffer ${hostbuffer.toString()}")
       batch = readBufferToTable(currentBatch.get.isCorrectRebaseMode,
         currentBatch.get.clippedSchema, currentBatch.get.partValues,
         hostbuffer, size)
@@ -764,8 +765,9 @@ class MultiFileParquetPartitionReader(
         withResource(filePath.getFileSystem(conf).open(filePath)) { in =>
           var succeeded = false
           val estTotalSize = calculateParquetOutputSize(blocks, clippedParquetSchema, true)
-          logWarning(s"allocated host memory buffer ${hmb.toString}")
           val hmb = HostMemoryBuffer.allocate(estTotalSize)
+          logWarning(s"allocated host memory buffer ${hmb.toString}")
+
           try {
             val out = new HostMemoryOutputStream(hmb)
             out.write(ParquetPartitionReader.PARQUET_MAGIC)
@@ -973,6 +975,8 @@ class MultiFileParquetPartitionReader(
         Some(evolveSchemaIfNeededAndClose(table, splits.mkString(","), clippedSchema))
       }
     } finally {
+      logWarning(s"freeing host buffer ${hostbuffer.toString()}")
+
       hostbuffer.close()
     }
     try {
@@ -987,140 +991,6 @@ class MultiFileParquetPartitionReader(
       table.foreach(_.close())
     }
   }
-
-  private def reallocHostBufferAndCopy(
-      in: HostMemoryInputStream,
-      newSizeEstimate: Long): (HostMemoryBuffer, HostMemoryOutputStream) = {
-    // realloc memory and copy
-    closeOnExcept(HostMemoryBuffer.allocate(newSizeEstimate)) { newhmb =>
-      val newout = new HostMemoryOutputStream(newhmb)
-      IOUtils.copy(in, newout)
-      (newhmb, newout)
-    }
-  }
-
-  private def readPartFiles(
-      blocks: Seq[(Path, BlockMetaData)],
-      clippedSchema: MessageType): (HostMemoryBuffer, Long) = {
-    withResource(new NvtxWithMetrics("Buffer file split", NvtxColor.YELLOW,
-      metrics("bufferTime"))) { _ =>
-      // ugly but we want to keep the order
-      val filesAndBlocks = LinkedHashMap[Path, ArrayBuffer[BlockMetaData]]()
-      blocks.foreach { info =>
-        if (filesAndBlocks.contains(info._1)) {
-          filesAndBlocks(info._1) += info._2
-        } else {
-          filesAndBlocks(info._1) = ArrayBuffer(info._2)
-        }
-      }
-
-      var succeeded = false
-      val allBlocks = blocks.map(_._2)
-      val initTotalSize = calculateParquetOutputSize(allBlocks, clippedSchema, true)
-
-      var hmb = HostMemoryBuffer.allocate(initTotalSize)
-      logWarning(s"allocated host memory buffer ${hmb.toString}")
-      var out = new HostMemoryOutputStream(hmb)
-      try {
-        out.write(ParquetPartitionReader.PARQUET_MAGIC)
-        val allOutputBlocks = scala.collection.mutable.ArrayBuffer[BlockMetaData]()
-        // TODO - could test this multi-threaded again?
-        filesAndBlocks.foreach { case (file, blocks) =>
-          withResource(file.getFileSystem(conf).open(file)) { in =>
-            val retBlocks = copyBlocksData(in, out, blocks)
-            allOutputBlocks ++= retBlocks
-          }
-        }
-        // The footer size can change vs the initial estimated because we are combining more blocks
-        //  and offsets are larger, check to make sure we allocated enough memory before writing.
-        // Not sure how expensive this is, we could throw exception instead if the written
-        // size comes out > then the estimated size.
-        val actualFooterSize = calculateParquetFooterSize(allOutputBlocks, clippedSchema)
-        val footerPos = out.getPos
-
-        // 4 + 4 is for writing size and the ending PARQUET_MAGIC.
-        val bufferSizeReq = footerPos + actualFooterSize + 4 + 4
-        val bufferSize = if (bufferSizeReq > initTotalSize) {
-          logWarning(s"The original estimated size $initTotalSize is to small, " +
-            s"reallocing and copying data to bigger buffer size: $bufferSizeReq")
-          val prevhmb = hmb
-          val in = new HostMemoryInputStream(prevhmb, footerPos)
-          val (newhmb, newout) = reallocHostBufferAndCopy(in, bufferSizeReq)
-          out = newout
-          hmb = newhmb
-          prevhmb.close()
-          bufferSizeReq
-        } else {
-          // we didn't change the buffer size so return the initial size which is the actual
-          // size of the buffer
-          initTotalSize
-        }
-        writeFooter(out, allOutputBlocks, clippedSchema)
-        BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
-        out.write(ParquetPartitionReader.PARQUET_MAGIC)
-        succeeded = true
-        // triple check we didn't go over memory
-        if (out.getPos > bufferSize) {
-          throw new QueryExecutionException(s"Calculated buffer size $bufferSize is to " +
-            s"small, actual written: ${out.getPos}")
-        }
-        (hmb, out.getPos)
-      } finally {
-        if (!succeeded) {
-          hmb.close()
-        }
-      }
-    }
-  }
-
-
-  private def readToTable(
-      currentChunkedBlocks: Seq[(Path, BlockMetaData)],
-      clippedSchema: MessageType,
-      isCorrectRebaseMode: Boolean): Option[Table] = {
-    if (currentChunkedBlocks.isEmpty) {
-      return None
-    }
-    val (dataBuffer, dataSize) = readPartFiles(currentChunkedBlocks, clippedSchema)
-    try {
-      if (dataSize == 0) {
-        None
-      } else {
-        if (debugDumpPrefix != null) {
-          dumpParquetData(dataBuffer, dataSize, splits)
-        }
-        val parseOpts = ParquetOptions.builder()
-          .withTimeUnit(DType.TIMESTAMP_MICROSECONDS)
-          .includeColumn(readDataSchema.fieldNames:_*).build()
-
-        // about to start using the GPU
-        GpuSemaphore.acquireIfNecessary(TaskContext.get())
-
-        val table = withResource(new NvtxWithMetrics("Parquet decode", NvtxColor.DARK_GREEN,
-            metrics(GPU_DECODE_TIME))) { _ =>
-          Table.readParquet(parseOpts, dataBuffer, 0, dataSize)
-        }
-        if (!isCorrectRebaseMode) {
-          (0 until table.getNumberOfColumns).foreach { i =>
-            if (RebaseHelper.isDateTimeRebaseNeededRead(table.getColumn(i))) {
-              throw RebaseHelper.newRebaseExceptionInRead("Parquet")
-            }
-          }
-        }
-        maxDeviceMemory = max(GpuColumnVector.getTotalDeviceMemoryUsed(table), maxDeviceMemory)
-        if (readDataSchema.length < table.getNumberOfColumns) {
-          table.close()
-          throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
-            s"but read ${table.getNumberOfColumns} from $currentChunkedBlocks")
-        }
-        metrics(NUM_OUTPUT_BATCHES) += 1
-        Some(evolveSchemaIfNeededAndClose(table, splits.mkString(","), clippedSchema))
-      }
-    } finally {
-      dataBuffer.close()
-    }
-  }
-
 }
 
 
