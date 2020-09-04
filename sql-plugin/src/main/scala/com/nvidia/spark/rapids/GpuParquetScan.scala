@@ -888,6 +888,8 @@ class MultiFileParquetPartitionReader(
       for (i <- 0 until limit) {
         // logWarning(s"submitting, i = $i")
         val file = splits(i)
+        logWarning(s"adding file ${file.filePath}")
+
         tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
           new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
       }
@@ -909,6 +911,7 @@ class MultiFileParquetPartitionReader(
 
       val future = tasks.poll
       val retBatch = future.get()
+      logWarning(s"file processing is ${retBatch.filePath}")
       InputFileUtils.setInputFileBlock(retBatch.filePath, retBatch.fileStart, retBatch.fileLength)
 
       batchesToRead -= 1
