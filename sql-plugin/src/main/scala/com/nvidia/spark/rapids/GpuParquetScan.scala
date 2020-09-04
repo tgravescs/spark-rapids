@@ -758,14 +758,13 @@ class MultiFileParquetPartitionReader(
       filters: Array[Filter]) extends Callable[HostMemoryBufferWithMetaData] with Logging {
 
     private def readPartFile(blocks: Seq[BlockMetaData], filePath: Path,
-        clippedParquetSchema: MessageType, estTotalSize: Long): (HostMemoryBuffer, Long) = {
+        clippedParquetSchema: MessageType): (HostMemoryBuffer, Long) = {
       withResource(new NvtxWithMetrics("Buffer file split", NvtxColor.YELLOW,
         metrics("bufferTime"))) { _ =>
         withResource(filePath.getFileSystem(conf).open(filePath)) { in =>
           var succeeded = false
-          // val estTotalSize = calculateParquetOutputSize(blocks, clippedParquetSchema, true)
-          val hmb =
-            HostMemoryBuffer.allocate(estTotalSize)
+          val estTotalSize = calculateParquetOutputSize(blocks, clippedParquetSchema, true)
+          val hmb = HostMemoryBuffer.allocate(estTotalSize)
           try {
             val out = new HostMemoryOutputStream(hmb)
             out.write(ParquetPartitionReader.PARQUET_MAGIC)
@@ -775,12 +774,12 @@ class MultiFileParquetPartitionReader(
 
             BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
             out.write(ParquetPartitionReader.PARQUET_MAGIC)
-            succeeded = true
             // check we didn't go over memory
             if (out.getPos > estTotalSize) {
               throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is to " +
                 s"small, actual written: ${out.getPos}")
             }
+            succeeded = true
             (hmb, out.getPos)
           } finally {
             if (!succeeded) {
@@ -853,20 +852,9 @@ class MultiFileParquetPartitionReader(
           val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
 
           while (blockChunkIter.hasNext) {
-
             val blockLimited = populateCurrentBlockChunk()
             val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
-
-            val estTotalSize = calculateParquetOutputSize(blockLimited, singleFileInfo.schema,
-              false)
-
-            val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema,
-              estTotalSize)
-
-            if (buffer == null) {
-              logWarning(s"buffer is null for task " +
-                s"${TaskContext.get().partitionId()} for file: $file")
-            }
+            val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema)
             hostBuffers += ((buffer, size))
           }
           logWarning(s"host buffers size is ${hostBuffers.size} ")
