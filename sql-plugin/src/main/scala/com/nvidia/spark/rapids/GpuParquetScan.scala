@@ -862,7 +862,7 @@ class MultiFileParquetPartitionReader(
             val blockLimited = populateCurrentBlockChunk()
             val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
             val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema)
-            logWarning(s"got buffer back iter: $iter readpart ${buffer.toString} file ${file.filePath} ${file.start}")
+            logWarning(s"got buffer back iter: $iter readpart ${buffer.toString} file ${file.filePath} start: ${file.start}")
             iter += 1
             hostBuffers += ((buffer, size))
           }
@@ -886,11 +886,11 @@ class MultiFileParquetPartitionReader(
     if (isInitted == false) {
       // we only submit as many tasks as we limit batches
       val limit = math.min(maxNumBatches, splits.length)
-      logWarning(s"next called for task: ${TaskContext.get().partitionId()}")
+      logWarning(s"next called for task limit is $limit splits size is ${splits.length} : ${TaskContext.get().partitionId()}")
       for (i <- 0 until limit) {
         // logWarning(s"submitting, i = $i")
         val file = splits(i)
-        logWarning(s"adding file ${file.filePath} ${file.start}")
+        logWarning(s"adding $i file ${file.filePath} start: ${file.start}")
 
         tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
           new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
@@ -913,7 +913,7 @@ class MultiFileParquetPartitionReader(
 
       val future = tasks.poll
       val retBatch = future.get()
-      logWarning(s"file processing is ${retBatch.filePath} ${retBatch.fileStart}")
+      logWarning(s"file processing is ${retBatch.filePath} start: ${retBatch.fileStart}")
       InputFileUtils.setInputFileBlock(retBatch.filePath, retBatch.fileStart, retBatch.fileLength)
 
       batchesToRead -= 1
