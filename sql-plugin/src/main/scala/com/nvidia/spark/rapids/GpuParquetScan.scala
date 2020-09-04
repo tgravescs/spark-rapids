@@ -747,7 +747,7 @@ class MultiFileParquetPartitionReader(
   private var filesToRead = 0
   private var currentFileHostBuffer: Option[HostMemoryBuffersWithMetaData] = None
   private var isInitted = false
-  private val tasks = new Queue[Future[HostMemoryBuffersWithMetaData]]()
+  private val tasks = new ConcurrentLinkedQueue[Future[HostMemoryBuffersWithMetaData]]()
   private val tasksToRun = new Queue[ReadBatchRunner]()
 
   private class ReadBatchRunner(filterHandler: GpuParquetFileFilterHandler,
@@ -827,7 +827,7 @@ class MultiFileParquetPartitionReader(
     val limit = math.min(maxNumBatches, splits.length)
     for (i <- 0 until limit) {
       val file = splits(i)
-      tasks.enqueue(MultiFileThreadPoolFactory.submitToThreadPool(
+      tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
         new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
     }
     // queue up any left
@@ -849,7 +849,7 @@ class MultiFileParquetPartitionReader(
     }
     currentFileHostBuffer = None
     val res = if (filesToRead > 0 && !isDone) {
-      val fileBufAndMeta = tasks.dequeue.get()
+      val fileBufAndMeta = tasks.poll.get()
       if (fileBufAndMeta.error != null) {
         logError(s"Exception while reading file ${fileBufAndMeta.filePath} " +
           s"at start ${fileBufAndMeta.fileStart} in thread", fileBufAndMeta.error)
@@ -900,7 +900,7 @@ class MultiFileParquetPartitionReader(
       // submit another task if we were limited
       if (tasksToRun.size > 0 && !isDone) {
         val runner = tasksToRun.dequeue()
-        tasks.enqueue(MultiFileThreadPoolFactory.submitToThreadPool(runner, numThreads))
+        tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(runner, numThreads))
       }
 
       if (batch.isDefined) {
@@ -930,7 +930,7 @@ class MultiFileParquetPartitionReader(
     currentFileHostBuffer = None
     batch.foreach(_.close())
     batch = None
-    tasks.foreach { task =>
+    tasks.asScala.foreach { task =>
       if (task.isDone()) {
         task.get.memBuffersAndSizes.foreach { case (buf, size) =>
           if (buf != null) {
