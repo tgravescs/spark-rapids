@@ -24,8 +24,9 @@ import java.util.concurrent._
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-import scala.collection.mutable.{ArrayBuffer, LinkedHashMap, Queue}
+import scala.collection.mutable.{ArrayBuffer, Queue}
 import scala.math.max
+
 import ai.rapids.cudf._
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.nvidia.spark.RebaseHelper
@@ -760,7 +761,6 @@ class MultiFileParquetPartitionReader(
     override def call(): HostMemoryBuffersWithMetaData = {
       val res = try {
         val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
-        logWarning(s"number of blocks after filter is: ${singleFileInfo.blocks.length}")
         if (singleFileInfo.blocks.length == 0) {
           // no blocks so put empty
           return HostMemoryBuffersWithMetaData(singleFileInfo.isCorrectedRebaseMode,
