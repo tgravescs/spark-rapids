@@ -458,12 +458,14 @@ object RapidsConf {
       .integerConf
       .createWithDefault(20)
 
-  val PARQUET_READ_MAX_HOST_MEMORY =
-    conf("spark.rapids.sql.format.parquet.smallFiles.hostMemoryBytes")
-      .doc("A soft limit on the maximum host memory used by the parquet " +
-        "reader when reading in parallel.")
-      .bytesConf(ByteUnit.BYTE)
-      .createWithDefault(java.lang.Long.MAX_VALUE)
+  val PARQUET_READ_MAX_NUM_BATCHES =
+    conf("spark.rapids.sql.format.parquet.smallFiles.maxNumBatches")
+      .doc("A limit on the maximum number of batches per task we keep on the CPU side before " +
+        "the batch is sent to the GPU. This affects the amount of host memory used when reading " +
+        "the batches in parallel.")
+      .integerConf
+      .checkValue(v => v > 0, "The maximum number of batches must be greater than 0.")
+      .createWithDefault(Integer.MAX_VALUE)
 
 
   val ENABLE_PARQUET_READ = conf("spark.rapids.sql.format.parquet.read.enabled")
@@ -868,7 +870,7 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val isParquetSmallFilesNumThreads: Int = get(ENABLE_SMALL_FILES_PARQUET_NUM_THREADS)
 
-  lazy val maxParquetReadHostMemorySizeBytes: Long = get(PARQUET_READ_MAX_HOST_MEMORY)
+  lazy val maxNumParquetReadBatches: Int = get(PARQUET_READ_MAX_NUM_BATCHES)
 
   lazy val isParquetReadEnabled: Boolean = get(ENABLE_PARQUET_READ)
 

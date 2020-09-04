@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-import scala.collection.mutable.{ArrayBuffer, LinkedHashMap}
+import scala.collection.mutable.{ArrayBuffer, LinkedHashMap, Queue}
 import scala.math.max
 
 import ai.rapids.cudf._
@@ -310,7 +310,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   private val filterHandler = new GpuParquetFileFilterHandler(sqlConf)
 
   private val numThreads = rapidsConf.isParquetSmallFilesNumThreads
-  private val maxParquetReadHostMemorySizeBytes = rapidsConf.maxParquetReadHostMemorySizeBytes
+  private val maxNumBatches = rapidsConf.maxNumParquetReadBatches
 
   override def supportColumnarReads(partition: InputPartition): Boolean = true
 
@@ -335,7 +335,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     new MultiFileParquetPartitionReader(conf, files,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
       maxReadBatchSizeRows, maxReadBatchSizeBytes, metrics, partitionSchema,
-      numThreads, maxParquetReadHostMemorySizeBytes, filterHandler, filters)
+      numThreads, maxNumBatches, filterHandler, filters)
   }
 }
 
@@ -419,7 +419,7 @@ abstract class FileParquetPartitionReaderBase(
     out.getByteCount
   }
 
-  // TODO - remove handleMulti-files
+  // TODO - remove handle Multi-files
   protected def calculateParquetOutputSize(
       currentChunkedBlocks: Seq[BlockMetaData],
       schema: MessageType,
@@ -614,11 +614,6 @@ abstract class FileParquetPartitionReaderBase(
   }
 }
 
-
-object HostMemoryTracker {
-  val currentHostMemoryUsed = new AtomicLong(0)
-}
-
 object MultiFileThreadPoolFactory {
 
   private var threadPool: Option[ThreadPoolExecutor] = None
@@ -675,14 +670,21 @@ class MultiFileParquetPartitionReader(
     execMetrics: Map[String, SQLMetric],
     partitionSchema: StructType,
     numThreads: Int,
-    maxParquetReadHostMemorySizeBytes: Long,
+    maxNumBatches: Int,
     filterHandler: GpuParquetFileFilterHandler,
     filters: Array[Filter])
   extends FileParquetPartitionReaderBase(conf, isSchemaCaseSensitive, readDataSchema,
     debugDumpPrefix, execMetrics) {
 
+  case class HostMemoryBufferWithMetaData(isCorrectRebaseMode: Boolean, clippedSchema: MessageType,
+      partValues: InternalRow, memBuffersAndSizes: Array[(HostMemoryBuffer, Long)])
+
   private var batchesToRead = 0
   private var currentBatch: Option[HostMemoryBufferWithMetaData] = None
+
+  private var isInitted = false
+  private val tasks = new Queue[Future[HostMemoryBufferWithMetaData]]()
+  private val tasksToRun = new Queue[ReadBatchRunner]()
 
   override def get(): ColumnarBatch = {
     val ret = if (currentBatch.isDefined) {
@@ -696,14 +698,7 @@ class MultiFileParquetPartitionReader(
       batch = readBufferToTable(currentBatch.get.isCorrectRebaseMode,
         currentBatch.get.clippedSchema, currentBatch.get.partValues,
         firstBuffer._1, firstBuffer._2)
-      logWarning(s"current host before is ${HostMemoryTracker.currentHostMemoryUsed.get}")
 
-      HostMemoryTracker.currentHostMemoryUsed.updateAndGet(_ - dataSize)
-      logWarning(s"current host memory removed $dataSize used " +
-        s"is ${HostMemoryTracker.currentHostMemoryUsed.get}")
-      HostMemoryTracker.currentHostMemoryUsed.synchronized {
-        HostMemoryTracker.currentHostMemoryUsed.notify()
-      }
       if (memBufferAndSize.length > 1) {
         // we have to leave currentBatch alone but update host buffer processed
         val prevBatch = currentBatch.get
@@ -711,6 +706,11 @@ class MultiFileParquetPartitionReader(
         currentBatch = Some(prevBatch.copy(memBuffersAndSizes = updatedBufferAndSize))
       } else {
         currentBatch = None
+      }
+      // submit another task if we were limited
+      if (tasksToRun.size > 0) {
+        val runner = tasksToRun.dequeue()
+        tasks.enqueue(MultiFileThreadPoolFactory.submitToThreadPool(runner, numThreads))
       }
       logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()}")
       if (batch.isDefined) {
@@ -847,7 +847,6 @@ class MultiFileParquetPartitionReader(
           val filePath = new Path(new URI(file.filePath))
           val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
 
-          // TODO - how to chunk into batches to limit size?
           while (blockChunkIter.hasNext) {
             val blockLimited = populateCurrentBlockChunk()
             val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
@@ -855,26 +854,6 @@ class MultiFileParquetPartitionReader(
             val estTotalSize = calculateParquetOutputSize(blockLimited, singleFileInfo.schema,
               false)
 
-            var waiting = true
-            while (waiting) {
-              val currentVal = HostMemoryTracker.currentHostMemoryUsed.get()
-              if (currentVal > 0 && currentVal + estTotalSize > maxParquetReadHostMemorySizeBytes) {
-                // we want to wait til some is read before using more host memory
-                // maybe wait instead?
-                logWarning(s"waiting current: $currentVal" +
-                  s" est: $estTotalSize max: $maxParquetReadHostMemorySizeBytes")
-                HostMemoryTracker.currentHostMemoryUsed.synchronized {
-                  HostMemoryTracker.currentHostMemoryUsed.wait(1000)
-                }
-              } else {
-                logWarning(s"compareAndSet current: $currentVal" +
-                  s" est: $estTotalSize max: $maxParquetReadHostMemorySizeBytes")
-                waiting = !HostMemoryTracker.currentHostMemoryUsed.compareAndSet(currentVal,
-                  currentVal + estTotalSize)
-              }
-            }
-            logWarning(s"added $estTotalSize, current host " +
-              s"memory used is ${HostMemoryTracker.currentHostMemoryUsed.get}")
             val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema,
               estTotalSize)
 
@@ -896,35 +875,33 @@ class MultiFileParquetPartitionReader(
       res
     }
   }
-  case class HostMemoryBufferWithMetaData(isCorrectRebaseMode: Boolean, clippedSchema: MessageType,
-      partValues: InternalRow, memBuffersAndSizes: Array[(HostMemoryBuffer, Long)])
-
-  case class BatchesMetaData(isCorrectRebaseMode: Boolean, clippedSchema: MessageType,
-      partValues: InternalRow, seqPathsAndBlocks: Seq[(Path, BlockMetaData)])
-
-  private val batchesMetaData: ArrayBuffer[BatchesMetaData] = ArrayBuffer.empty
-
-  private var isInitted = false
-
-  val tasks = new java.util.ArrayList[Future[HostMemoryBufferWithMetaData]]()
-
 
   override def next(): Boolean = {
     if (isInitted == false) {
-      splits.foreach { file =>
-        tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
+      // we only submit as many tasks as we limit batches
+      val limit = math.min(maxNumBatches, splits.length)
+      for (i <- 0 until limit) {
+        logWarning(s"submitting, i = $i")
+        val file = splits(i)
+        tasks.enqueue(MultiFileThreadPoolFactory.submitToThreadPool(
           new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
+      }
+      // queue up any left
+      for (i <- limit until splits.length) {
+        logWarning(s"queue rest, i = $i")
+        val file = splits(i)
+        tasksToRun.enqueue(new ReadBatchRunner(filterHandler, file, conf, filters))
       }
       isInitted = true
       batchesToRead = splits.length
     }
+    // if we have batch left from last read return it
     if (currentBatch.isDefined) {
       true
     }
-    var retBatch: HostMemoryBufferWithMetaData = null
     currentBatch = None
     val res = if (batchesToRead > 0) {
-      val future = tasks.remove(0)
+      val future = tasks.dequeue
       val retBatch = future.get()
       batchesToRead -= 1
       val memBufAndSize = retBatch.memBuffersAndSizes
