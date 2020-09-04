@@ -503,10 +503,8 @@ abstract class FileParquetPartitionReaderBase(
     blocks.foreach { block =>
       totalRows += block.getRowCount
       val columns = block.getColumns.asScala
-      logWarning(s"columns is ${columns.length}")
       val outputColumns = new ArrayBuffer[ColumnChunkMetaData](columns.length)
       columns.foreach { column =>
-        logWarning(s"column is ${column.toString}")
         // update column metadata to reflect new position in the output file
         val offsetAdjustment = out.getPos + totalBytesToCopy - column.getStartingPos
         val newDictOffset = if (column.getDictionaryPageOffset > 0) {
@@ -708,11 +706,12 @@ class MultiFileParquetPartitionReader(
         currentBatch = None
       }
       // submit another task if we were limited
+      val start = System.nanoTime()
       if (tasksToRun.size > 0) {
         val runner = tasksToRun.dequeue()
         tasks.enqueue(MultiFileThreadPoolFactory.submitToThreadPool(runner, numThreads))
       }
-      logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()}")
+      logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()} time ${System.nanoTime() - start}")
       if (batch.isDefined) {
         val batchToRet = batch.get
         batch = None
@@ -945,7 +944,6 @@ class MultiFileParquetPartitionReader(
           .withTimeUnit(DType.TIMESTAMP_MICROSECONDS)
           .includeColumn(readDataSchema.fieldNames:_*).build()
 
-        logWarning(s"data schema is: ${readDataSchema.fieldNames.mkString(",")}")
         // about to start using the GPU
         GpuSemaphore.acquireIfNecessary(TaskContext.get())
 
@@ -1118,84 +1116,6 @@ class MultiFileParquetPartitionReader(
     }
   }
 
-  /*
-  private def populateCurrentBlockChunk(): BatchesMetaData = {
-
-    val currentChunk = new ArrayBuffer[(Path, BlockMetaData)]
-    var numRows: Long = 0
-    var numBytes: Long = 0
-    var numParquetBytes: Long = 0
-    var currentFile: Path = null
-    var currentPartitionValues: InternalRow = null
-    var currentClippedSchema: MessageType = null
-    var currentIsCorrectRebaseMode: Boolean = false
-
-    @tailrec
-    def readNextBatch(): Unit = {
-      if (blockIterator.hasNext) {
-        if (currentFile == null) {
-          currentFile = blockIterator.head.filePath
-          currentPartitionValues = blockIterator.head.partValues
-          currentClippedSchema = blockIterator.head.schema
-          currentIsCorrectRebaseMode = blockIterator.head.isCorrectedRebaseMode
-        }
-        if (currentFile != blockIterator.head.filePath) {
-          // We need to ensure all files we are going to combine have the same datetime rebase mode.
-          if (blockIterator.head.isCorrectedRebaseMode != currentIsCorrectRebaseMode) {
-            logWarning("datetime rebase mode for the next file " +
-              s"${blockIterator.head.filePath} is different then current file $currentFile, " +
-              s"splitting into another batch.")
-            return
-          }
-
-          // check to see if partitionValues different, then have to split it
-          if (blockIterator.head.partValues != currentPartitionValues) {
-            logWarning(s"Partition values for the next file ${blockIterator.head.filePath}" +
-              s" doesn't match current $currentFile, splitting it into another batch!")
-            return
-          }
-          val schemaNextfile =
-            blockIterator.head.schema.asGroupType().getFields.asScala.map(_.getName)
-          val schemaCurrentfile =
-            currentClippedSchema.asGroupType().getFields.asScala.map(_.getName)
-          if (!schemaNextfile.sameElements(schemaCurrentfile)) {
-            logInfo(s"File schema for the next file ${blockIterator.head.filePath}" +
-              s" doesn't match current $currentFile, splitting it into another batch!")
-            return
-          }
-          logWarning(s"switching file task: ${TaskContext.get.partitionId()} " +
-            s"file: ${blockIterator.head.filePath}")
-          currentFile = blockIterator.head.filePath
-          currentPartitionValues = blockIterator.head.partValues
-          currentClippedSchema = blockIterator.head.schema
-        }
-        val peekedRowGroup = blockIterator.head.blockMeta
-        if (peekedRowGroup.getRowCount > Integer.MAX_VALUE) {
-          throw new UnsupportedOperationException("Too many rows in split")
-        }
-
-        if (numRows == 0 || numRows + peekedRowGroup.getRowCount <= maxReadBatchSizeRows) {
-          val estimatedBytes = GpuBatchUtils.estimateGpuMemory(readDataSchema,
-            peekedRowGroup.getRowCount)
-          if (numBytes == 0 || numBytes + estimatedBytes <= maxReadBatchSizeBytes) {
-            val nextBlock = blockIterator.next()
-            val nextTuple = (nextBlock.filePath, nextBlock.blockMeta)
-            currentChunk += nextTuple
-            numRows += currentChunk.last._2.getRowCount
-            numParquetBytes += currentChunk.last._2.getTotalByteSize
-            numBytes += estimatedBytes
-            readNextBatch()
-          }
-        }
-      }
-    }
-    readNextBatch()
-    logDebug(s"Loaded $numRows rows from Parquet. Parquet bytes read: $numParquetBytes. " +
-      s"Estimated GPU bytes: $numBytes")
-    BatchesMetaData(currentIsCorrectRebaseMode, currentClippedSchema,
-      currentPartitionValues, currentChunk)
-  }
-  */
 }
 
 
