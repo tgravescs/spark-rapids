@@ -21,7 +21,6 @@ import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.util.{Collections, Locale}
 import java.util.concurrent._
-import java.util.concurrent.atomic.AtomicLong
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -44,6 +43,7 @@ import org.apache.parquet.format.converter.ParquetMetadataConverter
 import org.apache.parquet.hadoop.{ParquetFileReader, ParquetInputFormat}
 import org.apache.parquet.hadoop.metadata._
 import org.apache.parquet.schema.{GroupType, MessageType, Types}
+
 import org.apache.spark.TaskContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.Logging
@@ -681,38 +681,40 @@ class MultiFileParquetPartitionReader(
   private var currentBatch: Option[HostMemoryBufferWithMetaData] = None
 
   private var isInitted = false
-  private val tasks = new Queue[Future[HostMemoryBufferWithMetaData]]()
+  private val tasks = new ConcurrentLinkedQueue[Future[HostMemoryBufferWithMetaData]]()
   private val tasksToRun = new Queue[ReadBatchRunner]()
 
   override def get(): ColumnarBatch = {
     val ret = if (currentBatch.isDefined) {
       batch.foreach(_.close())
-      val memBufferAndSize = currentBatch.get.memBuffersAndSizes
+      val batchReading = currentBatch.get
+      val memBufferAndSize = batchReading.memBuffersAndSizes
       val (hostbuffer, size) = memBufferAndSize.head
       if (hostbuffer == null) {
         return new ColumnarBatch(Array.empty, size.toInt)
       }
+
       val dataSize = size
       logWarning(s"processing host buffer ${hostbuffer.toString()}")
-      batch = readBufferToTable(currentBatch.get.isCorrectRebaseMode,
-        currentBatch.get.clippedSchema, currentBatch.get.partValues,
+      batch = readBufferToTable(batchReading.isCorrectRebaseMode,
+        batchReading.clippedSchema, batchReading.partValues,
         hostbuffer, size)
 
       if (memBufferAndSize.length > 1) {
         logWarning("we have multiple different buffers!")
         // we have to leave currentBatch alone but update host buffer processed
-        val prevBatch = currentBatch.get
         val updatedBufferAndSize = memBufferAndSize.drop(1)
-        currentBatch = Some(prevBatch.copy(memBuffersAndSizes = updatedBufferAndSize))
+        currentBatch = Some(batchReading.copy(memBuffersAndSizes = updatedBufferAndSize))
       } else {
         currentBatch = None
       }
+
       // submit another task if we were limited
       val start = System.nanoTime()
       if (tasksToRun.size > 0) {
         // logWarning("queueing the next task to run")
         val runner = tasksToRun.dequeue()
-        tasks.enqueue(MultiFileThreadPoolFactory.submitToThreadPool(runner, numThreads))
+        tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(runner, numThreads))
       }
       logWarning(s"done reading buffer to table ${TaskContext.get().partitionId()} " +
         s"time ${System.nanoTime() - start}")
@@ -859,7 +861,7 @@ class MultiFileParquetPartitionReader(
             val blockLimited = populateCurrentBlockChunk()
             val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
             val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema)
-            logWarning(s"got buffer back readpart ${buffer.toString}")
+            logWarning(s"got buffer back readpart ${buffer.toString} file ${file.filePath}")
             hostBuffers += ((buffer, size))
           }
           logWarning(s"host buffers size is ${hostBuffers.size}")
@@ -886,7 +888,7 @@ class MultiFileParquetPartitionReader(
       for (i <- 0 until limit) {
         // logWarning(s"submitting, i = $i")
         val file = splits(i)
-        tasks.enqueue(MultiFileThreadPoolFactory.submitToThreadPool(
+        tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
           new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
       }
       // queue up any left
@@ -905,7 +907,7 @@ class MultiFileParquetPartitionReader(
     currentBatch = None
     val res = if (batchesToRead > 0) {
 
-      val future = tasks.dequeue
+      val future = tasks.poll
       val retBatch = future.get()
       InputFileUtils.setInputFileBlock(retBatch.filePath, retBatch.fileStart, retBatch.fileLength)
 
