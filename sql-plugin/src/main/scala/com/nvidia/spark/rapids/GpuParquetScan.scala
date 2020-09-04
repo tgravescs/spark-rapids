@@ -732,13 +732,14 @@ class MultiFileParquetPartitionReader(
   }
 
   override def close(): Unit = {
+    isExhausted = true
     currentFileHostBuffer.foreach(_.memBuffersAndSizes.foreach(_._1.close()))
     currentFileHostBuffer = None
     batch.foreach(_.close())
     batch = None
     tasks.asScala.foreach { task =>
       if (task.isDone()) {
-        task.get.memBuffersAndSizes.foreach(_._1.close())
+        task.get.memBuffersAndSizes.map(_._1).foreach(_.close())
       } else {
         // Note we are not interrupting thread here so it
         // will finish reading and then just discard. If we
@@ -746,7 +747,6 @@ class MultiFileParquetPartitionReader(
         task.cancel(false)
       }
     }
-    isExhausted = true
   }
 
   private def addPartitionValues(
