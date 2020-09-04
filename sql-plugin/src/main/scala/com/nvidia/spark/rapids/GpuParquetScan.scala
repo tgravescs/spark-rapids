@@ -675,7 +675,7 @@ class MultiFileParquetPartitionReader(
 
   case class HostMemoryBufferWithMetaData(isCorrectRebaseMode: Boolean, clippedSchema: MessageType,
       partValues: InternalRow, memBuffersAndSizes: Array[(HostMemoryBuffer, Long)],
-      filePath: String, fileStart: Long, fileLength: Long)
+      filePath: String, fileStart: Long, fileLength: Long, error: Exception)
 
   private var batchesToRead = 0
   private var currentFileHostBuffer: Option[HostMemoryBufferWithMetaData] = None
@@ -741,10 +741,9 @@ class MultiFileParquetPartitionReader(
       if (task.isDone()) {
         task.get.memBuffersAndSizes.foreach(_._1.close())
       } else {
-        // note this can cause HDFS warning on closing the
-        // stream early (java.nio.channels.ClosedByInterruptException)
-        // It does log warning to the screen, if we don't want that I could
-        // choose not to interrupt and then just close everything at that point?
+        // Note we are not interrupting thread here so it
+        // will finish reading and then just discard. If we
+        // interrupt HDFS logs warnings about being interrupted.
         task.cancel(false)
       }
     }
@@ -850,7 +849,7 @@ class MultiFileParquetPartitionReader(
           // no blocks so put empty
           return HostMemoryBufferWithMetaData(singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)), file.filePath,
-            file.start, file.length)
+            file.start, file.length, null)
         }
         blockChunkIter = singleFileInfo.blocks.iterator.buffered
         if (readDataSchema.isEmpty) {
@@ -860,7 +859,7 @@ class MultiFileParquetPartitionReader(
           HostMemoryBufferWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, Array((null, numRows)),
-            file.filePath, file.start, file.length)
+            file.filePath, file.start, file.length, null)
 
         } else {
           val filePath = new Path(new URI(file.filePath))
@@ -873,17 +872,16 @@ class MultiFileParquetPartitionReader(
           }
           // closed before finishing
           if (isExhausted) {
-            logWarning("closed before finishing read file")
             hostBuffers.foreach(_._1.close())
             HostMemoryBufferWithMetaData(
               singleFileInfo.isCorrectedRebaseMode,
               singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)),
-              file.filePath, file.start, file.length)
+              file.filePath, file.start, file.length, null)
           }
           HostMemoryBufferWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, hostBuffers.toArray,
-            file.filePath, file.start, file.length)
+            file.filePath, file.start, file.length, null)
         }
       } catch {
         case e: Exception =>
@@ -891,7 +889,7 @@ class MultiFileParquetPartitionReader(
             logError(s"exception in thread, ${e.getMessage}", e)
           }
           return HostMemoryBufferWithMetaData(false, null, null, Array((null, 0)),
-            file.filePath, file.start, file.length)
+            file.filePath, file.start, file.length, e)
       }
       res
     }
@@ -924,6 +922,11 @@ class MultiFileParquetPartitionReader(
 
       val future = tasks.poll
       val retBatch = future.get()
+      if (retBatch.error != null) {
+        logError(s"Exception while reading file ${retBatch.filePath} " +
+          s"start ${retBatch.fileStart} in thread", retBatch.error)
+        throw retBatch.error
+      }
       InputFileUtils.setInputFileBlock(retBatch.filePath, retBatch.fileStart, retBatch.fileLength)
 
       batchesToRead -= 1
