@@ -741,7 +741,11 @@ class MultiFileParquetPartitionReader(
       if (task.isDone()) {
         task.get.memBuffersAndSizes.foreach(_._1.close())
       } else {
-        task.cancel(true)
+        // note this can cause HDFS warning on closing the
+        // stream early (java.nio.channels.ClosedByInterruptException)
+        // It does log warning to the screen, if we don't want that I could
+        // choose not to interrupt and then just close everything at that point?
+        task.cancel(false)
       }
     }
     isExhausted = true
@@ -867,7 +871,15 @@ class MultiFileParquetPartitionReader(
             val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema)
             hostBuffers += ((buffer, size))
           }
-          // logWarning(s"host buffers size is ${hostBuffers.size}")
+          // closed before finishing
+          if (isExhausted) {
+            logWarning("closed before finishing read file")
+            hostBuffers.foreach(_._1.close())
+            HostMemoryBufferWithMetaData(
+              singleFileInfo.isCorrectedRebaseMode,
+              singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)),
+              file.filePath, file.start, file.length)
+          }
           HostMemoryBufferWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, hostBuffers.toArray,
@@ -875,15 +887,11 @@ class MultiFileParquetPartitionReader(
         }
       } catch {
         case e: Exception =>
-          if (isExhausted) {
-            // close was called so ignore it
-            return HostMemoryBufferWithMetaData(false, null, null, Array((null, 0)),
-              file.filePath, file.start, file.length)
-          } else {
+          if (!isExhausted) {
             logError(s"exception in thread, ${e.getMessage}", e)
-            return HostMemoryBufferWithMetaData(false, null, null, Array((null, 0)),
-              file.filePath, file.start, file.length)
           }
+          return HostMemoryBufferWithMetaData(false, null, null, Array((null, 0)),
+            file.filePath, file.start, file.length)
       }
       res
     }
@@ -892,20 +900,15 @@ class MultiFileParquetPartitionReader(
   override def next(): Boolean = {
     if (isInitted == false) {
       // we only submit as many tasks as we limit batches
-      // logWarning(s"splits are: ${splits.map(_.filePath).mkString(",")}")
       val limit = math.min(maxNumBatches, splits.length)
-      // logWarning(s"next called for task limit is $limit splits size is ${splits.length} : ${TaskContext.get().partitionId()}")
       for (i <- 0 until limit) {
         // logWarning(s"submitting, i = $i")
         val file = splits(i)
-        // logWarning(s"adding $i file ${file.filePath} start: ${file.start} task: ${TaskContext.get().partitionId()}")
-
         tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
           new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
       }
       // queue up any left
       for (i <- limit until splits.length) {
-        // logWarning(s"queue rest, i = $i")
         val file = splits(i)
         tasksToRun.enqueue(new ReadBatchRunner(filterHandler, file, conf, filters))
       }
@@ -921,15 +924,12 @@ class MultiFileParquetPartitionReader(
 
       val future = tasks.poll
       val retBatch = future.get()
-      // logWarning(s"file processing is ${retBatch.filePath} start: ${retBatch.fileStart}")
       InputFileUtils.setInputFileBlock(retBatch.filePath, retBatch.fileStart, retBatch.fileLength)
 
       batchesToRead -= 1
       val memBufAndSize = retBatch.memBuffersAndSizes
-      // logWarning(s" next got host buffer: ${memBufAndSize.head.toString()}")
       // if sizes are 0 means no rows and no data so skip to next file
       if (memBufAndSize.map(_._2).sum == 0) {
-        // logWarning(s"size is 0 skipping ${memBufAndSize.head.toString()}")
         next()
       } else {
         currentFileHostBuffer = Some(retBatch)
@@ -994,8 +994,6 @@ class MultiFileParquetPartitionReader(
         Some(evolveSchemaIfNeededAndClose(table, splits.mkString(","), clippedSchema))
       }
     } finally {
-      // logWarning(s"freeing host buffer ${hostbuffer.toString()}")
-
       hostbuffer.close()
     }
     try {
