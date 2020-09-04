@@ -710,7 +710,7 @@ class MultiFileParquetPartitionReader(
       }
 
       // submit another task if we were limited
-      if (tasksToRun.size > 0) {
+      if (tasksToRun.size > 0 && !isExhausted) {
         // logWarning("queueing the next task to run")
         val runner = tasksToRun.dequeue()
         tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(runner, numThreads))
@@ -732,7 +732,6 @@ class MultiFileParquetPartitionReader(
   }
 
   override def close(): Unit = {
-    logWarning(s"close called!!! ${TaskContext.get().partitionId()}")
     currentFileHostBuffer.foreach(_.memBuffersAndSizes.foreach(_._1.close()))
     currentFileHostBuffer = None
     batch.foreach(_.close())
@@ -852,41 +851,54 @@ class MultiFileParquetPartitionReader(
             file.start, file.length, null)
         }
         blockChunkIter = singleFileInfo.blocks.iterator.buffered
-        if (readDataSchema.isEmpty) {
-          val numRows = singleFileInfo.blocks.map(_.getRowCount).sum.toInt
-          // overload size to be number of rows
-          // note numrows could be 0
-          HostMemoryBufferWithMetaData(
-            singleFileInfo.isCorrectedRebaseMode,
-            singleFileInfo.schema, singleFileInfo.partValues, Array((null, numRows)),
-            file.filePath, file.start, file.length, null)
-
-        } else {
-          val filePath = new Path(new URI(file.filePath))
-          val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
-          while (blockChunkIter.hasNext) {
-            val blockLimited = populateCurrentBlockChunk()
-            val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
-            val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema)
-            hostBuffers += ((buffer, size))
-          }
-          // closed before finishing
-          if (isExhausted) {
-            hostBuffers.foreach(_._1.close())
+        if (!isExhausted) {
+          if (readDataSchema.isEmpty) {
+            val numRows = singleFileInfo.blocks.map(_.getRowCount).sum.toInt
+            // overload size to be number of rows
+            // note numrows could be 0
             HostMemoryBufferWithMetaData(
               singleFileInfo.isCorrectedRebaseMode,
-              singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)),
+              singleFileInfo.schema, singleFileInfo.partValues, Array((null, numRows)),
+              file.filePath, file.start, file.length, null)
+
+          } else {
+            val filePath = new Path(new URI(file.filePath))
+            val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
+            while (blockChunkIter.hasNext) {
+              val blockLimited = populateCurrentBlockChunk()
+              val blockTotalSize = blockLimited.map(_.getTotalByteSize).sum
+              val (buffer, size) = readPartFile(blockLimited, filePath, singleFileInfo.schema)
+              hostBuffers += ((buffer, size))
+            }
+            // closed before finishing
+            if (isExhausted) {
+              logWarning("is exahusted closing buffers")
+              hostBuffers.foreach(_._1.close())
+              HostMemoryBufferWithMetaData(
+                singleFileInfo.isCorrectedRebaseMode,
+                singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)),
+                file.filePath, file.start, file.length, null)
+            }
+            HostMemoryBufferWithMetaData(
+              singleFileInfo.isCorrectedRebaseMode,
+              singleFileInfo.schema, singleFileInfo.partValues, hostBuffers.toArray,
               file.filePath, file.start, file.length, null)
           }
+        } else {
+          logWarning("is exahusted skipping")
+
           HostMemoryBufferWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
-            singleFileInfo.schema, singleFileInfo.partValues, hostBuffers.toArray,
+            singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)),
             file.filePath, file.start, file.length, null)
         }
       } catch {
         case e: Exception =>
           if (!isExhausted) {
             logError(s"exception in thread, ${e.getMessage}", e)
+          } else {
+            logError(s"isexhausted exception in thread, ${e.getMessage}", e)
+
           }
           return HostMemoryBufferWithMetaData(false, null, null, Array((null, 0)),
             file.filePath, file.start, file.length, e)
