@@ -1016,7 +1016,9 @@ class MultiFileParquetPartitionReader(
       var succeeded = false
       val allBlocks = blocks.map(_._2)
       val initTotalSize = calculateParquetOutputSize(allBlocks, clippedSchema, true)
+
       var hmb = HostMemoryBuffer.allocate(initTotalSize)
+      logWarning(s"allocated host memory buffer ${hmb.toString}")
       var out = new HostMemoryOutputStream(hmb)
       try {
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
