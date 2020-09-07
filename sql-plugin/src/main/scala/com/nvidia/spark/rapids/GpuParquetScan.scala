@@ -978,7 +978,7 @@ class MultiFileParquetPartitionReader(
           metrics(GPU_DECODE_TIME))) { _ =>
           Table.readParquet(parseOpts, hostbuffer, 0, dataSize)
         }
-        closeOnExcept(table) { table =>
+        closeOnExcept(table) { _ =>
           if (!isCorrectRebaseMode) {
             (0 until table.getNumberOfColumns).foreach { i =>
               if (RebaseHelper.isDateTimeRebaseNeededRead(table.getColumn(i))) {
@@ -988,12 +988,11 @@ class MultiFileParquetPartitionReader(
           }
           maxDeviceMemory = max(GpuColumnVector.getTotalDeviceMemoryUsed(table), maxDeviceMemory)
           if (readDataSchema.length < table.getNumberOfColumns) {
-            table.close()
             throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
-              s"but read ${table.getNumberOfColumns} from ?????")
+              s"but read ${table.getNumberOfColumns} from $currentChunkedBlocks")
           }
-          metrics(NUM_OUTPUT_BATCHES) += 1
         }
+        metrics(NUM_OUTPUT_BATCHES) += 1
         Some(evolveSchemaIfNeededAndClose(table, splits.mkString(","), clippedSchema))
       }
     } finally {
@@ -1116,18 +1115,19 @@ class ParquetPartitionReader(
             metrics(GPU_DECODE_TIME))) { _ =>
           Table.readParquet(parseOpts, dataBuffer, 0, dataSize)
         }
-        if (!isCorrectedRebaseMode) {
-          (0 until table.getNumberOfColumns).foreach { i =>
-            if (RebaseHelper.isDateTimeRebaseNeededRead(table.getColumn(i))) {
-              throw RebaseHelper.newRebaseExceptionInRead("Parquet")
+        closeOnExcept(table) { _ =>
+          if (!isCorrectedRebaseMode) {
+            (0 until table.getNumberOfColumns).foreach { i =>
+              if (RebaseHelper.isDateTimeRebaseNeededRead(table.getColumn(i))) {
+                throw RebaseHelper.newRebaseExceptionInRead("Parquet")
+              }
             }
           }
-        }
-        maxDeviceMemory = max(GpuColumnVector.getTotalDeviceMemoryUsed(table), maxDeviceMemory)
-        if (readDataSchema.length < table.getNumberOfColumns) {
-          table.close()
-          throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
-            s"but read ${table.getNumberOfColumns} from $filePath")
+          maxDeviceMemory = max(GpuColumnVector.getTotalDeviceMemoryUsed(table), maxDeviceMemory)
+          if (readDataSchema.length < table.getNumberOfColumns) {
+            throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
+              s"but read ${table.getNumberOfColumns} from $filePath")
+          }
         }
         metrics(NUM_OUTPUT_BATCHES) += 1
         Some(evolveSchemaIfNeededAndClose(table, filePath.toString, clippedParquetSchema))
