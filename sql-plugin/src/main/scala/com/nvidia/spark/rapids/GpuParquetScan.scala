@@ -729,7 +729,7 @@ class MultiFileParquetPartitionReader(
 
   case class HostMemoryBuffersWithMetaData(isCorrectRebaseMode: Boolean, clippedSchema: MessageType,
       partValues: InternalRow, memBuffersAndSizes: Array[(HostMemoryBuffer, Long)],
-      filePath: String, fileStart: Long, fileLength: Long, error: Exception)
+      filePath: String, fileStart: Long, fileLength: Long, error: Option[Exception])
 
   private var filesToRead = 0
   private var currentFileHostBuffer: Option[HostMemoryBuffersWithMetaData] = None
@@ -758,7 +758,7 @@ class MultiFileParquetPartitionReader(
           // no blocks so put empty
           return HostMemoryBuffersWithMetaData(singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)), file.filePath,
-            file.start, file.length, null)
+            file.start, file.length, None)
         }
         blockChunkIter = singleFileInfo.blocks.iterator.buffered
         if (!isDone) {
@@ -769,7 +769,7 @@ class MultiFileParquetPartitionReader(
             HostMemoryBuffersWithMetaData(
               singleFileInfo.isCorrectedRebaseMode,
               singleFileInfo.schema, singleFileInfo.partValues, Array((null, numRows)),
-              file.filePath, file.start, file.length, null)
+              file.filePath, file.start, file.length, None)
 
           } else {
             val filePath = new Path(new URI(file.filePath))
@@ -786,18 +786,18 @@ class MultiFileParquetPartitionReader(
               return HostMemoryBuffersWithMetaData(
                 singleFileInfo.isCorrectedRebaseMode,
                 singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)),
-                file.filePath, file.start, file.length, null)
+                file.filePath, file.start, file.length, None)
             }
             HostMemoryBuffersWithMetaData(
               singleFileInfo.isCorrectedRebaseMode,
               singleFileInfo.schema, singleFileInfo.partValues, hostBuffers.toArray,
-              file.filePath, file.start, file.length, null)
+              file.filePath, file.start, file.length, None)
           }
         } else {
           HostMemoryBuffersWithMetaData(
             singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.schema, singleFileInfo.partValues, Array((null, 0)),
-            file.filePath, file.start, file.length, null)
+            file.filePath, file.start, file.length, None)
         }
       } catch {
         case e: Exception =>
@@ -806,7 +806,7 @@ class MultiFileParquetPartitionReader(
           }
           hostBuffers.foreach(_._1.close())
           return HostMemoryBuffersWithMetaData(false, null, null, Array((null, 0)),
-            file.filePath, file.start, file.length, e)
+            file.filePath, file.start, file.length, Some(e))
       }
     }
   }
@@ -834,14 +834,9 @@ class MultiFileParquetPartitionReader(
       fileBufAndMeta: HostMemoryBuffersWithMetaData): Option[ColumnarBatch] = {
     val memBufferAndSize = fileBufAndMeta.memBuffersAndSizes
     val (hostbuffer, size) = memBufferAndSize.head
-    val nextBatch = if (hostbuffer == null) {
-      // the host buffer is null when we do a count()
-      Some(new ColumnarBatch(Array.empty, size.toInt))
-    } else {
-      readBufferToTable(fileBufAndMeta.isCorrectRebaseMode,
+    val nextBatch = readBufferToTable(fileBufAndMeta.isCorrectRebaseMode,
         fileBufAndMeta.clippedSchema, fileBufAndMeta.partValues,
         hostbuffer, size, fileBufAndMeta.filePath)
-    }
 
     if (memBufferAndSize.length > 1) {
       val updatedBuffers = memBufferAndSize.drop(1)
@@ -868,10 +863,10 @@ class MultiFileParquetPartitionReader(
         currentFileHostBuffer = None
         if (filesToRead > 0 && !isDone) {
           val fileBufAndMeta = tasks.poll.get()
-          if (fileBufAndMeta.error != null) {
+          if (fileBufAndMeta.error.isDefined) {
             logError(s"Exception while reading file ${fileBufAndMeta.filePath} " +
-              s"at start ${fileBufAndMeta.fileStart} in thread", fileBufAndMeta.error)
-            throw fileBufAndMeta.error
+              s"at start ${fileBufAndMeta.fileStart} in thread", fileBufAndMeta.error.get)
+            throw fileBufAndMeta.error.get
           }
           filesToRead -= 1
           InputFileUtils.setInputFileBlock(fileBufAndMeta.filePath, fileBufAndMeta.fileStart,
