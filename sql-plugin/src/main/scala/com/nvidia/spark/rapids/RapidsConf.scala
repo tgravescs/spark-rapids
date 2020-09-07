@@ -452,7 +452,7 @@ object RapidsConf {
     .booleanConf
     .createWithDefault(true)
 
-  val ENABLE_SMALL_FILES_PARQUET_NUM_THREADS =
+  val PARQUET_SMALL_FILES_NUM_THREADS =
     conf("spark.rapids.sql.format.parquet.smallFiles.numThreads")
       .doc("The maximum number of threads to use for reading small parquet files in parallel.")
       .integerConf
@@ -460,7 +460,7 @@ object RapidsConf {
 
   val PARQUET_READ_MAX_NUM_FILES_PROCESSED =
     conf("spark.rapids.sql.format.parquet.smallFiles.maxNumFileProcessed")
-      .doc("A limit on the maximum number offiles per task processed in parallel on the CPU " +
+      .doc("A limit on the maximum number of files per task processed in parallel on the CPU " +
         "side before the file is sent to the GPU. This affects the amount of host memory used " +
         "when reading the files in parallel.")
       .integerConf
@@ -710,11 +710,11 @@ object RapidsConf {
     if (asTable) {
       println("")
       // scalastyle:off line.size.limit
-      println("""## Supported GPU Operators and Fine Tuning 
-        |_The RAPIDS Accelerator for Apache Spark_ can be configured to enable or disable specific 
-        |GPU accelerated expressions.  Enabled expressions are candidates for GPU execution. If the 
-        |expression is configured as disabled, the accelerator plugin will not attempt replacement, 
-        |and it will run on the CPU.  
+      println("""## Supported GPU Operators and Fine Tuning
+        |_The RAPIDS Accelerator for Apache Spark_ can be configured to enable or disable specific
+        |GPU accelerated expressions.  Enabled expressions are candidates for GPU execution. If the
+        |expression is configured as disabled, the accelerator plugin will not attempt replacement,
+        |and it will run on the CPU.
         |
         |Please leverage the [`spark.rapids.sql.explain`](#sql.explain) setting to get
         |feedback from the plugin as to why parts of a query may not be executing on the GPU.
@@ -868,7 +868,7 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val isParquetSmallFilesEnabled: Boolean = get(ENABLE_SMALL_FILES_PARQUET)
 
-  lazy val isParquetSmallFilesNumThreads: Int = get(ENABLE_SMALL_FILES_PARQUET_NUM_THREADS)
+  lazy val parquetSmallFilesNumThreads: Int = get(PARQUET_SMALL_FILES_NUM_THREADS)
 
   lazy val maxNumParquetFilesProcessed: Int = get(PARQUET_READ_MAX_NUM_FILES_PROCESSED)
 
