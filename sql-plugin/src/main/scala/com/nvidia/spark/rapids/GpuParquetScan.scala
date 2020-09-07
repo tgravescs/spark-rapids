@@ -654,7 +654,6 @@ abstract class FileParquetPartitionReaderBase(
 
 }
 
-// TODO - test with local vs singleton performance
 // Singleton threadpool that is used across all the tasks
 object MultiFileThreadPoolFactory {
 
