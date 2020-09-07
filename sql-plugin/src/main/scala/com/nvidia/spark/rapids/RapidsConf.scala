@@ -464,7 +464,7 @@ object RapidsConf {
       .createWithDefault(20)
 
   val PARQUET_MULTITHREAD_READ_MAX_NUM_FILES_PARALLEL =
-    conf("spark.rapids.sql.format.parquet.multiThreadedRead.maxNumFileParallel")
+    conf("spark.rapids.sql.format.parquet.multiThreadedRead.maxNumFilesParallel")
       .doc("A limit on the maximum number of files per task processed in parallel on the CPU " +
         "side before the file is sent to the GPU. This affects the amount of host memory used " +
         "when reading the files in parallel.")

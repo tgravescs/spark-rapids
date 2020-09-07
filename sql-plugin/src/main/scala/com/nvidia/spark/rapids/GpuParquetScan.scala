@@ -839,7 +839,7 @@ class MultiFileParquetPartitionReader(
     } else {
       readBufferToTable(fileBufAndMeta.isCorrectRebaseMode,
         fileBufAndMeta.clippedSchema, fileBufAndMeta.partValues,
-        hostbuffer, size)
+        hostbuffer, size, fileBufAndMeta.filePath)
     }
 
     if (memBufferAndSize.length > 1) {
@@ -952,7 +952,8 @@ class MultiFileParquetPartitionReader(
       clippedSchema: MessageType,
       partValues: InternalRow,
       hostbuffer: HostMemoryBuffer,
-      dataSize: Long): Option[ColumnarBatch] = {
+      dataSize: Long,
+      filePath: String): Option[ColumnarBatch] = {
     if (hostbuffer == null) {
       if (dataSize == 0) {
         None
@@ -989,7 +990,7 @@ class MultiFileParquetPartitionReader(
           maxDeviceMemory = max(GpuColumnVector.getTotalDeviceMemoryUsed(table), maxDeviceMemory)
           if (readDataSchema.length < table.getNumberOfColumns) {
             throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
-              s"but read ${table.getNumberOfColumns} from $currentChunkedBlocks")
+              s"but read ${table.getNumberOfColumns} from $filePath")
           }
         }
         metrics(NUM_OUTPUT_BATCHES) += 1
