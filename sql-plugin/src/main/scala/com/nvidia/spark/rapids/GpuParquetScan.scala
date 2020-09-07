@@ -751,6 +751,7 @@ class MultiFileParquetPartitionReader(
      * buffer is null and the size is the number of rows.
      */
     override def call(): HostMemoryBuffersWithMetaData = {
+      val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
       try {
         val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
         if (singleFileInfo.blocks.length == 0) {
@@ -772,7 +773,6 @@ class MultiFileParquetPartitionReader(
 
           } else {
             val filePath = new Path(new URI(file.filePath))
-            val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
             while (blockChunkIter.hasNext) {
               val blockLimited = populateCurrentBlockChunk(blockChunkIter,
                 maxReadBatchSizeRows, maxReadBatchSizeBytes)
@@ -804,6 +804,7 @@ class MultiFileParquetPartitionReader(
           if (!isDone) {
             logError(s"Exception in Parquet file read thread, ${e.getMessage}", e)
           }
+          hostBuffers.foreach(_._1.close())
           return HostMemoryBuffersWithMetaData(false, null, null, Array((null, 0)),
             file.filePath, file.start, file.length, e)
       }
