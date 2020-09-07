@@ -947,53 +947,47 @@ class MultiFileParquetPartitionReader(
       isCorrectRebaseMode: Boolean,
       clippedSchema: MessageType,
       partValues: InternalRow,
-      hostbuffer: HostMemoryBuffer,
+      hostBuffer: HostMemoryBuffer,
       dataSize: Long,
       filePath: String): Option[ColumnarBatch] = {
-    if (hostbuffer == null) {
-      if (dataSize == 0) {
-        None
-      } else {
-        Some(new ColumnarBatch(Array.empty, dataSize.toInt))
-      }
+    if (dataSize == 0) {
+      return None
     }
-    val table = try {
-      if (dataSize == 0) {
-        None
-      } else {
-        if (debugDumpPrefix != null) {
-          dumpParquetData(hostbuffer, dataSize, splits)
-        }
-        val parseOpts = ParquetOptions.builder()
-          .withTimeUnit(DType.TIMESTAMP_MICROSECONDS)
-          .includeColumn(readDataSchema.fieldNames:_*).build()
+    // not reading any data, so return a degenerate ColumnarBatch with the row count
+    if (hostBuffer == null) {
+      return Some(new ColumnarBatch(Array.empty, dataSize.toInt))
+    }
+    val table = withResource(hostBuffer) { _ =>
+      if (debugDumpPrefix != null) {
+        dumpParquetData(hostBuffer, dataSize, splits)
+      }
+      val parseOpts = ParquetOptions.builder()
+        .withTimeUnit(DType.TIMESTAMP_MICROSECONDS)
+        .includeColumn(readDataSchema.fieldNames: _*).build()
 
-        // about to start using the GPU
-        GpuSemaphore.acquireIfNecessary(TaskContext.get())
+      // about to start using the GPU
+      GpuSemaphore.acquireIfNecessary(TaskContext.get())
 
-        val table = withResource(new NvtxWithMetrics("Parquet decode", NvtxColor.DARK_GREEN,
-          metrics(GPU_DECODE_TIME))) { _ =>
-          Table.readParquet(parseOpts, hostbuffer, 0, dataSize)
-        }
-        closeOnExcept(table) { _ =>
-          if (!isCorrectRebaseMode) {
-            (0 until table.getNumberOfColumns).foreach { i =>
-              if (RebaseHelper.isDateTimeRebaseNeededRead(table.getColumn(i))) {
-                throw RebaseHelper.newRebaseExceptionInRead("Parquet")
-              }
+      val table = withResource(new NvtxWithMetrics("Parquet decode", NvtxColor.DARK_GREEN,
+        metrics(GPU_DECODE_TIME))) { _ =>
+        Table.readParquet(parseOpts, hostBuffer, 0, dataSize)
+      }
+      closeOnExcept(table) { _ =>
+        if (!isCorrectRebaseMode) {
+          (0 until table.getNumberOfColumns).foreach { i =>
+            if (RebaseHelper.isDateTimeRebaseNeededRead(table.getColumn(i))) {
+              throw RebaseHelper.newRebaseExceptionInRead("Parquet")
             }
           }
-          maxDeviceMemory = max(GpuColumnVector.getTotalDeviceMemoryUsed(table), maxDeviceMemory)
-          if (readDataSchema.length < table.getNumberOfColumns) {
-            throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
-              s"but read ${table.getNumberOfColumns} from $filePath")
-          }
         }
-        metrics(NUM_OUTPUT_BATCHES) += 1
-        Some(evolveSchemaIfNeededAndClose(table, splits.mkString(","), clippedSchema))
+        maxDeviceMemory = max(GpuColumnVector.getTotalDeviceMemoryUsed(table), maxDeviceMemory)
+        if (readDataSchema.length < table.getNumberOfColumns) {
+          throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
+            s"but read ${table.getNumberOfColumns} from $filePath")
+        }
       }
-    } finally {
-      hostbuffer.close()
+      metrics(NUM_OUTPUT_BATCHES) += 1
+      Some(evolveSchemaIfNeededAndClose(table, splits.mkString(","), clippedSchema))
     }
     try {
       val maybeBatch = table.map(GpuColumnVector.from)
