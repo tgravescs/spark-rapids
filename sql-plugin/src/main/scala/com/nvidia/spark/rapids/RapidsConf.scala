@@ -445,28 +445,31 @@ object RapidsConf {
     .booleanConf
     .createWithDefault(true)
 
-  val ENABLE_SMALL_FILES_PARQUET = conf("spark.rapids.sql.format.parquet.smallFiles.enabled")
-    .doc("When set to true, handles reading multiple small files within a partition more " +
-      "efficiently by combining multiple files on the CPU side before sending to the GPU. " +
-      "Recommended unless user needs mergeSchema option or schema evolution.")
+  val ENABLE_MULTITHREAD_PARQUET_READS = conf(
+    "spark.rapids.sql.format.parquet.multiThreadedRead.enabled")
+    .doc("When set to true, reads multiple small files within a partition more efficiently " +
+      "by reading each file in a separate thread in parallel on the CPU side before " +
+      "sending to the GPU. Limited by " +
+      "spark.rapids.sql.format.parquet.multiThreadedRead.numThreads " +
+      "and spark.rapids.sql.format.parquet.multiThreadedRead.maxNumFileProcessed")
     .booleanConf
     .createWithDefault(true)
 
-  val PARQUET_SMALL_FILES_NUM_THREADS =
-    conf("spark.rapids.sql.format.parquet.smallFiles.numThreads")
-      .doc("The maximum number of threads to use for reading small parquet files in parallel.")
+  val PARQUET_MULTITHREAD_READ_NUM_THREADS =
+    conf("spark.rapids.sql.format.parquet.multiThreadedRead.numThreads")
+      .doc("The maximum number of threads, on the executor, to use for reading small " +
+        "parquet files in parallel.")
       .integerConf
       .createWithDefault(20)
 
-  val PARQUET_READ_MAX_NUM_FILES_PROCESSED =
-    conf("spark.rapids.sql.format.parquet.smallFiles.maxNumFileProcessed")
+  val PARQUET_MULTITHREAD_READ_MAX_NUM_FILES_PARALLEL =
+    conf("spark.rapids.sql.format.parquet.multiThreadedRead.maxNumFileParallel")
       .doc("A limit on the maximum number of files per task processed in parallel on the CPU " +
         "side before the file is sent to the GPU. This affects the amount of host memory used " +
         "when reading the files in parallel.")
       .integerConf
-      .checkValue(v => v > 0, "The maximum number of batches must be greater than 0.")
+      .checkValue(v => v > 0, "The maximum number of files must be greater than 0.")
       .createWithDefault(Integer.MAX_VALUE)
-
 
   val ENABLE_PARQUET_READ = conf("spark.rapids.sql.format.parquet.read.enabled")
     .doc("When set to false disables parquet input acceleration")
@@ -866,11 +869,11 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val isParquetEnabled: Boolean = get(ENABLE_PARQUET)
 
-  lazy val isParquetSmallFilesEnabled: Boolean = get(ENABLE_SMALL_FILES_PARQUET)
+  lazy val isParquetMultiThreadReadEnabled: Boolean = get(ENABLE_MULTITHREAD_PARQUET_READS)
 
-  lazy val parquetSmallFilesNumThreads: Int = get(PARQUET_SMALL_FILES_NUM_THREADS)
+  lazy val parquetMultiThreadReadNumThreads: Int = get(PARQUET_MULTITHREAD_READ_NUM_THREADS)
 
-  lazy val maxNumParquetFilesProcessed: Int = get(PARQUET_READ_MAX_NUM_FILES_PROCESSED)
+  lazy val maxNumParquetFilesParallel: Int = get(PARQUET_MULTITHREAD_READ_MAX_NUM_FILES_PARALLEL)
 
   lazy val isParquetReadEnabled: Boolean = get(ENABLE_PARQUET_READ)
 

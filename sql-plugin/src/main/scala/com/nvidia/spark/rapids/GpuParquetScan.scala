@@ -296,8 +296,8 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   private val debugDumpPrefix = rapidsConf.parquetDebugDumpPrefix
   private val maxReadBatchSizeRows = rapidsConf.maxReadBatchSizeRows
   private val maxReadBatchSizeBytes = rapidsConf.maxReadBatchSizeBytes
-  private val numThreads = rapidsConf.parquetSmallFilesNumThreads
-  private val maxNumFileProcessed = rapidsConf.maxNumParquetFilesProcessed
+  private val numThreads = rapidsConf.parquetMultiThreadReadNumThreads
+  private val maxNumFileProcessed = rapidsConf.maxNumParquetFilesParallel
 
   private val filterHandler = new GpuParquetFileFilterHandler(sqlConf)
 

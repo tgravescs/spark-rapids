@@ -153,7 +153,7 @@ class Spark300Shims extends SparkShims {
               GpuFileSourceScanExec.convertFileFormat(wrapped.relation.fileFormat),
               options)(sparkSession)
             val canUseSmallFileOpt = newRelation.fileFormat match {
-              case _: ParquetFileFormat => conf.isParquetSmallFilesEnabled
+              case _: ParquetFileFormat => conf.isParquetMultiThreadReadEnabled
               case _ => false
             }
             GpuFileSourceScanExec(
@@ -247,7 +247,7 @@ class Spark300Shims extends SparkShims {
             a.partitionFilters,
             a.dataFilters,
             conf,
-            conf.isParquetSmallFilesEnabled)
+            conf.isParquetMultiThreadReadEnabled)
         }
       }),
     GpuOverrides.scan[OrcScan](
