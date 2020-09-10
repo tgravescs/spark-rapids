@@ -109,8 +109,16 @@ sudo ln -s /databricks/jars/ $SPARK_HOME/jars || true
 sudo chmod 777 /databricks/data/logs/
 sudo chmod 777 /databricks/data/logs/*
 echo { \"port\":\"15002\" } > ~/.databricks-connect
-ls $DB_JAR_LOC/rapids*
-ls $DB_JAR_LOC/cudf*
+if [ `ls $DB_JAR_LOC/rapids* | wc -l` > 1 ]; then
+    echo "Too many rapids jars in $DB_JAR_LOC"
+    ls $DB_JAR_LOC/rapids*
+    exit 1
+fi
+if [ `ls $DB_JAR_LOC/cudf* | wc -l` > 1 ]; then
+    echo "Too many cudf jars in $DB_JAR_LOC"
+    ls $DB_JAR_LOC/cudf*
+    exit 1
+fi
 $SPARK_HOME/bin/spark-submit ./runtests.py --runtime_env="databricks"
 cd /home/ubuntu
 tar -zcvf spark-rapids-built.tgz spark-rapids
