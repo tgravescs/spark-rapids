@@ -89,9 +89,12 @@ mvn -B install:install-file \
 
 mvn -B '-Pdatabricks,!snapshot-shims' clean package -DskipTests
 
+
 # Copy so we pick up new built jar and latesty CuDF jar. Note that the jar names has to be
 # exactly what is in the staticly setup Databricks cluster we use. 
+echo "Copying rapids jars: dist/target/$RAPIDS_BUILT_JAR $DB_RAPIDS_JAR_LOC"
 sudo cp dist/target/$RAPIDS_BUILT_JAR $DB_RAPIDS_JAR_LOC
+echo "Copying cudf jars: $CUDF_JAR $DB_CUDF_JAR_LOC"
 sudo cp $CUDF_JAR $DB_CUDF_JAR_LOC
 
 # tests
@@ -106,6 +109,8 @@ sudo ln -s /databricks/jars/ $SPARK_HOME/jars || true
 sudo chmod 777 /databricks/data/logs/
 sudo chmod 777 /databricks/data/logs/*
 echo { \"port\":\"15002\" } > ~/.databricks-connect
+ls /databricks/jar/rapids*
+ls /databricks/jar/cudf*
 $SPARK_HOME/bin/spark-submit ./runtests.py --runtime_env="databricks"
 cd /home/ubuntu
 tar -zcvf spark-rapids-built.tgz spark-rapids
