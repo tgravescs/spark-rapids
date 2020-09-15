@@ -122,13 +122,19 @@ case class GpuShuffledHashJoinExec(
         val startTime = System.nanoTime()
         val builtTable = withResource(ConcatAndConsumeAll.getSingleBatchWithVerification(
           buildIter, localBuildOutput)) { buildBatch: ColumnarBatch =>
+          logWarning(s"batch num rows is: ${buildBatch.numRows()}")
           withResource(GpuProjectExec.project(buildBatch, gpuBuildKeys)) { keys =>
+            logWarning(s"keys batch has ${keys.numRows()}")
             val combined = GpuHashJoin.incRefCount(combine(keys, buildBatch))
+            logWarning(s"combined batch has ${combined.numRows()}")
             val filtered = filterBuiltTableIfNeeded(combined)
+            logWarning(s"filtered batch has ${filtered.numRows()}")
+
             combinedSize =
                 GpuColumnVector.extractColumns(filtered)
                     .map(_.getBase.getDeviceMemorySize).sum.toInt
             withResource(filtered) { filtered =>
+              logWarning(s"filtered last has ${filtered.numRows()}")
               GpuColumnVector.from(filtered)
             }
           }
