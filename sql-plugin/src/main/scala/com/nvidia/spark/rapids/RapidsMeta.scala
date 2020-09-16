@@ -17,6 +17,7 @@
 package com.nvidia.spark.rapids
 
 import scala.collection.mutable
+
 import com.nvidia.spark.rapids.GpuOverrides.isStringLit
 
 import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, ComplexTypeMergingExpression, Expression, String2TrimExpression, TernaryExpression, UnaryExpression}
@@ -24,12 +25,11 @@ import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.connector.read.Scan
-import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
 import org.apache.spark.sql.execution.adaptive.{QueryStageExec, ShuffleQueryStageExec}
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.exchange.{ReusedExchangeExec, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, ShuffledHashJoinExec, SortMergeJoinExec}
-import org.apache.spark.sql.rapids.GpuFileSourceScanExec
 import org.apache.spark.sql.types.DataType
 
 trait ConfKeysAndIncompat {
@@ -468,21 +468,27 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
       }
     }
 
-    def checkForBucketedRead(plan:  Either[
-      SparkPlanMeta[QueryStageExec],
-      SparkPlanMeta[ShuffleExchangeExec]]): Unit = {
-      plan match {
-        case Right(e) => e.plan.foreach { p =>
-          if (p.isInstanceOf[GpuFileSourceScanExec]) {
-            if (p.asInstanceOf[GpuFileSourceScanExec].bucketedScan) {
-              e.willNotWorkOnGpu("Cannot support a shuffle if the read before it is bucketed")
-            }
-          }
+    def isBucketedScan(plan: SparkPlan, e: SparkPlanMeta[ShuffleExchangeExec]): Unit = {
+      if (plan.isInstanceOf[FileSourceScanExec]) {
+        if (plan.asInstanceOf[FileSourceScanExec].bucketedScan) {
+          e.willNotWorkOnGpu("Cannot support a shuffle if the read before it is bucketed")
         }
       }
     }
 
-    shuffleExchanges.foreach(checkForBucketedRead)
+    def checkForBucketedRead(p: SparkPlanMeta[_]): Unit = {
+        p.wrapped match {
+          case _: FileSourceScanExec =>
+            if (plan.asInstanceOf[FileSourceScanExec].bucketedScan) {
+              p.willNotWorkOnGpu(
+                "Cannot support a shuffle if the read before it is bucketed")
+            }
+          case _ => p.childPlans.foreach(checkForBucketedRead)
+        }
+    }
+
+    val onlyShuffleExchanges = shuffleExchanges.filter(_.isRight).map(_.right.get)
+    onlyShuffleExchanges.foreach( p => p.childPlans.foreach(checkForBucketedRead)
     // if we can't convert all exchanges to GPU then we need to make sure that all of them
     // run on the CPU instead
     if (!shuffleExchanges.forall(canThisBeReplaced)) {
@@ -497,7 +503,6 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
       }
     }
   }
-
 
   private def fixUpJoinConsistencyIfNeeded(): Unit = {
     childPlans.foreach(_.fixUpJoinConsistencyIfNeeded())
