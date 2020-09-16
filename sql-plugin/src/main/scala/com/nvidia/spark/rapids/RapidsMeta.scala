@@ -20,6 +20,7 @@ import scala.collection.mutable
 
 import com.nvidia.spark.rapids.GpuOverrides.isStringLit
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, ComplexTypeMergingExpression, Expression, String2TrimExpression, TernaryExpression, UnaryExpression}
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
@@ -419,7 +420,7 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat)
-  extends RapidsMeta[INPUT, SparkPlan, GpuExec](plan, conf, parent, rule) {
+  extends RapidsMeta[INPUT, SparkPlan, GpuExec](plan, conf, parent, rule) with Logging {
 
   override val childPlans: Seq[SparkPlanMeta[_]] =
     plan.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
@@ -477,6 +478,7 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     }
 
     def checkForBucketedRead(p: SparkPlanMeta[_]): Unit = {
+      logWarning(s"check bucketed plan is ${p.wrapped}")
         p.wrapped match {
           case _: FileSourceScanExec =>
             if (plan.asInstanceOf[FileSourceScanExec].bucketedScan) {
@@ -488,7 +490,9 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     }
 
     val onlyShuffleExchanges = shuffleExchanges.filter(_.isRight).map(_.right.get)
-    onlyShuffleExchanges.foreach( p => p.childPlans.foreach(checkForBucketedRead)
+    logWarning(s"check bucketed shuffles s ${onlyShuffleExchanges}")
+
+    onlyShuffleExchanges.foreach( p => p.childPlans.foreach(checkForBucketedRead))
     // if we can't convert all exchanges to GPU then we need to make sure that all of them
     // run on the CPU instead
     if (!shuffleExchanges.forall(canThisBeReplaced)) {
