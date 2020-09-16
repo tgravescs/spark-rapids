@@ -480,6 +480,7 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     def checkForBucketedRead(p: SparkPlanMeta[_]): Unit = {
       logWarning(s"check bucketed plan is ${p.wrapped}")
         p.wrapped match {
+          case _: Scan =>
           case _: FileSourceScanExec =>
             if (plan.asInstanceOf[FileSourceScanExec].bucketedScan) {
               p.willNotWorkOnGpu(
