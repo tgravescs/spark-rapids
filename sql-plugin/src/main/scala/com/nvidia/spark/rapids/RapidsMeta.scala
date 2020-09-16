@@ -450,10 +450,12 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
 
   private def findBucketedReads(): Seq[Boolean] = wrapped match {
     case f: FileSourceScanExec =>
-      logWarning(s"found file source scan")
-      if (f.bucketedScan) true :: Nil else false :: Nil
+      if (f.bucketedScan) {
+        true :: Nil
+      } else {
+        false :: Nil
+      }
     case _ =>
-      logWarning(s"wrapped is $wrapped")
       childPlans.flatMap(_.findBucketedReads())
   }
 
@@ -464,6 +466,8 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     // attempts to tag ShuffleExchangeExec nodes for CPU if other exchanges (either
     // ShuffleExchangeExec or ShuffleQueryStageExec nodes) were also tagged for CPU.
     val shuffleExchanges = findShuffleExchanges()
+    // if any of the table reads are bucketed then we can't do the shuffle on the
+    // GPU because the hashing is different between the CPU and GPU
     val bucketedReads = findBucketedReads().exists(_ == true)
 
     def canThisBeReplaced(plan: Either[
@@ -479,9 +483,9 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
       }
     }
 
-    // if we can't convert all exchanges to GPU then we need to make sure that all of them
-    // run on the CPU instead
-    if (!shuffleExchanges.forall(canThisBeReplaced) || bucketedReads) {
+    // if we are reading from a bucketed table or if we can't convert all exchanges to GPU
+    // then we need to make sure that all of them run on the CPU instead
+    if (bucketedReads || !shuffleExchanges.forall(canThisBeReplaced)) {
       val errMsg = if (bucketedReads) {
         "can't support shuffle on the GPU with bucketed reads!"
       } else {
