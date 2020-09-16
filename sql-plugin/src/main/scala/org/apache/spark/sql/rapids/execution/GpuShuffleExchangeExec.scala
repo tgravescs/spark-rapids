@@ -22,6 +22,7 @@ import scala.concurrent.Future
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.{MapOutputStatistics, ShuffleDependency}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.serializer.Serializer
@@ -136,7 +137,7 @@ abstract class GpuShuffleExchangeExecBase(
   }
 }
 
-object GpuShuffleExchangeExec {
+object GpuShuffleExchangeExec extends Logging {
   def prepareBatchShuffleDependency(
       rdd: RDD[ColumnarBatch],
       outputAttributes: Seq[Attribute],
@@ -181,19 +182,24 @@ object GpuShuffleExchangeExec {
           private var at = 0
           private val mutablePair = new MutablePair[Int, ColumnarBatch]()
           private def partNextBatch(): Unit = {
+            logWarning(s"part next batch ")
             if (partitioned != null) {
               partitioned.map(_._1).safeClose()
               partitioned = null
               at = 0
             }
             if (iter.hasNext) {
+              logWarning(s"part next batch iter has next")
               var batch = iter.next()
+              logWarning(s"part next batch num rows: ${batch.numRows}")
               while (batch.numRows == 0 && iter.hasNext) {
                 batch.close()
                 batch = iter.next()
               }
               partitioned = getParts(batch).asInstanceOf[Array[(ColumnarBatch, Int)]]
+              logWarning(s"partitioned num is ${partitioned.length}")
               partitioned.foreach(batches => {
+                logWarning(s"partitioned num rows add is ${batches._1.numRows()}")
                 metrics(GpuMetricNames.NUM_OUTPUT_ROWS) += batches._1.numRows()
               })
               metrics(GpuMetricNames.NUM_OUTPUT_BATCHES) += partitioned.length
@@ -202,6 +208,7 @@ object GpuShuffleExchangeExec {
           }
 
           override def hasNext: Boolean = {
+            logWarning(s"partition has next")
             if (partitioned == null || at >= partitioned.length) {
               partNextBatch()
             }

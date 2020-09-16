@@ -122,19 +122,19 @@ case class GpuShuffledHashJoinExec(
         val startTime = System.nanoTime()
         val builtTable = withResource(ConcatAndConsumeAll.getSingleBatchWithVerification(
           buildIter, localBuildOutput)) { buildBatch: ColumnarBatch =>
-          logWarning(s"batch num rows is: ${buildBatch.numRows()}")
+          logWarning(s"batch num rows is: ${buildBatch.numRows()} id: ${TaskContext.get.partitionId()}")
           withResource(GpuProjectExec.project(buildBatch, gpuBuildKeys)) { keys =>
-            logWarning(s"keys batch has ${keys.numRows()}")
+            logWarning(s"keys batch has ${keys.numRows()} id: ${TaskContext.get.partitionId()}")
             val combined = GpuHashJoin.incRefCount(combine(keys, buildBatch))
-            logWarning(s"combined batch has ${combined.numRows()}")
+            logWarning(s"combined batch has ${combined.numRows()} id: ${TaskContext.get.partitionId()}")
             val filtered = filterBuiltTableIfNeeded(combined)
-            logWarning(s"filtered batch has ${filtered.numRows()}")
+            logWarning(s"filtered batch has ${filtered.numRows()} id: ${TaskContext.get.partitionId()}")
 
             combinedSize =
                 GpuColumnVector.extractColumns(filtered)
                     .map(_.getBase.getDeviceMemorySize).sum.toInt
             withResource(filtered) { filtered =>
-              logWarning(s"filtered last has ${filtered.numRows()}")
+              logWarning(s"filtered last has ${filtered.numRows()} id: ${TaskContext.get.partitionId()}")
               GpuColumnVector.from(filtered)
             }
           }

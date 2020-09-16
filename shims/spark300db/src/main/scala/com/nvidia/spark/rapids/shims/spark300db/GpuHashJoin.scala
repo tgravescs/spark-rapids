@@ -18,6 +18,7 @@ package com.nvidia.spark.rapids.shims.spark300db
 import ai.rapids.cudf.{NvtxColor, Table}
 import com.nvidia.spark.rapids._
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight}
@@ -48,7 +49,7 @@ object GpuHashJoin {
   }
 }
 
-trait GpuHashJoin extends GpuExec with HashJoin {
+trait GpuHashJoin extends GpuExec with HashJoin with Logging {
 
   override def output: Seq[Attribute] = {
     joinType match {
@@ -204,15 +205,23 @@ trait GpuHashJoin extends GpuExec with HashJoin {
           if (stream.hasNext) {
             val cb = stream.next()
             val startTime = System.nanoTime()
+            logWarning(s"streamingcolumn batch is ${cb.numRows()} id: ${TaskContext.get.partitionId()}")
             nextCb = doJoin(builtTable, cb, boundCondition, joinOutputRows, numOutputRows,
               numOutputBatches, joinTime, filterTime)
+            if (nextCb.isDefined) {
+              logWarning(s"after join is ${nextCb.get.numRows()} id: ${TaskContext.get.partitionId()}")
+            }
             totalTime += (System.nanoTime() - startTime)
           } else if (first) {
             // We have to at least try one in some cases
             val startTime = System.nanoTime()
             val cb = GpuColumnVector.emptyBatch(streamedPlan.output.asJava)
+            logWarning(s"first streamingcolumn batch is ${cb.numRows()} id: ${TaskContext.get.partitionId()}")
             nextCb = doJoin(builtTable, cb, boundCondition, joinOutputRows, numOutputRows,
               numOutputBatches, joinTime, filterTime)
+            if (nextCb.isDefined) {
+              logWarning(s"first after join is ${nextCb.get.numRows()} id: ${TaskContext.get.partitionId()}")
+            }
             totalTime += (System.nanoTime() - startTime)
           }
           first = false
