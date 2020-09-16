@@ -450,10 +450,11 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
 
   private def findBucketedReads(): Seq[Boolean] = wrapped match {
     case f: FileSourceScanExec =>
+      logWarning(s"found file source scan")
       if (f.bucketedScan) true :: Nil else false :: Nil
-    case s: Scan =>
-      if (s.asInstanceOf[FileSourceScanExec].bucketedScan) true :: Nil else false :: Nil
-    case _ => childPlans.flatMap(_.findBucketedReads())
+    case _ =>
+      logWarning(s"wrapped is $wrapped")
+      childPlans.flatMap(_.findBucketedReads())
   }
 
   private def makeShuffleConsistent(): Unit = {
@@ -478,29 +479,17 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
       }
     }
 
-   /* def checkForBucketedRead(p: SparkPlanMeta[_]): Unit = {
-      logWarning(s"check bucketed plan is ${p.wrapped}")
-      val input = p.wrapped.getClass
-      logWarning(s"check bucketed plan is ${p.wrapped} class: ${input}")
-      p.wrapped match {
-          case f: ExternalRDDScanExec =>
-            logWarning("match scan so checking bucketScan")
-            if (f.asInstanceOf[FileSourceScanExec].bucketedScan) {
-              logWarning("match scan so checking bucketScan - not working")
-              p.willNotWorkOnGpu(
-                "Cannot support a shuffle if the read before it is bucketed")
-            }
-          case _ => p.childPlans.foreach(checkForBucketedRead)
-        }
-    } */
-
     // if we can't convert all exchanges to GPU then we need to make sure that all of them
     // run on the CPU instead
     if (!shuffleExchanges.forall(canThisBeReplaced) || bucketedReads) {
+      val errMsg = if (bucketedReads) {
+        "can't support shuffle on the GPU with bucketed reads!"
+      } else {
+        "other exchanges that feed the same join are on the CPU, and GPU hashing is " +
+          "not consistent with the CPU version"
+      }
       // tag any exchanges that have not been converted to query stages yet
-      shuffleExchanges.filter(_.isRight)
-          .foreach(_.right.get.willNotWorkOnGpu("other exchanges that feed the same join are" +
-              " on the CPU, and GPU hashing is not consistent with the CPU version"))
+      shuffleExchanges.filter(_.isRight).foreach(_.right.get.willNotWorkOnGpu(errMsg))
       // verify that no query stages already got converted to GPU
       if (shuffleExchanges.filter(_.isLeft).exists(canThisBeReplaced)) {
         throw new IllegalStateException("Join needs to run on CPU but at least one input " +
