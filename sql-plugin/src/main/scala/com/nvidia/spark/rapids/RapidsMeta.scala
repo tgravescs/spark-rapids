@@ -469,20 +469,15 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
       }
     }
 
-    def isBucketedScan(plan: SparkPlan, e: SparkPlanMeta[ShuffleExchangeExec]): Unit = {
-      if (plan.isInstanceOf[FileSourceScanExec]) {
-        if (plan.asInstanceOf[FileSourceScanExec].bucketedScan) {
-          e.willNotWorkOnGpu("Cannot support a shuffle if the read before it is bucketed")
-        }
-      }
-    }
-
     def checkForBucketedRead(p: SparkPlanMeta[_]): Unit = {
       logWarning(s"check bucketed plan is ${p.wrapped}")
-        p.wrapped match {
-          case _: Scan =>
-          case _: FileSourceScanExec =>
-            if (plan.asInstanceOf[FileSourceScanExec].bucketedScan) {
+      val input = p.wrapped
+      logWarning(s"check bucketed plan is ${p.wrapped} class: ${input}")
+      p.wrapped match {
+          case f: Scan =>
+            logWarning("match scan so checking bucketScan")
+            if (f.asInstanceOf[FileSourceScanExec].bucketedScan) {
+              logWarning("match scan so checking bucketScan - not working")
               p.willNotWorkOnGpu(
                 "Cannot support a shuffle if the read before it is bucketed")
             }
@@ -507,6 +502,10 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
             "query stage ran on GPU")
       }
     }
+  }
+
+  private def checkBucketedRead(): Unit = {
+
   }
 
   private def fixUpJoinConsistencyIfNeeded(): Unit = {
