@@ -17,7 +17,6 @@
 package com.nvidia.spark.rapids
 
 import scala.collection.mutable
-
 import com.nvidia.spark.rapids.GpuOverrides.isStringLit
 
 import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, ComplexTypeMergingExpression, Expression, String2TrimExpression, TernaryExpression, UnaryExpression}
@@ -30,6 +29,7 @@ import org.apache.spark.sql.execution.adaptive.{QueryStageExec, ShuffleQueryStag
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.exchange.{ReusedExchangeExec, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, ShuffledHashJoinExec, SortMergeJoinExec}
+import org.apache.spark.sql.rapids.GpuFileSourceScanExec
 import org.apache.spark.sql.types.DataType
 
 trait ConfKeysAndIncompat {
@@ -468,6 +468,21 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
       }
     }
 
+    def checkForBucketedRead(plan:  Either[
+      SparkPlanMeta[QueryStageExec],
+      SparkPlanMeta[ShuffleExchangeExec]]): Unit = {
+      plan match {
+        case Right(e) => e.plan.foreach { p =>
+          if (p.isInstanceOf[GpuFileSourceScanExec]) {
+            if (p.asInstanceOf[GpuFileSourceScanExec].bucketedScan) {
+              e.willNotWorkOnGpu("Cannot support a shuffle if the read before it is bucketed")
+            }
+          }
+        }
+      }
+    }
+
+    shuffleExchanges.foreach(checkForBucketedRead)
     // if we can't convert all exchanges to GPU then we need to make sure that all of them
     // run on the CPU instead
     if (!shuffleExchanges.forall(canThisBeReplaced)) {
