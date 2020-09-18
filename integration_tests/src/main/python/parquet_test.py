@@ -415,3 +415,21 @@ def test_small_file_memory(spark_tmp_path, v1_enabled_list):
                   'spark.sql.files.maxPartitionBytes': "1g",
                   'spark.sql.sources.useV1SourceList': v1_enabled_list})
 
+# @pytest.mark.parametrize('v1_enabled_list', ["", "parquet"])
+#def test_performance(spark_tmp_path, v1_enabled_list, parquet_gens):
+@pytest.mark.parametrize('parquet_gens', parquet_gens_list, ids=idfn)
+def test_performance(spark_tmp_path, parquet_gens):
+    stringcols = [string_gen] * 4
+    final_cols = parquet_gens + stringcols
+    gen_list = [('_c' + str(i), gen) for i, gen in enumerate(final_cols)]
+    first_data_path = spark_tmp_path + '/PARQUET_DATA'
+    print("path is %s" % first_data_path)
+    with_cpu_session(
+            lambda spark : gen_df(spark, gen_list, length=40000).repartition(8000).write.parquet(first_data_path),
+            conf={'spark.sql.legacy.parquet.datetimeRebaseModeInWrite': 'CORRECTED'})
+    data_path = spark_tmp_path + '/PARQUET_DATA'
+    assert_gpu_and_cpu_are_equal_collect(
+            lambda spark : spark.read.parquet(data_path),
+            conf={'spark.rapids.sql.format.parquet.multiThreadedRead.enabled': 'true',
+                  'spark.sql.files.maxPartitionBytes': "1g"})
+                  #'spark.sql.sources.useV1SourceList': v1_enabled_list})
