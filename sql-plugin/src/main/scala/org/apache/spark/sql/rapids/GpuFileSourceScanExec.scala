@@ -448,6 +448,8 @@ case class GpuFileSourceScanExec(
       // if they are small files before sending it down to the GPU
       val sqlConf = relation.sparkSession.sessionState.conf
       val hadoopConf = relation.sparkSession.sessionState.newHadoopConfWithOptions(relation.options)
+      logWarning("files are: " + relation.inputFiles.mkString(","))
+
       val broadcastedHadoopConf =
         relation.sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
       val factory = GpuParquetMultiFilePartitionReaderFactory(
@@ -501,6 +503,7 @@ case class GpuFileSourceScanExec(
       // if they are small files before sending it down to the GPU
       val sqlConf = relation.sparkSession.sessionState.conf
       val hadoopConf = relation.sparkSession.sessionState.newHadoopConfWithOptions(relation.options)
+      logWarning("files are: " + relation.inputFiles.mkString(","))
       val broadcastedHadoopConf =
         relation.sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
       val factory = GpuParquetMultiFilePartitionReaderFactory(
