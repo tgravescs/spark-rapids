@@ -204,7 +204,7 @@ def _assert_gpu_and_cpu_writes_are_equal(
     gpu_path = base_path + '/GPU'
     with_gpu_session(lambda spark : write_func(spark, gpu_path), conf=conf)
     gpu_end = time.time()
-    print('### WRITE: GPU TOOK {} CPU TOOK {} ###'.format( 
+    print('### WRITE: GPU TOOK {} secs CPU TOOK {} secs ###'.format( 
         gpu_end - gpu_start, cpu_end - cpu_start))
 
     (cpu_bring_back, cpu_collect_type) = _prep_func_for_compare(

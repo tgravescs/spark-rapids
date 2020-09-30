@@ -15,6 +15,7 @@
 import pytest
 
 from asserts import assert_gpu_and_cpu_are_equal_collect, assert_gpu_and_cpu_writes_are_equal_collect, assert_gpu_fallback_collect
+from conftest import runtime_env
 from datetime import date, datetime, timezone
 from data_gen import *
 from marks import *
@@ -415,8 +416,7 @@ def test_small_file_memory(spark_tmp_path, v1_enabled_list):
                   'spark.sql.files.maxPartitionBytes': "1g",
                   'spark.sql.sources.useV1SourceList': v1_enabled_list})
 
-# @pytest.mark.parametrize('v1_enabled_list', ["", "parquet"])
-#def test_performance(spark_tmp_path, v1_enabled_list, parquet_gens):
+@pytest.mark.skipif(runtime_env() != "smallfiletest", reason="Only to generate small files")
 @pytest.mark.parametrize('parquet_gens', parquet_gens_list, ids=idfn)
 def test_performance(spark_tmp_path, parquet_gens):
     stringcols = [string_gen] * 4
