@@ -1895,10 +1895,16 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
         }
       }
       val convertedPlan = wrap.convertIfNeeded()
-      addSortsIfNeeded(convertedPlan, conf)
+      val sortsPlan = addSortsIfNeeded(convertedPlan, conf)
+      addCollectLmitIfNeeded(sortsPlan, conf)
     } else {
       plan
     }
+  }
+
+  private final class CollectConfKeysAndIncompat extends ConfKeysAndIncompat {
+    override val operationName: String = "Exec"
+    override def confKey = "spark.rapids.sql.exec.CollectLimitExec"
   }
 
   private final class SortConfKeysAndIncompat extends ConfKeysAndIncompat {
@@ -1940,4 +1946,32 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
         ensureOrdering(operator, conf)
     }
   }
+
+  def addCollectLmitIfNeeded(plan: SparkPlan, conf: RapidsConf): SparkPlan = {
+    plan.transformUp {
+      case operator: CollectLimitExec =>
+        replaceCollectIfNeeded(operator, conf)
+    }
+  }
+
+  // copied from Spark EnsureRequirements but only does the ordering checks and
+  // check to convert any SortExec added to GpuSortExec
+  private def replaceCollectIfNeeded(operator: CollectLimitExec, conf: RapidsConf): SparkPlan = {
+    // var children: Seq[SparkPlan] = operator.children
+
+    val collectMeta = new GpuCollectLimitMeta(operator, conf, None, new CollectConfKeysAndIncompat)
+    collectMeta.initReasons()
+    collectMeta.tagPlanForGpu()
+    logWarning("replacing collect limt 2")
+
+    val newchildren = if (collectMeta.canThisBeReplaced) {
+      logWarning("replacing collect limt 3")
+      collectMeta.convertToGpu()
+    } else {
+      operator
+    }
+    operator.withNewChildren(Seq(newchildren))
+
+  }
+
 }

@@ -160,7 +160,7 @@ class GpuCollectLimitMeta(
   override val childParts: scala.Seq[PartMeta[_]] =
     Seq(GpuOverrides.wrapPart(collectLimit.outputPartitioning, conf, Some(this)))
 
-    /*
+
   override def convertToGpu(): GpuExec = {
     logWarning("converting to gpu global imiit shuffle, local limit")
     // logWarning("convert limit child is: " + childPlans)
@@ -168,6 +168,6 @@ class GpuCollectLimitMeta(
       ShimLoader.getSparkShims.getGpuShuffleExchangeExec(GpuSinglePartitioning(Seq.empty),
         GpuLocalLimitExec(collectLimit.limit, childPlans(0).convertIfNeeded())))
   }
-  */
+
 
 }
