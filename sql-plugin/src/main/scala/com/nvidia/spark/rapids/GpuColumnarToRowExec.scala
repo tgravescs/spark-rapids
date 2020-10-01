@@ -306,7 +306,10 @@ object GpuColumnarToRowExecParent {
 }
 
 case class GpuColumnarToRowExec(child: SparkPlan, override val exportColumnarRdd: Boolean = false)
-   extends GpuColumnarToRowExecParent(child, exportColumnarRdd) {
-       override def executeCollect(): Array[InternalRow] = child.executeTake(20)
+   extends GpuColumnarToRowExecParent(child, exportColumnarRdd) with Logging {
+       override def executeCollect(): Array[InternalRow] = {
+         logWarning("colunar to row execute collect")
+         child.executeCollect()
+        }
 
    }

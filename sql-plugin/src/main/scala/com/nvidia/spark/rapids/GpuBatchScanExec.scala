@@ -69,6 +69,7 @@ case class GpuBatchScanExec(
   }
 
   override lazy val partitions: Seq[InputPartition] = batch.planInputPartitions()
+  logWarning("Gpu batch scan partitions is: " + partitions.size)
 
   override lazy val readerFactory: PartitionReaderFactory = batch.createReaderFactory()
 

@@ -330,7 +330,7 @@ final class InsertIntoHadoopFsRelationCommandMeta(
   }
 }
 
-object GpuOverrides {
+object GpuOverrides extends Logging {
   val FLOAT_DIFFERS_GROUP_INCOMPAT =
     "when enabling these, there may be extra groups produced for floating point grouping " +
     "keys (e.g. -0.0, and 0.0)"
@@ -1691,8 +1691,10 @@ object GpuOverrides {
         override val childScans: scala.Seq[ScanMeta[_]] =
           Seq(GpuOverrides.wrapScan(p.scan, conf, Some(this)))
 
-        override def convertToGpu(): GpuExec =
+        override def convertToGpu(): GpuExec = {
+          logWarning("partitions in batch scan is: " + p.partitions.size)
           GpuBatchScanExec(p.output, childScans(0).convertToGpu())
+        }
       }),
     exec[CoalesceExec](
       "The backend for the dataframe coalesce method",
@@ -1746,9 +1748,9 @@ object GpuOverrides {
           override def convertToGpu(): GpuExec =
             GpuGlobalLimitExec(globalLimitExec.limit, childPlans(0).convertIfNeeded())
         }),
-    exec[CollectLimitExec](
-      "Reduce to single partition and apply limit",
-      (collectLimitExec, conf, p, r) => new GpuCollectLimitMeta(collectLimitExec, conf, p, r)),
+     //exec[CollectLimitExec](
+     //  "Reduce to single partition and apply limit",
+     //  (collectLimitExec, conf, p, r) => new GpuCollectLimitMeta(collectLimitExec, conf, p, r)),
     exec[FilterExec](
       "The backend for most filter statements",
       (filter, conf, p, r) => new SparkPlanMeta[FilterExec](filter, conf, p, r) {
@@ -1896,7 +1898,8 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
       }
       val convertedPlan = wrap.convertIfNeeded()
       val sortsPlan = addSortsIfNeeded(convertedPlan, conf)
-      addCollectLmitIfNeeded(sortsPlan, conf)
+      // addCollectLmitIfNeeded(sortsPlan, conf)
+      sortsPlan
     } else {
       plan
     }
@@ -1948,10 +1951,14 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
   }
 
   def addCollectLmitIfNeeded(plan: SparkPlan, conf: RapidsConf): SparkPlan = {
-    plan.transformUp {
+    logWarning("in collect limit add if needed before: " + plan)
+    val retPlan = plan.transformUp {
       case operator: CollectLimitExec =>
+        logWarning("replacing collect limit exec add")
         replaceCollectIfNeeded(operator, conf)
     }
+    logWarning("plan is: " + retPlan)
+    retPlan
   }
 
   // copied from Spark EnsureRequirements but only does the ordering checks and
@@ -1970,7 +1977,10 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
     } else {
       operator
     }
-    operator.withNewChildren(Seq(newchildren))
+    logWarning("new children are: " + newchildren)
+    val ret = operator.withNewChildren(Seq(newchildren))
+    logWarning("all paln are: " + ret)
+    ret
 
   }
 
