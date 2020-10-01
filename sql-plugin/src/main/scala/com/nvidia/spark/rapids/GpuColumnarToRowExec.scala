@@ -19,6 +19,7 @@ package com.nvidia.spark.rapids
 import ai.rapids.cudf.{NvtxColor, NvtxRange}
 import com.nvidia.spark.rapids.GpuMetricNames._
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.TaskContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -109,13 +110,16 @@ class ColumnarToRowIterator(batches: Iterator[ColumnarBatch], numInputBatches: S
 }
 
 abstract class GpuColumnarToRowExecParent(child: SparkPlan, val exportColumnarRdd: Boolean)
-    extends UnaryExecNode with CodegenSupport with GpuExec {
+    extends UnaryExecNode with CodegenSupport with GpuExec with Logging {
   // We need to do this so the assertions don't fail
   override def supportsColumnar = false
 
   override def output: Seq[Attribute] = child.output
 
-  override def outputPartitioning: Partitioning = child.outputPartitioning
+  override def outputPartitioning: Partitioning = {
+    val part = child.outputPartitioning
+    part
+  }
 
   override def outputOrdering: Seq[SortOrder] = child.outputOrdering
 
@@ -302,4 +306,7 @@ object GpuColumnarToRowExecParent {
 }
 
 case class GpuColumnarToRowExec(child: SparkPlan, override val exportColumnarRdd: Boolean = false)
-   extends GpuColumnarToRowExecParent(child, exportColumnarRdd)
+   extends GpuColumnarToRowExecParent(child, exportColumnarRdd) {
+       override def executeCollect(): Array[InternalRow] = child.executeTake(20)
+
+   }

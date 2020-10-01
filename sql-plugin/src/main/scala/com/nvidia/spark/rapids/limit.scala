@@ -22,6 +22,7 @@ import ai.rapids.cudf.{NvtxColor, Table}
 import com.nvidia.spark.rapids.GpuMetricNames._
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.serializer.Serializer
 import org.apache.spark.sql.catalyst.InternalRow
@@ -36,10 +37,14 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  * Helper trait which defines methods that are shared by both
  * [[GpuLocalLimitExec]] and [[GpuGlobalLimitExec]].
  */
-trait GpuBaseLimitExec extends LimitExec with GpuExec {
+trait GpuBaseLimitExec extends LimitExec with GpuExec with Logging {
   override def output: Seq[Attribute] = child.output
 
-  override def outputPartitioning: Partitioning = child.outputPartitioning
+  override def outputPartitioning: Partitioning = {
+    val part = child.outputPartitioning
+    logWarning("base limit exe cpartitioing : " + part)
+    return part
+  }
 
   override def outputOrdering: Seq[SortOrder] = child.outputOrdering
 
@@ -47,9 +52,13 @@ trait GpuBaseLimitExec extends LimitExec with GpuExec {
     throw new IllegalStateException(s"Row-based execution should not occur for $this")
 
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
+    logWarning("base limit exec do execut")
+    new Exception("Stack trace").printStackTrace();
     val numOutputRows = longMetric(NUM_OUTPUT_ROWS)
     val numOutputBatches = longMetric(NUM_OUTPUT_BATCHES)
     val totalTime = longMetric(TOTAL_TIME)
+
+    logWarning("limit number rows is: " + limit)
 
     val crdd = child.executeColumnar()
     crdd.mapPartitions { cbIter =>
@@ -69,6 +78,7 @@ trait GpuBaseLimitExec extends LimitExec with GpuExec {
             numOutputBatches += 1
             numOutputRows += result.numRows()
             remainingLimit -= result.numRows()
+            // logWarning("remaining limit number rows is: " + remainingLimit + " result rows: " + result.numRows())
             result
           }
         }
@@ -112,13 +122,33 @@ trait GpuBaseLimitExec extends LimitExec with GpuExec {
 /**
  * Take the first `limit` elements of each child partition, but do not collect or shuffle them.
  */
-case class GpuLocalLimitExec(limit: Int, child: SparkPlan) extends GpuBaseLimitExec
+case class GpuLocalLimitExec(limit: Int, child: SparkPlan) extends GpuBaseLimitExec {
+  override def outputPartitioning: Partitioning = {
+    val part = child.outputPartitioning
+    // new Exception("Stack trace").printStackTrace();
+    // logWarning("local limit child is: " + child)
+    logWarning("local limit partitioing : " + part)
+    return part
+  }
+  override def executeCollect(): Array[InternalRow] = {
+    logWarning("called execute collect in local limt")
+    child.executeTake(limit)
+  }
+}
 
 /**
  * Take the first `limit` elements of the child's single output partition.
  */
-case class GpuGlobalLimitExec(limit: Int, child: SparkPlan) extends GpuBaseLimitExec {
+case class GpuGlobalLimitExec(limit: Int, child: SparkPlan) extends GpuBaseLimitExec with Logging {
   override def requiredChildDistribution: List[Distribution] = AllTuples :: Nil
+  override def outputPartitioning: Partitioning = { 
+    logWarning("global liiomit exec singlepartition")
+    SinglePartition
+  }
+  override def executeCollect(): Array[InternalRow] = {
+    logWarning("called execute collect in global limt")
+    child.executeTake(limit)
+  }
 }
 
 class GpuCollectLimitMeta(
@@ -126,13 +156,18 @@ class GpuCollectLimitMeta(
                       conf: RapidsConf,
                       parent: Option[RapidsMeta[_, _, _]],
                       rule: ConfKeysAndIncompat)
-  extends SparkPlanMeta[CollectLimitExec](collectLimit, conf, parent, rule) {
+  extends SparkPlanMeta[CollectLimitExec](collectLimit, conf, parent, rule) with Logging {
   override val childParts: scala.Seq[PartMeta[_]] =
     Seq(GpuOverrides.wrapPart(collectLimit.outputPartitioning, conf, Some(this)))
 
-  override def convertToGpu(): GpuExec =
+    /*
+  override def convertToGpu(): GpuExec = {
+    logWarning("converting to gpu global imiit shuffle, local limit")
+    // logWarning("convert limit child is: " + childPlans)
     GpuGlobalLimitExec(collectLimit.limit,
       ShimLoader.getSparkShims.getGpuShuffleExchangeExec(GpuSinglePartitioning(Seq.empty),
         GpuLocalLimitExec(collectLimit.limit, childPlans(0).convertIfNeeded())))
+  }
+  */
 
 }

@@ -50,16 +50,18 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.util.SerializableConfiguration
 
+import org.apache.spark.internal.Logging
 
 case class GpuBatchScanExec(
     output: Seq[AttributeReference],
-    @transient scan: Scan) extends DataSourceV2ScanExecBase with GpuExec {
+    @transient scan: Scan) extends DataSourceV2ScanExecBase with GpuExec with Logging {
 
   @transient lazy val batch: Batch = scan.toBatch
 
   override def supportsColumnar = true
 
   override lazy val additionalMetrics = GpuMetricNames.buildGpuScanMetrics(sparkContext)
+
 
   scan match {
     case s: ScanWithMetrics => s.metrics = metrics ++ additionalMetrics

@@ -21,6 +21,7 @@ import ai.rapids.cudf.{NvtxColor, Scalar, Table}
 import com.nvidia.spark.rapids.GpuMetricNames._
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.{InterruptibleIterator, Partition, SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -64,7 +65,7 @@ object GpuProjectExec {
 }
 
 case class GpuProjectExec(projectList: Seq[Expression], child: SparkPlan)
-    extends UnaryExecNode with GpuExec {
+    extends UnaryExecNode with GpuExec with Logging {
 
   private val sparkProjectList = projectList.asInstanceOf[Seq[NamedExpression]]
 
@@ -72,7 +73,11 @@ case class GpuProjectExec(projectList: Seq[Expression], child: SparkPlan)
 
   override def outputOrdering: Seq[SortOrder] = child.outputOrdering
 
-  override def outputPartitioning: Partitioning = child.outputPartitioning
+  override def outputPartitioning: Partitioning = {
+    val part = child.outputPartitioning
+    logWarning("project exec partitioing: " + part)
+    part
+  }
 
   override def doExecute(): RDD[InternalRow] =
     throw new IllegalStateException(s"Row-based execution should not occur for $this")
@@ -84,6 +89,7 @@ case class GpuProjectExec(projectList: Seq[Expression], child: SparkPlan)
     val boundProjectList = GpuBindReferences.bindGpuReferences(projectList, child.output)
     val rdd = child.executeColumnar()
     rdd.map { cb =>
+      logWarning("rdd map in project")
       numOutputBatches += 1
       numOutputRows += cb.numRows()
       GpuProjectExec.projectAndClose(cb, boundProjectList, totalTime)

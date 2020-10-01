@@ -22,6 +22,7 @@ import scala.concurrent.Future
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.{MapOutputStatistics, ShuffleDependency}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.serializer.Serializer
@@ -66,8 +67,15 @@ class GpuShuffleMeta(
  * Performs a shuffle that will result in the desired partitioning.
  */
 abstract class GpuShuffleExchangeExecBase(
-    override val outputPartitioning: Partitioning,
-    child: SparkPlan) extends Exchange with GpuExec {
+    val parting: Partitioning,
+    child: SparkPlan) extends Exchange with GpuExec with Logging {
+
+
+  override def outputPartitioning: Partitioning = {
+    val part = child.outputPartitioning
+    logWarning("output partitioning shuffle: " + part)
+    parting
+  }
 
   /**
    * Lots of small output batches we want to group together.
