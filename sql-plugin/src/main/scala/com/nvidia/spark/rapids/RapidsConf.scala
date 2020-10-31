@@ -293,6 +293,16 @@ object RapidsConf {
     .stringConf
     .createWithDefault("NONE")
 
+  val ALLUXIO_ENABLED = conf("spark.rapids.alluxio.enabled")
+    .doc("Enable Alluxio")
+    .booleanConf
+    .createWithDefault(false)
+
+  val ALLUXIO_IPPORT = conf("spark.rapids.alluxio.ipport")
+    .doc("Provides the IP:Port of alluxio service")
+    .stringConf
+    .createWithDefault("0.0.0.0:19998")
+
   val GPU_OOM_DUMP_DIR = conf("spark.rapids.memory.gpu.oomDumpDir")
     .doc("The path to a local directory where a heap dump will be created if the GPU " +
       "encounters an unrecoverable out-of-memory (OOM) error. The filename will be of the " +
@@ -922,6 +932,10 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val testingAllowedNonGpu: Seq[String] = get(TEST_ALLOWED_NONGPU)
 
   lazy val rmmDebugLocation: String = get(RMM_DEBUG)
+
+  lazy val alluxioIPPort: String = get(ALLUXIO_IPPORT)
+
+  lazy val alluxioEnabled: Boolean = get(ALLUXIO_ENABLED)
 
   lazy val gpuOomDumpDir: Option[String] = get(GPU_OOM_DUMP_DIR)
 
