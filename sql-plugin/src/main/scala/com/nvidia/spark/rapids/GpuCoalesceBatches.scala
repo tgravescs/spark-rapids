@@ -280,6 +280,7 @@ abstract class AbstractGpuCoalesceIterator(
         logInfo("Gary-Alluxio: " + stringFieldIndices.size);
         logInfo("Gary-Alluxio stringField: " + stringFieldIndices.mkString(","))
         logInfo("Gary-Alluxio columnSizes: " + columnSizes.mkString(","))
+        logInfo("Gary-Alluxio schema: " + schema.treeString)
         stringColumnSizes = stringFieldIndices.map(i => getColumnDataSize(batch, i, columnSizes(i)))
             .zip(stringColumnSizes)
             .map(pair => pair._1 + pair._2)
