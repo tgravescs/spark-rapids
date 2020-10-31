@@ -122,6 +122,8 @@ class Spark300dbShims extends Spark300Shims with Logging {
             }
             logInfo("Gary-Alluxio: " + location.inputFiles.mkString(","))
             logInfo("Gary-Alluxio: " + location.getClass.getCanonicalName)
+            logInfo("Gary-Alluxio: " + wrapped.relation.partitionSchema.treeString)
+            logInfo("Gary-Alluxio: " + wrapped.relation.dataSchema.treeString)
             logInfo("Gary-Alluxio: " + wrapped.relation.bucketSpec.toString())
             logInfo("Gary-Alluxio: " + wrapped.relation.fileFormat.toString())
             logInfo("Gary-Alluxio: " + options.toString())
