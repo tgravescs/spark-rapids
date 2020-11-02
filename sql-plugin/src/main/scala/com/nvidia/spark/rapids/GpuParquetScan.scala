@@ -291,6 +291,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
       fileSchema, isCaseSensitive)
     val columnPaths = clippedSchema.getPaths.asScala.map(x => ColumnPath.get(x: _*))
     val clipped = ParquetPartitionReader.clipBlocks(columnPaths, blocks.asScala)
+    logWarning(" file partition values are: " + file.partitionValues)
     ParquetFileInfoWithBlockMeta(filePath, clipped, file.partitionValues,
       clippedSchema, isCorrectedRebaseForThisFile)
   }

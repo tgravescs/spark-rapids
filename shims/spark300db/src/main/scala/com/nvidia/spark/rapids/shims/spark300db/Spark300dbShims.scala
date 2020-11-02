@@ -107,6 +107,7 @@ class Spark300dbShims extends Spark300Shims with Logging {
               && wrapped.relation.location.getClass.getCanonicalName() ==
               "com.databricks.sql.transaction.tahoe.stats.PreparedDeltaFileIndex") {
               // Need to change the IP address of Alluxio
+              logInfo("paths before replacing with alluxio are: " + wrapped.relation.location.inputFiles.mkString(","))
               val paths = wrapped.relation.location.inputFiles.map(str =>
                 new Path(str.replaceFirst("s3:/", "alluxio://" + conf.alluxioIPPort))).toSeq
               logInfo("Gary-Alluxio-paths: " + paths.mkString(","))
