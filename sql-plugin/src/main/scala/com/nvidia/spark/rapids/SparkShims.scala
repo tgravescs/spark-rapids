@@ -139,5 +139,7 @@ trait SparkShims {
   def copyFileSourceScanExec(
       scanExec: GpuFileSourceScanExec,
       queryUsesInputFile: Boolean): GpuFileSourceScanExec
+
+  def alluxioReplace(files: Array[PartitionedFile], alluxioIp: String):Array[PartitionedFile]
 }
 

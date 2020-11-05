@@ -23,7 +23,6 @@ import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.shims.spark300.Spark300Shims
 import org.apache.spark.sql.rapids.shims.spark300db._
 import org.apache.hadoop.fs.Path
-
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkEnv
 import org.apache.spark.sql.SparkSession
@@ -33,7 +32,7 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.physical.BroadcastMode
 import org.apache.spark.sql.execution._
-import org.apache.spark.sql.execution.datasources.{BucketingUtils, FilePartition, HadoopFsRelation, PartitionDirectory, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{BucketingUtils, FilePartition, HadoopFsRelation, InMemoryFileIndex, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.exchange.{BroadcastExchangeExec, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BroadcastNestedLoopJoinExec, HashJoin, SortMergeJoinExec}
@@ -42,8 +41,9 @@ import org.apache.spark.sql.rapids.{GpuFileSourceScanExec, GpuTimeSub}
 import org.apache.spark.sql.rapids.execution.{GpuBroadcastExchangeExecBase, GpuBroadcastMeta, GpuBroadcastNestedLoopJoinExecBase, GpuShuffleExchangeExecBase, GpuShuffleMeta}
 import org.apache.spark.sql.types._
 import org.apache.spark.storage.{BlockId, BlockManagerId}
+import org.apache.spark.internal.Logging
 
-class Spark300dbShims extends Spark300Shims {
+class Spark300dbShims extends Spark300Shims with Logging {
 
   override def getSparkShimVersion: ShimVersion = SparkShimServiceProvider.VERSION
 
@@ -201,4 +201,24 @@ class Spark300dbShims extends Spark300Shims {
       queryUsesInputFile: Boolean): GpuFileSourceScanExec = {
     scanExec.copy(queryUsesInputFile=queryUsesInputFile)
   }
+
+  override def alluxioReplace(files: Array[PartitionedFile], alluxioIp: String):Array[PartitionedFile] = {
+    files.map(pf => {
+      val locations = if (pf.locations == null) {
+        logInfo("Gary-Alluio alluxioReplace location: NULL")
+        null
+      } else {
+        logInfo("Gary-Alluio alluxioReplace location: " + pf.locations.mkString(","))
+        pf.locations.map(str => str.replaceFirst("s3:/", "alluxio://" + alluxioIp))
+      }
+      new PartitionedFile(pf.partitionValues,
+        pf.filePath.replaceFirst("s3:/", "alluxio://" + alluxioIp),
+        pf.start,
+        pf.length,
+        locations,
+        pf.modificationTime
+      )
+    })
+  }
+
 }

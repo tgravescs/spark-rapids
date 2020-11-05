@@ -318,6 +318,8 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   private val numThreads = rapidsConf.parquetMultiThreadReadNumThreads
   private val maxNumFileProcessed = rapidsConf.maxNumParquetFilesParallel
   private val canUseMultiThreadReader = rapidsConf.isParquetMultiThreadReadEnabled
+  private val alluxioEnabled = rapidsConf.alluxioEnabled
+  private val alluxioIPPort = rapidsConf.alluxioIPPort
   // we can't use the coalescing files reader when InputFileName, InputFileBlockStart,
   // or InputFileBlockLength because we are combining all the files into a single buffer
   // and we don't know which file is associated with each row.
@@ -386,7 +388,15 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   private def buildBaseColumnarParquetReaderForCloud(
       files: Array[PartitionedFile],
       conf: Configuration): PartitionReader[ColumnarBatch] = {
-    new MultiFileCloudParquetPartitionReader(conf, files,
+    logInfo("Gary-Alluxio GpuParquetScan: " + conf.toString())
+    val new_files = if (alluxioEnabled) {
+      logInfo("Gary-Alluxio GpuParquetScan: use alluxio")
+      ShimLoader.getSparkShims.alluxioReplace(files, alluxioIPPort)
+    } else {
+      files
+    }
+    logInfo("Gary-Alluxio GpuParquetScan: " + new_files.mkString(","))
+    new MultiFileCloudParquetPartitionReader(conf, new_files,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
       maxReadBatchSizeRows, maxReadBatchSizeBytes, metrics, partitionSchema,
       numThreads, maxNumFileProcessed, filterHandler, filters)

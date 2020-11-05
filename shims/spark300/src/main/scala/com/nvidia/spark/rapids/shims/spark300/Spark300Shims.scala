@@ -48,8 +48,9 @@ import org.apache.spark.sql.rapids.shims.spark300._
 import org.apache.spark.sql.types._
 import org.apache.spark.storage.{BlockId, BlockManagerId}
 import org.apache.spark.unsafe.types.CalendarInterval
+import org.apache.spark.internal.Logging
 
-class Spark300Shims extends SparkShims {
+class Spark300Shims extends SparkShims with Logging {
 
   override def getSparkShimVersion: ShimVersion = SparkShimServiceProvider.VERSION
 
@@ -390,4 +391,15 @@ class Spark300Shims extends SparkShims {
      exportColumnRdd: Boolean): GpuColumnarToRowExecParent = {
     GpuColumnarToRowExec(plan, exportColumnRdd)
   }
+
+  override def alluxioReplace(files: Array[PartitionedFile],
+                              alluxioIp: String):Array[PartitionedFile] = files.map(pf => {
+      logInfo("Gary-Alluio spark300shims alluxioReplace location: " + pf.locations.mkString(","))
+      new PartitionedFile(pf.partitionValues,
+          pf.filePath.replaceFirst("s3:/", "alluxio://" + alluxioIp),
+          pf.start,
+          pf.length,
+          pf.locations.map(str => str.replaceFirst("s3:/", "alluxio://" + alluxioIp))
+      )
+  })
 }
