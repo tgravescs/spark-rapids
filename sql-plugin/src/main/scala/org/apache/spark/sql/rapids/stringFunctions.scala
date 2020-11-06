@@ -22,6 +22,7 @@ import ai.rapids.cudf.{ColumnVector, DType, PadSide, Scalar, Table}
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{ExpectsInputTypes, Expression, ImplicitCastInputTypes, NullIntolerant, Predicate, StringSplit, SubstringIndex}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
@@ -810,7 +811,7 @@ class GpuStringSplitMeta(
 }
 
 case class GpuStringSplit(str: Expression, regex: Expression, limit: Expression)
-    extends GpuTernaryExpression with ImplicitCastInputTypes {
+    extends GpuTernaryExpression with ImplicitCastInputTypes with Logging {
 
   override def dataType: DataType = ArrayType(StringType)
   override def inputTypes: Seq[DataType] = Seq(StringType, StringType, IntegerType)
@@ -822,6 +823,8 @@ case class GpuStringSplit(str: Expression, regex: Expression, limit: Expression)
 
   override def doColumnar(str: GpuColumnVector, regex: Scalar, limit: Scalar): GpuColumnVector = {
     val intLimit = limit.getInt
+    logWarning("do columnar string split, vector type is: " + str.getBase().getDataType)
+    logWarning("do columnar string split, data type reported is : " + dataType)
     GpuColumnVector.from(str.getBase.stringSplitRecord(regex, intLimit))
   }
 

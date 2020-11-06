@@ -19,6 +19,7 @@ package com.nvidia.spark.rapids
 import ai.rapids.cudf.{BinaryOp, BinaryOperable, DType, Scalar, UnaryOp}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.vectorized.ColumnarBatch
@@ -106,7 +107,7 @@ abstract class GpuUnevaluableUnaryExpression extends GpuUnaryExpression with Gpu
     throw new UnsupportedOperationException(s"Cannot columnar evaluate expression: $this")
 }
 
-abstract class GpuUnaryExpression extends UnaryExpression with GpuExpression {
+abstract class GpuUnaryExpression extends UnaryExpression with GpuExpression with Logging {
   protected def doColumnar(input: GpuColumnVector): GpuColumnVector
 
   def outputTypeOverride: DType = null
@@ -116,10 +117,13 @@ abstract class GpuUnaryExpression extends UnaryExpression with GpuExpression {
     try {
       input match {
         case vec: GpuColumnVector =>
+          logWarning(s"unary expression base type is: ${vec.getBase().getType()}")
           var tmp = doColumnar(vec)
           try {
             val base = tmp.getBase
             if (outputTypeOverride != null && outputTypeOverride != base.getType) {
+              logWarning(s"override type is: $outputTypeOverride")
+              logWarning(s"base type is: ${base.getType}")
               GpuColumnVector.from(base.castTo(outputTypeOverride))
             } else {
               val r = tmp

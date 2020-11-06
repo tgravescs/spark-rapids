@@ -33,6 +33,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+
 /**
  * A GPU accelerated version of the Spark ColumnVector.
  * Most of the standard Spark APIs should never be called, as they assume that the data
@@ -40,6 +44,9 @@ import java.util.List;
  * We also provide GPU accelerated versions of the transitions to and from rows.
  */
 public class GpuColumnVector extends GpuColumnVectorBase {
+
+  private static final Logger logger = LoggerFactory.getLogger(GpuColumnVector.class);
+
 
   public static final class GpuColumnarBatchBuilder implements AutoCloseable {
     private final ai.rapids.cudf.HostColumnVector.ColumnBuilder[] builders;
@@ -208,6 +215,8 @@ public class GpuColumnVector extends GpuColumnVectorBase {
 
   protected static final <T> DataType getSparkTypeFrom(ColumnViewAccess<T> access) {
     DType type = access.getDataType();
+    // logger.warn("tyep from spark is " + type + "stack tracke: " + Arrays.toString(Thread.currentThread().getStackTrace()).replace( ',', '\n' ));
+    logger.warn("tyep from spark is " + type);
     if (type == DType.LIST) {
       try (ColumnViewAccess<T> child = access.getChildColumnViewAccess(0)) {
         return new ArrayType(getSparkTypeFrom(child), true);

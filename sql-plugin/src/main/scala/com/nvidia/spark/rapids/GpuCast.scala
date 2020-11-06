@@ -22,6 +22,7 @@ import java.util.{Calendar, TimeZone}
 
 import ai.rapids.cudf.{ColumnVector, DType, Scalar}
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.analysis.TypeCheckResult
 import org.apache.spark.sql.catalyst.expressions.{Cast, CastBase, Expression, NullIntolerant, TimeZoneAwareExpression}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
@@ -192,7 +193,7 @@ case class GpuCast(
     dataType: DataType,
     ansiMode: Boolean = false,
     timeZoneId: Option[String] = None)
-  extends GpuUnaryExpression with TimeZoneAwareExpression with NullIntolerant {
+  extends GpuUnaryExpression with TimeZoneAwareExpression with NullIntolerant with Logging {
 
   import GpuCast._
 
@@ -247,6 +248,7 @@ case class GpuCast(
   }
 
   override def doColumnar(input: GpuColumnVector): GpuColumnVector = {
+    logWarning("gpu cast input type is : " + input.dataType() + " to: " + dataType)
     (input.dataType(), dataType) match {
       case (DateType, BooleanType | _: NumericType) =>
         // casts from date type to numerics are always null
@@ -459,8 +461,10 @@ case class GpuCast(
       case (ShortType | IntegerType | LongType | ByteType | StringType, BinaryType) =>
         new GpuColumnVector(BinaryType, input.getBase.asByteList(true))
 
-      case _ =>
+      case _ => {
+        logWarning(" stack trace is: " + Thread.currentThread().getStackTrace().mkString(","))
         GpuColumnVector.from(input.getBase.castTo(GpuColumnVector.getRapidsType(dataType)))
+      }
     }
   }
 
