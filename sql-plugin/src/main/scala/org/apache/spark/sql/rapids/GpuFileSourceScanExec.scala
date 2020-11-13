@@ -19,14 +19,13 @@ package org.apache.spark.sql.rapids
 import java.util.concurrent.TimeUnit.NANOSECONDS
 
 import scala.collection.mutable.HashMap
-
 import com.nvidia.spark.rapids.{GpuExec, GpuMetricNames, GpuParquetMultiFilePartitionReaderFactory, GpuReadCSVFileFormat, GpuReadFileFormatWithMetrics, GpuReadOrcFileFormat, GpuReadParquetFileFormat, RapidsConf, ShimLoader, SparkPlanMeta}
 import org.apache.hadoop.fs.Path
-
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
-import org.apache.spark.sql.catalyst.expressions.{And, Ascending, Attribute, AttributeReference, BoundReference, DynamicPruningExpression, Expression, Literal, PlanExpression, Predicate, SortOrder}
+import org.apache.spark.sql.catalyst.expressions.{And, Ascending, Attribute, AttributeReference, BoundReference, DynamicPruningExpression, Expression, ExpressionSet, Literal, PlanExpression, Predicate, SortOrder}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.physical.{HashPartitioning, Partitioning, UnknownPartitioning}
 import org.apache.spark.sql.execution.{ExecSubqueryExpression, ExplainUtils, FileSourceScanExec, SQLExecution}
@@ -65,7 +64,7 @@ case class GpuFileSourceScanExec(
     dataFilters: Seq[Expression],
     tableIdentifier: Option[TableIdentifier],
     supportsSmallFileOpt: Boolean = true)
-    extends GpuDataSourceScanExec with GpuExec {
+    extends GpuDataSourceScanExec with GpuExec with Logging {
 
   override val nodeName: String = {
     s"GpuScan $relation ${tableIdentifier.map(_.unquotedString).getOrElse("")}"
@@ -90,6 +89,13 @@ case class GpuFileSourceScanExec(
   @transient lazy val selectedPartitions: Array[PartitionDirectory] = {
     val optimizerMetadataTimeNs = relation.location.metadataOpsTimeNs.getOrElse(0L)
     val startTime = System.nanoTime()
+
+    val allFilters = ExpressionSet(partitionFilters.filterNot(isDynamicPruningFilter)
+      ++ dataFilters)
+    if (partitionFilters.length > 0) {
+      logInfo("Gary-Alluxio: dataFilters[0] " + partitionFilters(0))
+    }
+    logInfo("Gary-Alluxio: in selectedPartitions allFilters:" + allFilters)
     val ret =
       relation.location.listFiles(
         partitionFilters.filterNot(isDynamicPruningFilter), dataFilters)
@@ -100,6 +106,9 @@ case class GpuFileSourceScanExec(
     val timeTakenMs = NANOSECONDS.toMillis(
       (System.nanoTime() - startTime) + optimizerMetadataTimeNs)
     driverMetrics("metadataTime") = timeTakenMs
+    var sum = 0
+    ret.foreach(x => sum = sum + x.files.length)
+    logInfo("Gary-Alluxio selected Partitions: is " + sum)
     ret
   }.toArray
 
