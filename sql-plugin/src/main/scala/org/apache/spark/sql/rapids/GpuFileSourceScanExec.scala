@@ -103,6 +103,7 @@ case class GpuFileSourceScanExec(
       logInfo("Gary-Alluxio: dataFilters[0] " + partitionFilters(0))
     }
     logInfo("Gary-Alluxio: in selectedPartitions allFilters:" + allFilters)
+    val start = System.currentTimeMillis
     val ret =
       relation.location.listFiles(
         partitionFilters.filterNot(isDynamicPruningFilter), dataFilters)
@@ -115,7 +116,8 @@ case class GpuFileSourceScanExec(
     driverMetrics("metadataTime") = timeTakenMs
     var sum = 0
     ret.foreach(x => sum = sum + x.files.length)
-    logInfo("Gary-Alluxio selected Partitions: is " + sum)
+    val duration = (System.currentTimeMillis - start).toFloat - start
+    logInfo("Gary-Alluxio selected Partitions: " + sum + " elapsed time:" + duration)
     ret
   }.toArray
 

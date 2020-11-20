@@ -128,14 +128,16 @@ class Spark300dbShims extends Spark300Shims with Logging {
               && wrapped.relation.location.getClass.getCanonicalName() ==
               "com.databricks.sql.transaction.tahoe.stats.PreparedDeltaFileIndex") {
 
+              val start = System.currentTimeMillis
+              logInfo("Gary-Alluxio ++++++++++++++++++ begin to replace S3:// to alluxio://")
               val preparedDeltaFileIndex = wrapped.relation.location.asInstanceOf[PreparedDeltaFileIndex]
               val deltaScanFileLength = preparedDeltaFileIndex.preparedScan.files.length
-              logInfo("Gary-Alluxio - deltaScanFileLength : " + deltaScanFileLength)
+              logInfo("Gary-Alluxio deltaScanFileLength : " + deltaScanFileLength)
               logInfo("Gary-Alluxio deltascan partitionFilters:" + preparedDeltaFileIndex.preparedScan.partitionFilters)
               logInfo("Gary-Alluxio deltascan dataFilters:" + preparedDeltaFileIndex.preparedScan.dataFilters)
               logInfo("Gary-Alluxio deltascan unusedFilters:" + preparedDeltaFileIndex.preparedScan.unusedFilters)
               logInfo("Gary-Alluxio deltascan allFilters:" + preparedDeltaFileIndex.preparedScan.allFilters)
-              logInfo("Gary-Alluxio -deltascan-- location:" + wrapped.relation.location)
+              logInfo("Gary-Alluxio deltascan location:" + wrapped.relation.location)
 //              logInfo("Gary-Alluxio get preparedScan " + wrapped.relation.location.preparedScan)
 
               // Need to change the IP address of Alluxio
@@ -216,25 +218,26 @@ class Spark300dbShims extends Spark300Shims with Logging {
 //              logInfo("Gary-Alluxio final partitionDirectory total files:" + sum)
 
               logInfo("Gary-Alluxio partitionSpec: " + fileIndex.partitionSpec().partitionColumns)
+              val duration = (System.currentTimeMillis - start).toFloat / 1000
+              logInfo("Gary-Alluxio ----------- end to replace S3:// to alluxio:// elapsed time:" +
+                duration)
               fileIndex
             } else {
               logInfo("Gary-Alluxio-paths: no change")
               wrapped.relation.location
             }
 
-            logInfo("Gary-Alluxio: partitionSchema0: " + wrapped.relation.location.partitionSchema.treeString)
-//            logInfo("Gary-Alluxio: " + location.inputFiles.mkString(","))
-            logInfo("Gary-Alluxio: location class name:" + location.getClass.getCanonicalName)
-            logInfo("Gary-Alluxio: partitionSchema1: " + wrapped.relation.partitionSchema.treeString)
-            logInfo("Gary-Alluxio: dataSchema: " + wrapped.relation.dataSchema.treeString)
-            logInfo("Gary-Alluxio: bucketSpec: " + wrapped.relation.bucketSpec.toString())
-            logInfo("Gary-Alluxio: fileFormat: " + wrapped.relation.fileFormat.toString())
-            logInfo("Gary-Alluxio: options: " + options.toString())
-            logInfo("Gary-Alluxio: partitionFilters:" + wrapped.partitionFilters)
-            logInfo("Gary-Alluxio: dataFilters:" + wrapped.dataFilters)
-            logInfo("Gary-Alluxio: tableIdentifier:" + wrapped.tableIdentifier)
-
-
+//            logInfo("Gary-Alluxio: partitionSchema0: " + wrapped.relation.location.partitionSchema.treeString)
+////            logInfo("Gary-Alluxio: " + location.inputFiles.mkString(","))
+//            logInfo("Gary-Alluxio: location class name:" + location.getClass.getCanonicalName)
+//            logInfo("Gary-Alluxio: partitionSchema1: " + wrapped.relation.partitionSchema.treeString)
+//            logInfo("Gary-Alluxio: dataSchema: " + wrapped.relation.dataSchema.treeString)
+//            logInfo("Gary-Alluxio: bucketSpec: " + wrapped.relation.bucketSpec.toString())
+//            logInfo("Gary-Alluxio: fileFormat: " + wrapped.relation.fileFormat.toString())
+//            logInfo("Gary-Alluxio: options: " + options.toString())
+//            logInfo("Gary-Alluxio: partitionFilters:" + wrapped.partitionFilters)
+//            logInfo("Gary-Alluxio: dataFilters:" + wrapped.dataFilters)
+//            logInfo("Gary-Alluxio: tableIdentifier:" + wrapped.tableIdentifier)
 
             val newRelation = HadoopFsRelation(
               location,
