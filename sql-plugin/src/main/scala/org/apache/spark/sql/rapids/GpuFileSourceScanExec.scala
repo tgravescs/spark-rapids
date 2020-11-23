@@ -116,8 +116,8 @@ case class GpuFileSourceScanExec(
     driverMetrics("metadataTime") = timeTakenMs
     var sum = 0
     ret.foreach(x => sum = sum + x.files.length)
-    val duration = (System.currentTimeMillis - start).toFloat - start
-    logInfo("Gary-Alluxio selected Partitions: " + sum + " elapsed time:" + duration)
+    val duration = (System.currentTimeMillis - start).toFloat / 1000 
+    logInfo("Gary-Alluxio in selectedPartitions selected Partitions: " + sum + " elapsed time:" + duration)
     ret
   }.toArray
 
