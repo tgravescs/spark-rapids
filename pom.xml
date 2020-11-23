@@ -125,7 +125,7 @@
             </build>
         </profile>
         <profile>
-            <id>databricks301</id>
+            <id>databricks</id>
             <properties>
 	        <rat.consoleOutput>true</rat.consoleOutput>
             </properties>
