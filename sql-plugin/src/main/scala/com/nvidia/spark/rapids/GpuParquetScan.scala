@@ -418,13 +418,22 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       files: Array[PartitionedFile],
       conf: Configuration): PartitionReader[ColumnarBatch] = {
     val conf = broadcastedConf.value.value
-    val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
+    var clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
     files.map { file =>
       val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
       clippedBlocks ++= singleFileInfo.blocks.map(
         ParquetFileInfoWithSingleBlockMeta(singleFileInfo.filePath, _, file.partitionValues,
           singleFileInfo.schema, singleFileInfo.isCorrectedRebaseMode))
     }
+
+
+    logInfo("Gary-Alluxio before")
+    clippedBlocks.foreach(p => logInfo("Gary-Alluxio: before " + p.filePath.toString))
+
+    clippedBlocks = clippedBlocks.sortWith((p1, p2) =>
+      p1.filePath.toString.compareTo(p2.filePath.toString) < 0)
+    logInfo("Gary-Alluxio after")
+    clippedBlocks.foreach(p => logInfo("Gary-Alluxio: after " + p.filePath.toString))
 
     new MultiFileParquetPartitionReader(conf, files, clippedBlocks,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
