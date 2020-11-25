@@ -712,8 +712,10 @@ abstract class FileParquetPartitionReaderBase(
       blocks: Seq[BlockMetaData],
       clippedSchema: MessageType,
       filePath: Path): (HostMemoryBuffer, Long) = {
-    withResource(new NvtxWithMetrics("Buffer file split", NvtxColor.YELLOW,
-      metrics("bufferTime"))) { _ =>
+    val start = System.currentTimeMillis
+    // withResource(new NvtxRange("Buffer file split", NvtxColor.YELLOW,
+      // metrics("bufferTime"))) { _ =>
+    withResource(new NvtxRange("Buffer file split", NvtxColor.YELLOW)) { _ =>
       withResource(filePath.getFileSystem(conf).open(filePath)) { in =>
         val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema, false)
         closeOnExcept(HostMemoryBuffer.allocate(estTotalSize)) { hmb =>
@@ -730,6 +732,7 @@ abstract class FileParquetPartitionReaderBase(
             throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is to " +
               s"small, actual written: ${out.getPos}")
           }
+          logWarning(s"bufferTime = ${System.currentTimeMillis - start}")
           (hmb, out.getPos)
         }
       }
@@ -914,6 +917,7 @@ class MultiFileParquetPartitionReader(
   private def readPartFiles(
       blocks: Seq[(Path, BlockMetaData)],
       clippedSchema: MessageType): (HostMemoryBuffer, Long) = {
+    val start = System.currentTimeMillis
     withResource(new NvtxWithMetrics("Buffer file split", NvtxColor.YELLOW,
       metrics("bufferTime"))) { _ =>
       // ugly but we want to keep the order
@@ -981,6 +985,7 @@ class MultiFileParquetPartitionReader(
         if (finalizehmb != null) {
           finalizehmb.close()
         }
+        logWarning(s"bufferTime = ${System.currentTimeMillis - start}")
         (hmb, amountWritten)
       }
     }
@@ -1033,11 +1038,7 @@ class MultiFileParquetPartitionReader(
     if (currentChunkedBlocks.isEmpty) {
       return None
     }
-    val (dataBuffer, dataSize) =
-    withResource(new NvtxWithMetrics("Parquet read part files", NvtxColor.GREEN,
-      metrics("readPartFiles"))) { _ =>
-        readPartFiles(currentChunkedBlocks, clippedSchema)
-      }
+    val (dataBuffer, dataSize) = readPartFiles(currentChunkedBlocks, clippedSchema)
     try {
       if (dataSize == 0) {
         None
@@ -1201,7 +1202,7 @@ class MultiFileCloudParquetPartitionReader(
 
   case class HostMemoryBuffersWithMetaData(isCorrectRebaseMode: Boolean, clippedSchema: MessageType,
       partValues: InternalRow, memBuffersAndSizes: Array[(HostMemoryBuffer, Long)],
-      fileName: String, fileStart: Long, fileLength: Long)
+      fileName: String, fileStart: Long, fileLength: Long, bufferTime: Long)
 
   private var filesToRead = 0
   private var currentFileHostBuffers: Option[HostMemoryBuffersWithMetaData] = None
@@ -1226,13 +1227,14 @@ class MultiFileCloudParquetPartitionReader(
      */
     override def call(): HostMemoryBuffersWithMetaData = {
       val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
+      var totalBufferTime = 0L
       try {
         val fileBlockMeta = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
         if (fileBlockMeta.blocks.length == 0) {
           // no blocks so return null buffer and size 0
           return HostMemoryBuffersWithMetaData(fileBlockMeta.isCorrectedRebaseMode,
             fileBlockMeta.schema, fileBlockMeta.partValues, Array((null, 0)),
-            file.filePath, file.start, file.length)
+            file.filePath, file.start, file.length, totalBufferTime)
         }
         blockChunkIter = fileBlockMeta.blocks.iterator.buffered
         if (isDone) {
@@ -1240,14 +1242,14 @@ class MultiFileCloudParquetPartitionReader(
           HostMemoryBuffersWithMetaData(
             fileBlockMeta.isCorrectedRebaseMode,
             fileBlockMeta.schema, fileBlockMeta.partValues, Array((null, 0)),
-            file.filePath, file.start, file.length)
+            file.filePath, file.start, file.length, totalBufferTime)
         } else {
           if (readDataSchema.isEmpty) {
             val numRows = fileBlockMeta.blocks.map(_.getRowCount).sum.toInt
             // overload size to be number of rows with null buffer
             HostMemoryBuffersWithMetaData(fileBlockMeta.isCorrectedRebaseMode,
               fileBlockMeta.schema, fileBlockMeta.partValues, Array((null, numRows)),
-              file.filePath, file.start, file.length)
+              file.filePath, file.start, file.length, totalBufferTime)
 
           } else {
             val filePath = new Path(new URI(file.filePath))
@@ -1255,18 +1257,20 @@ class MultiFileCloudParquetPartitionReader(
               val blocksToRead = populateCurrentBlockChunk(blockChunkIter,
                 maxReadBatchSizeRows, maxReadBatchSizeBytes)
               val blockTotalSize = blocksToRead.map(_.getTotalByteSize).sum
+              val bufferStartTime = System.nanoTime()
               hostBuffers += readPartFile(blocksToRead, fileBlockMeta.schema, filePath)
+              totalBufferTime += (System.nanoTime() - bufferStartTime)
             }
             if (isDone) {
               // got close before finishing
               hostBuffers.foreach(_._1.safeClose())
               HostMemoryBuffersWithMetaData(fileBlockMeta.isCorrectedRebaseMode,
                 fileBlockMeta.schema, fileBlockMeta.partValues, Array((null, 0)),
-                file.filePath, file.start, file.length)
+                file.filePath, file.start, file.length, totalBufferTime)
             } else {
               HostMemoryBuffersWithMetaData(fileBlockMeta.isCorrectedRebaseMode,
                 fileBlockMeta.schema, fileBlockMeta.partValues, hostBuffers.toArray,
-                file.filePath, file.start, file.length)
+                file.filePath, file.start, file.length, totalBufferTime)
             }
           }
         }
@@ -1343,6 +1347,9 @@ class MultiFileCloudParquetPartitionReader(
         currentFileHostBuffers = None
         if (filesToRead > 0 && !isDone) {
           val fileBufsAndMeta = tasks.poll.get()
+          val bufferTime = fileBufsAndMeta.bufferTime
+          logWarning(s"total buffer time for task: ${TaskContext.get()taskAttemptId()} is $bufferTime")
+          metrics("bufferTime").add(bufferTime)
           filesToRead -= 1
           InputFileUtils.setInputFileBlock(fileBufsAndMeta.fileName, fileBufsAndMeta.fileStart,
             fileBufsAndMeta.fileLength)
