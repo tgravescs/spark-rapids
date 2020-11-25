@@ -420,12 +420,15 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     val conf = broadcastedConf.value.value
     val start = System.currentTimeMillis
     val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
+    withResource(new NvtxWithMetrics("filter split", NvtxColor.YELLOW,
+      metrics("filterTime"))) { _ =>
     files.map { file =>
       val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
       clippedBlocks ++= singleFileInfo.blocks.map(
         ParquetFileInfoWithSingleBlockMeta(singleFileInfo.filePath, _, file.partitionValues,
           singleFileInfo.schema, singleFileInfo.isCorrectedRebaseMode))
     }
+      }
 
     val end = System.currentTimeMillis
     logWarning("time to filter blocks is: " + (end -start))
@@ -1060,6 +1063,8 @@ class MultiFileParquetPartitionReader(
           metrics(GPU_DECODE_TIME))) { _ =>
           Table.readParquet(parseOpts, dataBuffer, 0, dataSize)
         }
+    withResource(new NvtxWithMetrics("rest of time", NvtxColor.GREEN,
+      metrics("restTime"))) { _ =>
         closeOnExcept(table) { _ =>
           if (!isCorrectRebaseMode) {
             (0 until table.getNumberOfColumns).foreach { i =>
@@ -1076,6 +1081,7 @@ class MultiFileParquetPartitionReader(
         }
         metrics(NUM_OUTPUT_BATCHES) += 1
         Some(evolveSchemaIfNeededAndClose(table, splits.mkString(","), clippedSchema))
+      }
       }
     } finally {
       logWarning(s"took ${System.currentTimeMillis - startReadTable} to do read to table")
@@ -1228,6 +1234,8 @@ class MultiFileCloudParquetPartitionReader(
     override def call(): HostMemoryBuffersWithMetaData = {
       val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
       var totalBufferTime = 0L
+    withResource(new NvtxWithMetrics("rest of time", NvtxColor.GREEN,
+      metrics("restTime"))) { _ =>
       try {
         val fileBlockMeta = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
         if (fileBlockMeta.blocks.length == 0) {
@@ -1278,6 +1286,7 @@ class MultiFileCloudParquetPartitionReader(
         case e: Throwable =>
           hostBuffers.foreach(_._1.safeClose())
           throw e
+      }
       }
     }
   }
