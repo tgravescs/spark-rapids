@@ -418,6 +418,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       files: Array[PartitionedFile],
       conf: Configuration): PartitionReader[ColumnarBatch] = {
     val conf = broadcastedConf.value.value
+    val start = System.currentTimeMillis
     val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
     files.map { file =>
       val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
@@ -426,6 +427,8 @@ case class GpuParquetMultiFilePartitionReaderFactory(
           singleFileInfo.schema, singleFileInfo.isCorrectedRebaseMode))
     }
 
+    val end = System.currentTimeMillis
+    logWarning("time to filter blocks is: " + (end -start))
     new MultiFileParquetPartitionReader(conf, files, clippedBlocks,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
       maxReadBatchSizeRows, maxReadBatchSizeBytes, metrics,
@@ -987,7 +990,10 @@ class MultiFileParquetPartitionReader(
     withResource(new NvtxWithMetrics("Parquet readBatch", NvtxColor.GREEN,
       metrics(TOTAL_TIME))) { _ =>
       val (isCorrectRebaseMode, clippedSchema, partValues, seqPathsAndBlocks) =
+        withResource(new NvtxWithMetrics("Parquet populate chunk", NvtxColor.GREEN,
+          metrics("populateChunk"))) { _ =>
         populateCurrentBlockChunk()
+        }
       if (readDataSchema.isEmpty) {
         // not reading any data, so return a degenerate ColumnarBatch with the row count
         val numRows = seqPathsAndBlocks.map(_._2.getRowCount).sum.toInt
@@ -1021,10 +1027,17 @@ class MultiFileParquetPartitionReader(
       currentChunkedBlocks: Seq[(Path, BlockMetaData)],
       clippedSchema: MessageType,
       isCorrectRebaseMode: Boolean): Option[Table] = {
+    val startReadTable = System.currentTimeMillis
+    withResource(new NvtxWithMetrics("Parquet to table", NvtxColor.GREEN,
+      metrics("readToTable"))) { _ =>
     if (currentChunkedBlocks.isEmpty) {
       return None
     }
-    val (dataBuffer, dataSize) = readPartFiles(currentChunkedBlocks, clippedSchema)
+    val (dataBuffer, dataSize) =
+    withResource(new NvtxWithMetrics("Parquet read part files", NvtxColor.GREEN,
+      metrics("readPartFiles"))) { _ =>
+        readPartFiles(currentChunkedBlocks, clippedSchema)
+      }
     try {
       if (dataSize == 0) {
         None
@@ -1037,7 +1050,10 @@ class MultiFileParquetPartitionReader(
           .includeColumn(readDataSchema.fieldNames:_*).build()
 
         // about to start using the GPU
+    withResource(new NvtxWithMetrics("Parquet acquire sem", NvtxColor.GREEN,
+      metrics("acquireSemaphore"))) { _ =>
         GpuSemaphore.acquireIfNecessary(TaskContext.get())
+      }
 
         val table = withResource(new NvtxWithMetrics("Parquet decode", NvtxColor.DARK_GREEN,
           metrics(GPU_DECODE_TIME))) { _ =>
@@ -1061,8 +1077,10 @@ class MultiFileParquetPartitionReader(
         Some(evolveSchemaIfNeededAndClose(table, splits.mkString(","), clippedSchema))
       }
     } finally {
+      logWarning(s"took ${System.currentTimeMillis - startReadTable} to do read to table")
       dataBuffer.close()
     }
+      }
   }
 
   private def populateCurrentBlockChunk():
@@ -1395,6 +1413,9 @@ class MultiFileCloudParquetPartitionReader(
       hostBuffer: HostMemoryBuffer,
       dataSize: Long,
       fileName: String): Option[ColumnarBatch] = {
+    withResource(new NvtxWithMetrics("Parquet read buffer to table", NvtxColor.GREEN,
+      metrics("readToTable"))) { _ =>
+    val startReadTable = System.currentTimeMillis
     if (dataSize == 0) {
       // shouldn't ever get here
       None
@@ -1402,7 +1423,10 @@ class MultiFileCloudParquetPartitionReader(
     // not reading any data, but add in partition data if needed
     if (hostBuffer == null) {
       // Someone is going to process this data, even if it is just a row count
+    withResource(new NvtxWithMetrics("Parquet acquire sem", NvtxColor.GREEN,
+      metrics("acquireSemaphore"))) { _ =>
       GpuSemaphore.acquireIfNecessary(TaskContext.get())
+      }
       val emptyBatch = new ColumnarBatch(Array.empty, dataSize.toInt)
       return addPartitionValues(Some(emptyBatch), partValues, partitionSchema)
     }
@@ -1415,7 +1439,10 @@ class MultiFileCloudParquetPartitionReader(
         .includeColumn(readDataSchema.fieldNames: _*).build()
 
       // about to start using the GPU
+    withResource(new NvtxWithMetrics("Parquet acquire sem", NvtxColor.GREEN,
+      metrics("acquireSemaphore"))) { _ =>
       GpuSemaphore.acquireIfNecessary(TaskContext.get())
+      }
 
       val table = withResource(new NvtxWithMetrics("Parquet decode", NvtxColor.DARK_GREEN,
         metrics(GPU_DECODE_TIME))) { _ =>
@@ -1448,8 +1475,10 @@ class MultiFileCloudParquetPartitionReader(
       // its not different for all the blocks in this batch
       addPartitionValues(maybeBatch, partValues, partitionSchema)
     } finally {
+      logWarning(s"took ${System.currentTimeMillis - startReadTable} to do read to table")
       table.foreach(_.close())
     }
+      }
   }
 }
 
@@ -1508,7 +1537,8 @@ class ParquetPartitionReader(
   private def readBatch(): Option[ColumnarBatch] = {
     withResource(new NvtxWithMetrics("Parquet readBatch", NvtxColor.GREEN,
         metrics(TOTAL_TIME))) { _ =>
-      val currentChunkedBlocks = populateCurrentBlockChunk(blockIterator,
+       val currentChunkedBlocks =
+          populateCurrentBlockChunk(blockIterator,
         maxReadBatchSizeRows, maxReadBatchSizeBytes)
       if (readDataSchema.isEmpty) {
         // not reading any data, so return a degenerate ColumnarBatch with the row count

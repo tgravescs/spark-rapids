@@ -52,6 +52,10 @@ object GpuMetricNames {
     Map(
       NUM_OUTPUT_BATCHES -> SQLMetrics.createMetric(sparkContext, DESCRIPTION_NUM_OUTPUT_BATCHES),
       TOTAL_TIME -> SQLMetrics.createNanoTimingMetric(sparkContext, DESCRIPTION_TOTAL_TIME),
+      "readToTable" -> SQLMetrics.createNanoTimingMetric(sparkContext, "readtoTable Time"),
+      "populateChunk" -> SQLMetrics.createNanoTimingMetric(sparkContext, "populateChunk Time"),
+      "readPartFiles" -> SQLMetrics.createNanoTimingMetric(sparkContext, "read part files Time"),
+      "acquireSemaphore" -> SQLMetrics.createNanoTimingMetric(sparkContext, "acquire semaphore Time"),
       GPU_DECODE_TIME -> SQLMetrics.createNanoTimingMetric(sparkContext, "GPU decode time"),
       BUFFER_TIME -> SQLMetrics.createNanoTimingMetric(sparkContext, "buffer time"),
       PEAK_DEVICE_MEMORY -> SQLMetrics.createSizeMetric(sparkContext,
