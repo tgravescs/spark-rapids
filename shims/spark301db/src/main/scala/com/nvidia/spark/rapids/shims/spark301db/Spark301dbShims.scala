@@ -164,8 +164,6 @@ class Spark301dbShims extends Spark301Shims with Logging {
                 userSpecifiedPartitionSpec = Some(partitionSpec)
               )
 
-              // logInfo("Gary-Alluxio partitionSpec: " + fileIndex.partitionSpec().partitionColumns)
-              val duration = (System.currentTimeMillis - start).toFloat / 1000
               fileIndex
             } else {
               wrapped.relation.location
