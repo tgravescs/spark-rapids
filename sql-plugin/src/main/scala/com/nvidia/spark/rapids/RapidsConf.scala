@@ -777,6 +777,16 @@ object RapidsConf {
     .booleanConf
     .createWithDefault(false)
 
+  val ALLUXIO_ENABLED = conf("spark.rapids.alluxio.enabled")
+    .doc("Enable Alluxio")
+    .booleanConf
+    .createWithDefault(false)
+
+  val ALLUXIO_IPPORT = conf("spark.rapids.alluxio.ipport")
+    .doc("Provides the IP:Port of alluxio service")
+    .stringConf
+    .createWithDefault("0.0.0.0:19998")
+
   private def printSectionHeader(category: String): Unit =
     println(s"\n### $category")
 
@@ -1063,6 +1073,10 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val cudfVersionOverride: Boolean = get(CUDF_VERSION_OVERRIDE)
 
   lazy val getCloudSchemes: Option[Seq[String]] = get(CLOUD_SCHEMES)
+
+  lazy val alluxioIPPort: String = get(ALLUXIO_IPPORT)
+
+  lazy val alluxioEnabled: Boolean = get(ALLUXIO_ENABLED)
 
   def isOperatorEnabled(key: String, incompat: Boolean, isDisabledByDefault: Boolean): Boolean = {
     val default = !(isDisabledByDefault || incompat) || (incompat && isIncompatEnabled)
