@@ -16,23 +16,27 @@
 
 package com.nvidia.spark.rapids
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Ascending, Attribute, AttributeReference, Expression, InputFileBlockLength, InputFileBlockStart, InputFileName, SortOrder}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.adaptive.{AdaptiveSparkPlanExec, BroadcastQueryStageExec, CustomShuffleReaderExec, QueryStageExec, ShuffleQueryStageExec}
 import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
 import org.apache.spark.sql.execution.command.ExecutedCommandExec
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanExecBase
+import org.apache.spark.sql.execution.datasources.v2.{BatchScanExec, DataSourceV2ScanExecBase}
 import org.apache.spark.sql.execution.exchange.{Exchange, ReusedExchangeExec, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BroadcastNestedLoopJoinExec}
 import org.apache.spark.sql.rapids.{GpuDataSourceScanExec, GpuFileSourceScanExec, GpuInputFileBlockLength, GpuInputFileBlockStart, GpuInputFileName, GpuShuffleEnv}
 import org.apache.spark.sql.rapids.execution.{GpuBroadcastExchangeExecBase, GpuCustomShuffleReaderExec, GpuShuffleExchangeExecBase}
 
+
+trait GpuDataLoading
+
 /**
  * Rules that run after the row to columnar and columnar to row transitions have been inserted.
  * These rules insert transitions to and from the GPU, and then optimize various transitions.
  */
-class GpuTransitionOverrides extends Rule[SparkPlan] {
+class GpuTransitionOverrides extends Rule[SparkPlan] with Logging {
   var conf: RapidsConf = null
 
   def optimizeGpuPlanTransitions(plan: SparkPlan): SparkPlan = plan match {
@@ -323,6 +327,14 @@ class GpuTransitionOverrides extends Rule[SparkPlan] {
   private def insertColumnarToGpu(plan: SparkPlan): SparkPlan = {
     val nonQueryStagePlan = getNonQueryStagePlan(plan)
     if (nonQueryStagePlan.supportsColumnar && !nonQueryStagePlan.isInstanceOf[GpuExec]) {
+      logWarning("inserting host columnar to gpu, class type: " + nonQueryStagePlan.getClass)
+      if (nonQueryStagePlan.isInstanceOf[BatchScanExec]) {
+        logWarning("inserting host columnar to gpu batch scan: " +
+          nonQueryStagePlan.asInstanceOf[BatchScanExec].scan.getClass)
+        if (nonQueryStagePlan.asInstanceOf[BatchScanExec].scan.isInstanceOf[GpuDataLoading]) {
+           logWarning("inserting host columnar instance of GpuDataLoading")
+        }
+      }
       HostColumnarToGpu(insertColumnarFromGpu(plan), TargetSize(conf.gpuTargetBatchSizeBytes))
     } else {
       plan.withNewChildren(plan.children.map(insertColumnarToGpu))
@@ -453,8 +465,10 @@ class GpuTransitionOverrides extends Rule[SparkPlan] {
   override def apply(plan: SparkPlan): SparkPlan = {
     this.conf = new RapidsConf(plan.conf)
     if (conf.isSqlEnabled) {
+      logWarning("first " + plan)
       var updatedPlan = insertHashOptimizeSorts(plan)
       updatedPlan = updateScansForInput(updatedPlan)
+      logWarning("before inst colum to gpu" + updatedPlan)
       updatedPlan = insertColumnarFromGpu(updatedPlan)
       updatedPlan = insertCoalesce(updatedPlan)
       // only insert shuffle coalesces when using normal shuffle
@@ -464,7 +478,9 @@ class GpuTransitionOverrides extends Rule[SparkPlan] {
       if (plan.conf.adaptiveExecutionEnabled) {
         updatedPlan = optimizeAdaptiveTransitions(updatedPlan, None)
       } else {
+      logWarning("before optimize gpu " + updatedPlan)
         updatedPlan = optimizeGpuPlanTransitions(updatedPlan)
+      logWarning("after optimize gpu " + updatedPlan)
       }
       updatedPlan = optimizeCoalesce(updatedPlan)
       if (conf.exportColumnarRdd) {
