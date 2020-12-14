@@ -859,7 +859,7 @@ class MultiFileParquetPartitionReader(
     partitionSchema: StructType,
     numThreads: Int)
   extends FileParquetPartitionReaderBase(conf, isSchemaCaseSensitive, readDataSchema,
-    debugDumpPrefix, execMetrics) {
+    debugDumpPrefix, execMetrics) with Logging {
 
   private val blockIterator: BufferedIterator[ParquetFileInfoWithSingleBlockMeta] =
     clippedBlocks.iterator.buffered
@@ -1029,7 +1029,7 @@ class MultiFileParquetPartitionReader(
           if (allPartitionColumns.size > 1) {
             var succeeded = false
             val numCols = allPartitionColumns.head.size
-            // logWarning("num cols is: " + numCols)
+            logWarning("num cols is: " + numCols)
             val result = new Array[GpuColumnVector](numCols)
             try {
               for (i <- result.indices) {
@@ -1072,6 +1072,7 @@ class MultiFileParquetPartitionReader(
             }
           } else if (allPartitionColumns.size == 1) {
             try {
+              logWarning("partition columns = 1")
               val partitionColumns = allPartitionColumns.head
               // just create column batch
               val fileBatchCols = (0 until cb.numCols).map(cb.column)
@@ -1090,7 +1091,6 @@ class MultiFileParquetPartitionReader(
             cb
           }
         } finally {
-
           if (cb != null) {
             cb.close()
           }
