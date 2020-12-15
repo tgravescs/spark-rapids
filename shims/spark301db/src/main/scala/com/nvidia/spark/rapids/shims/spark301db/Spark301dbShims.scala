@@ -18,8 +18,11 @@ package com.nvidia.spark.rapids.shims.spark301db
 
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.shims.spark301.Spark301Shims
+import com.databricks.sql.transaction.tahoe.stats.PreparedDeltaFileIndex
+import com.databricks.sql.transaction.tahoe.stats.DeltaScan
 
 import org.apache.spark.sql.rapids.shims.spark301db._
+import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -29,7 +32,7 @@ import org.apache.spark.sql.catalyst.plans.physical.{BroadcastMode, Partitioning
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.adaptive.ShuffleQueryStageExec
-import org.apache.spark.sql.execution.datasources.{FilePartition, HadoopFsRelation, PartitionDirectory, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{BucketingUtils, DbPartitioningUtils, FilePartition, HadoopFsRelation, InMemoryFileIndex, PartitionDirectory, PartitionedFile, PartitioningAwareFileIndex}
 import org.apache.spark.sql.execution.datasources.json.JsonFileFormat
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BroadcastNestedLoopJoinExec, HashJoin, SortMergeJoinExec}
@@ -40,7 +43,7 @@ import org.apache.spark.sql.rapids.execution.{GpuBroadcastExchangeExecBase, GpuB
 import org.apache.spark.sql.rapids.execution.python.GpuWindowInPandasExecMetaBase
 import org.apache.spark.sql.types._
 
-class Spark301dbShims extends Spark301Shims {
+class Spark301dbShims extends Spark301Shims with Logging {
 
   override def getSparkShimVersion: ShimVersion = SparkShimServiceProvider.VERSION
 
@@ -119,8 +122,59 @@ class Spark301dbShims extends Spark301Shims {
           override def convertToGpu(): GpuExec = {
             val sparkSession = wrapped.relation.sparkSession
             val options = wrapped.relation.options
+            val location = if (conf.alluxioEnabled
+              && wrapped.relation.location.getClass.getCanonicalName() ==
+              "com.databricks.sql.transaction.tahoe.stats.PreparedDeltaFileIndex") {
+
+              logInfo("Gary-Alluxio ++++++++++++++++++ begin to replace S3:// to alluxio://")
+              val preparedDeltaFileIndex = wrapped.relation.location.asInstanceOf[PreparedDeltaFileIndex]
+              val deltaScanFileLength = preparedDeltaFileIndex.preparedScan.files.length
+
+              val alluxioStr = "alluxio://" + conf.alluxioIPPort
+
+              // we need rootPaths from PreparedDeltaFileIndex to infer PartitionSpec
+              val finalRootPaths = wrapped.relation.location.rootPaths.map(path => {
+                new Path(path.toString.replaceFirst("s3:/", alluxioStr))
+              })
+              // listFiles prefixed by s3://
+              val listFiles: Seq[PartitionDirectory] = wrapped.relation.location.listFiles(
+                wrapped.partitionFilters, wrapped.dataFilters)
+              var sum = 0
+
+              // all files replaced s3:/ to alluxio://
+              val inputFiles: Seq[Path] = listFiles.flatMap(partitionDir => {
+                partitionDir.files.map(f => new Path(
+                  f.getPath.toString.replaceFirst("s3:/", "alluxio://" + conf.alluxioIPPort)))
+              }).toSet.toSeq
+
+              // get the leaf dir of inputFiles
+              val leafDirs = inputFiles.map(_.getParent).toSet.toSeq
+
+              val partitionSpec = DbPartitioningUtils.inferPartitioning(
+                sparkSession,
+                leafDirs,
+                finalRootPaths.toSet,
+                wrapped.relation.options,
+                Option(wrapped.relation.dataSchema)
+              )
+
+              val fileIndex = new InMemoryFileIndex(
+                sparkSession,
+                inputFiles,
+                // for temp solution
+//                options + (PartitioningAwareFileIndex.BASE_PATH_PARAM -> realRootPaths(0).toString),
+                options,
+                Option(wrapped.relation.dataSchema),
+                userSpecifiedPartitionSpec = Some(partitionSpec)
+              )
+
+              fileIndex
+            } else {
+              wrapped.relation.location
+            }
+
             val newRelation = HadoopFsRelation(
-              wrapped.relation.location,
+              location,
               wrapped.relation.partitionSchema,
               wrapped.relation.dataSchema,
               wrapped.relation.bucketSpec,
