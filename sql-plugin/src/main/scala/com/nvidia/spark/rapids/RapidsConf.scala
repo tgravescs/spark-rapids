@@ -794,6 +794,16 @@ object RapidsConf {
     .booleanConf
     .createWithDefault(true)
 
+  val ALLUXIO_ENABLED = conf("spark.rapids.alluxio.enabled")
+    .doc("Enable Alluxio")
+    .booleanConf
+    .createWithDefault(false)
+
+  val ALLUXIO_IPPORT = conf("spark.rapids.alluxio.ipport")
+    .doc("Provides the IP:Port of alluxio service")
+    .stringConf
+    .createWithDefault("0.0.0.0:19998")
+
   private def printSectionHeader(category: String): Unit =
     println(s"\n### $category")
 
@@ -1076,6 +1086,10 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val shuffleCompressionCodec: String = get(SHUFFLE_COMPRESSION_CODEC)
 
   lazy val shuffleCompressionMaxBatchMemory: Long = get(SHUFFLE_COMPRESSION_MAX_BATCH_MEMORY)
+
+  lazy val alluxioIPPort: String = get(ALLUXIO_IPPORT)
+
+  lazy val alluxioEnabled: Boolean = get(ALLUXIO_ENABLED)
 
   lazy val shimsProviderOverride: Option[String] = get(SHIMS_PROVIDER_OVERRIDE)
 
