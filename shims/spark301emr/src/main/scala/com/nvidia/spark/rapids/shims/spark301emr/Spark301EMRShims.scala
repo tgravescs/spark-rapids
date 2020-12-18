@@ -21,6 +21,10 @@ import java.lang.reflect.Constructor
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.shims.spark301.Spark301Shims
 import com.nvidia.spark.rapids.spark301emr.RapidsShuffleManager
+import org.apache.spark.sql.catalyst.plans.physical.{BroadcastMode, Partitioning}
+import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.exchange.{BroadcastExchangeLike, ShuffleExchangeExec, ShuffleExchangeLike}
+import org.apache.spark.sql.rapids.execution.{GpuBroadcastExchangeExecBase, GpuShuffleExchangeExecBase}
 
 class Spark301EMRShims extends Spark301Shims {
 
@@ -29,4 +33,24 @@ class Spark301EMRShims extends Spark301Shims {
   override def getRapidsShuffleManagerClass: String = {
     classOf[RapidsShuffleManager].getCanonicalName
   }
+
+  override def getGpuBroadcastExchangeExec(
+      mode: BroadcastMode,
+      child: SparkPlan): GpuBroadcastExchangeExecBase = {
+    GpuBroadcastExchangeExec(mode, child)
+  }
+
+  override def getGpuShuffleExchangeExec(
+      outputPartitioning: Partitioning,
+      child: SparkPlan,
+      cpuShuffle: Option[ShuffleExchangeExec]): GpuShuffleExchangeExecBase = {
+    val canChangeNumPartitions = cpuShuffle.forall(_.canChangeNumPartitions)
+    GpuShuffleExchangeExec(outputPartitioning, child, canChangeNumPartitions)
+  }
+
+  override def isBroadcastExchangeLike(plan: SparkPlan): Boolean =
+    plan.isInstanceOf[BroadcastExchangeLike]
+
+  override def isShuffleExchangeLike(plan: SparkPlan): Boolean =
+    plan.isInstanceOf[ShuffleExchangeLike]
 }
