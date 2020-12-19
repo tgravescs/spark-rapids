@@ -20,6 +20,7 @@ import scala.collection.mutable
 
 import com.nvidia.spark.rapids.GpuOverrides.isStringLit
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, ComplexTypeMergingExpression, Expression, String2TrimExpression, TernaryExpression, UnaryExpression}
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
@@ -28,7 +29,7 @@ import org.apache.spark.sql.connector.read.Scan
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
 import org.apache.spark.sql.execution.adaptive.{QueryStageExec, ShuffleQueryStageExec}
 import org.apache.spark.sql.execution.command.DataWritingCommand
-import org.apache.spark.sql.execution.exchange.{ReusedExchangeExec, ShuffleExchangeExec}
+import org.apache.spark.sql.execution.exchange.{Exchange, ReusedExchangeExec, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, ShuffledHashJoinExec, SortMergeJoinExec}
 import org.apache.spark.sql.types.DataType
 
@@ -67,7 +68,7 @@ abstract class RapidsMeta[INPUT <: BASE, BASE, OUTPUT <: BASE](
     val wrapped: INPUT,
     val conf: RapidsConf,
     val parent: Option[RapidsMeta[_, _, _]],
-    rule: ConfKeysAndIncompat) {
+    rule: ConfKeysAndIncompat) extends Logging {
 
   /**
    * The wrapped plans that should be examined
@@ -135,6 +136,7 @@ abstract class RapidsMeta[INPUT <: BASE, BASE, OUTPUT <: BASE](
     // during query stage planning when AQE is on
     wrapped match {
       case p: SparkPlan =>
+        logWarning(" tag values meta: " + p.getTagValue(gpuSupportedTag).getOrElse(Set.empty))
         p.setTagValue(gpuSupportedTag,
           p.getTagValue(gpuSupportedTag).getOrElse(Set.empty) + because)
       case _ =>
@@ -458,16 +460,25 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
 
   private def findShuffleExchanges(): Seq[Either[
       SparkPlanMeta[QueryStageExec],
-      SparkPlanMeta[ShuffleExchangeExec]]] = wrapped match {
+      SparkPlanMeta[ShuffleExchangeExec]]] = {
+        // logWarning("in find shuffle exchanges wrapped: " + wrapped)
+        wrapped match {
     case _: ShuffleQueryStageExec =>
+      logWarning("Tom Found ShuffleQueryStageExec: " + wrapped)
       Left(this.asInstanceOf[SparkPlanMeta[QueryStageExec]]) :: Nil
     case _: ShuffleExchangeExec =>
+      logWarning("Tom Found ShuffleExchangeExec: " + wrapped)
       Right(this.asInstanceOf[SparkPlanMeta[ShuffleExchangeExec]]) :: Nil
-    case bkj: BroadcastHashJoinExec => ShimLoader.getSparkShims.getBuildSide(bkj) match {
+    case bkj: BroadcastHashJoinExec => 
+      logWarning("Tom Found broadcasthashjoinexec: " + wrapped)
+      ShimLoader.getSparkShims.getBuildSide(bkj) match {
       case GpuBuildLeft => childPlans(1).findShuffleExchanges()
       case GpuBuildRight => childPlans(0).findShuffleExchanges()
     }
-    case _ => childPlans.flatMap(_.findShuffleExchanges())
+    case _ => 
+      logWarning("non continue finding exchanges ")
+      childPlans.flatMap(_.findShuffleExchanges())
+        }
   }
 
   private def findBucketedReads(): Seq[Boolean] = wrapped match {
@@ -491,21 +502,31 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     // ShuffleQueryStageExec nodes for exchanges that have already started executing. This code
     // attempts to tag ShuffleExchangeExec nodes for CPU if other exchanges (either
     // ShuffleExchangeExec or ShuffleQueryStageExec nodes) were also tagged for CPU.
+    logWarning("going to find shuffle exchanges wrapped: " + wrapped)
     val shuffleExchanges = findShuffleExchanges()
     // if any of the table reads are bucketed then we can't do the shuffle on the
     // GPU because the hashing is different between the CPU and GPU
     val bucketedReads = findBucketedReads().exists(_ == true)
+    logWarning("shuffle exchanges found are: " + shuffleExchanges)
 
     def canThisBeReplaced(plan: Either[
         SparkPlanMeta[QueryStageExec],
         SparkPlanMeta[ShuffleExchangeExec]]): Boolean = {
       plan match {
         case Left(qs) => qs.wrapped.plan match {
-          case _: GpuExec => true
-          case ReusedExchangeExec(_, _: GpuExec) => true
-          case _ => false
+          case _: GpuExec => 
+            logWarning("can be replaced gpuexec true")
+            true
+          case ReusedExchangeExec(_, _: GpuExec) =>
+            logWarning("can be replaced reused exchanged exec true")
+            true
+          case _ =>
+            logWarning("can be replaced false")
+            false
         }
-        case Right(e) => e.canThisBeReplaced
+        case Right(e) => 
+          logWarning("right in can be replace")
+          e.canThisBeReplaced
       }
     }
 
@@ -520,7 +541,11 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
           "not consistent with the CPU version"
       }
       // tag any exchanges that have not been converted to query stages yet
-      shuffleExchanges.filter(_.isRight).foreach(_.right.get.willNotWorkOnGpu(errMsg))
+      logWarning("shuffle exchanges are: " + shuffleExchanges)
+      shuffleExchanges.filter(_.isRight).foreach{ x =>
+        logWarning("marking for will not work: " + x)
+        x.right.get.willNotWorkOnGpu(errMsg)
+        } 
       // verify that no query stages already got converted to GPU
       if (shuffleExchanges.filter(_.isLeft).exists(canThisBeReplaced)) {
         throw new IllegalStateException("Join needs to run on CPU but at least one input " +
@@ -537,19 +562,65 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
   private def fixUpJoinConsistencyIfNeeded(): Unit = {
     childPlans.foreach(_.fixUpJoinConsistencyIfNeeded())
     wrapped match {
-      case _: ShuffledHashJoinExec => makeShuffleConsistent()
-      case _: SortMergeJoinExec => makeShuffleConsistent()
+      case _: ShuffledHashJoinExec => 
+        logWarning("shuffle hash join make consistent")
+        makeShuffleConsistent()
+      case _: SortMergeJoinExec => 
+        logWarning("sort merge join make consistent")
+        makeShuffleConsistent()
       case _ => ()
     }
   }
 
   private def fixUpExchangeOverhead(): Unit = {
+    logWarning("fix up exchange: " + wrapped)
+    logWarning("class : " + wrapped.getClass)
     childPlans.foreach(_.fixUpExchangeOverhead())
-    if (wrapped.isInstanceOf[ShuffleExchangeExec] &&
-      (parent.filter(_.canThisBeReplaced).isEmpty &&
-        childPlans.filter(_.canThisBeReplaced).isEmpty)) {
-      willNotWorkOnGpu("Columnar exchange without columnar children is inefficient")
+    logWarning("done fix up exchange children")
+    if (wrapped.isInstanceOf[Exchange]) {
+      logWarning("exchange : " + wrapped)
     }
+    if (ShimLoader.getSparkShims.isShuffleExchangeLike(wrapped)) {
+      logWarning("exchange shuffle like : " + wrapped)
+    }
+    if (wrapped.isInstanceOf[ShuffleExchangeExec]) {
+      logWarning("fix up exchange shuffle : " + wrapped)
+      if ((parent.filter(_.canThisBeReplaced).isEmpty)) {
+        logWarning("parent can be replaced is empty: " + parent)
+      } else {
+        logWarning("parent can be replaced is not empty " + parent)
+      }
+      if (childPlans.filter(_.canThisBeReplaced).isEmpty) {
+        logWarning("childplans can be replaced is empty " + childPlans)
+      } else {
+        logWarning("childplans can be replaced not empty " + childPlans)
+      }
+      if (parent.filter(_.canThisBeReplaced).isEmpty &&
+        childPlans.filter(_.canThisBeReplaced).isEmpty) { 
+        logWarning("both child and parent empty")
+      }
+      if (parent.filter(_.canThisBeReplaced).isEmpty ||
+        childPlans.filter(_.canThisBeReplaced).isEmpty) { 
+        logWarning("both child || parent empty")
+      }
+    }
+    if (wrapped.isInstanceOf[ShuffleExchangeExec]) {
+      val parentCanBeReplaced = parent.filter(_.canThisBeReplaced)
+      val childrenCanBeReplaced = childPlans.filter(_.canThisBeReplaced)
+
+      if (parentCanBeReplaced.nonEmpty) {
+        if (parentCanBeReplaced.filter(_.shouldThisBeRemoved).isEmpty) {
+           logWarning("parent should be removed is empty ")
+        } else {
+           logWarning("parent should be removed is nonempty " + parentCanBeReplaced)
+        }
+      }
+      if (childrenCanBeReplaced.isEmpty) {
+        logWarning("marking as will not work on Gpu due to not columnar children " + wrapped)
+        willNotWorkOnGpu("Columnar exchange without columnar children is inefficient")
+      }
+    }
+    logWarning("done fix up exchange")
   }
 
   /**
@@ -581,6 +652,7 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     // would make a join inconsistent
     fixUpExchangeOverhead()
     fixUpJoinConsistencyIfNeeded()
+    logWarning("done running tag rules")
   }
 
   override final def tagSelfForGpu(): Unit = {

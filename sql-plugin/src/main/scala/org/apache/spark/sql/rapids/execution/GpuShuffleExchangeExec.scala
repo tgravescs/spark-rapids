@@ -23,6 +23,7 @@ import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.GpuMetricNames.{DESCRIPTION_NUM_OUTPUT_BATCHES, DESCRIPTION_NUM_OUTPUT_ROWS, DESCRIPTION_NUM_PARTITIONS, DESCRIPTION_PARTITION_SIZE, NUM_OUTPUT_BATCHES, NUM_OUTPUT_ROWS, NUM_PARTITIONS, PARTITION_SIZE}
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.{MapOutputStatistics, ShuffleDependency}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.serializer.Serializer
@@ -44,7 +45,7 @@ class GpuShuffleMeta(
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat)
-  extends SparkPlanMeta[ShuffleExchangeExec](shuffle, conf, parent, rule) {
+  extends SparkPlanMeta[ShuffleExchangeExec](shuffle, conf, parent, rule) with Logging {
   // Some kinds of Partitioning are a type of expression, but Partitioning itself is not
   // so don't let them leak through as expressions
   override val childExprs: scala.Seq[ExprMeta[_]] = Seq.empty
@@ -54,6 +55,7 @@ class GpuShuffleMeta(
   override def tagPlanForGpu(): Unit = {
     // when AQE is enabled and we are planning a new query stage, we need to look at meta-data
     // previously stored on the spark plan to determine whether this exchange can run on GPU
+    logWarning("gpu supported tag shuffle meta: " + wrapped.getTagValue(gpuSupportedTag))
     wrapped.getTagValue(gpuSupportedTag).foreach(_.foreach(willNotWorkOnGpu))
   }
 

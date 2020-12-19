@@ -42,6 +42,7 @@ import org.apache.spark.sql.execution.metric.SQLMetrics
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
+import org.apache.spark.internal.Logging
 
 @SerialVersionUID(100L)
 class SerializeConcatHostBuffersDeserializeBatch(
@@ -204,7 +205,7 @@ class GpuBroadcastMeta(
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: ConfKeysAndIncompat) extends
-  SparkPlanMeta[BroadcastExchangeExec](exchange, conf, parent, rule) {
+  SparkPlanMeta[BroadcastExchangeExec](exchange, conf, parent, rule) with Logging {
 
   override def isSupportedType(t: DataType): Boolean =
     GpuOverrides.isSupportedType(t,
@@ -228,6 +229,7 @@ class GpuBroadcastMeta(
     }
     // when AQE is enabled and we are planning a new query stage, we need to look at meta-data
     // previously stored on the spark plan to determine whether this exchange can run on GPU
+    logWarning("get supported tag broadcast meta: " + wrapped.getTagValue(gpuSupportedTag))
     wrapped.getTagValue(gpuSupportedTag).foreach(_.foreach(willNotWorkOnGpu))
   }
 
