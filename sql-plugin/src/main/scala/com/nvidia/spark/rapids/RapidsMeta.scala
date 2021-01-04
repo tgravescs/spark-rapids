@@ -562,7 +562,6 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     }
   }
 
-
   /**
    * Run rules that happen for the entire tree after it has been tagged initially.
    */
