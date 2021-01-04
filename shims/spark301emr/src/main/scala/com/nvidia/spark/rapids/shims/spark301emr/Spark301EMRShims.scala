@@ -24,11 +24,20 @@ import com.nvidia.spark.rapids.spark301emr.RapidsShuffleManager
 import org.apache.spark.sql.catalyst.plans.physical.{BroadcastMode, Partitioning}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.exchange.{BroadcastExchangeLike, ShuffleExchangeExec, ShuffleExchangeLike}
+import org.apache.spark.sql.execution.joins.BroadcastHashJoinExec
 import org.apache.spark.sql.rapids.execution.{GpuBroadcastExchangeExecBase, GpuShuffleExchangeExecBase}
 
 class Spark301EMRShims extends Spark301Shims {
 
   override def getSparkShimVersion: ShimVersion = SparkShimServiceProvider.VERSION
+
+  override def getExecs: Map[Class[_ <: SparkPlan], ExecRule[_ <: SparkPlan]] = {
+    super.getExecs ++ Seq(
+      GpuOverrides.exec[BroadcastHashJoinExec](
+        "Implementation of join using broadcast data",
+        (join, conf, p, r) => new GpuBroadcastHashJoinMeta(join, conf, p, r))
+    ).map(r => (r.getClassFor.asSubclass(classOf[SparkPlan]), r))
+  }
 
   override def getRapidsShuffleManagerClass: String = {
     classOf[RapidsShuffleManager].getCanonicalName
@@ -46,6 +55,13 @@ class Spark301EMRShims extends Spark301Shims {
       cpuShuffle: Option[ShuffleExchangeExec]): GpuShuffleExchangeExecBase = {
     val canChangeNumPartitions = cpuShuffle.forall(_.canChangeNumPartitions)
     GpuShuffleExchangeExec(outputPartitioning, child, canChangeNumPartitions)
+  }
+
+  override def isGpuBroadcastHashJoin(plan: SparkPlan): Boolean = {
+    plan match {
+      case _: GpuBroadcastHashJoinExec => true
+      case _ => false
+    }
   }
 
   override def isBroadcastExchangeLike(plan: SparkPlan): Boolean =

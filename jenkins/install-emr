@@ -1,0 +1,24 @@
+mvn -B install:install-file \
+   -Dmaven.repo.local=/home/hadoop/.m2/repository \
+   -Dfile=/usr/lib/spark/jars/spark-sql_2.12-3.0.1-amzn-0.jar \
+   -DgroupId=org.apache.spark \
+   -DartifactId=spark-sql_2.12 \
+   -Dversion=3.0.1-emr \
+   -Dpackaging=jar
+
+
+mvn -B install:install-file \
+   -Dmaven.repo.local=/home/hadoop/.m2/repository \
+   -Dfile=/usr/lib/spark/jars/spark-catalyst_2.12-3.0.1-amzn-0.jar \
+   -DgroupId=org.apache.spark \
+   -DartifactId=spark-catalyst_2.12 \
+   -Dversion=3.0.1-emr \
+   -Dpackaging=jar
+
+mvn -B install:install-file \
+   -Dmaven.repo.local=/home/hadoop/.m2/repository \
+   -Dfile=/usr/lib/spark/jars/spark-core_2.12-3.0.1-amzn-0.jar \
+   -DgroupId=org.apache.spark \
+   -DartifactId=spark-core_2.12 \
+   -Dversion=3.0.1-emr \
+   -Dpackaging=jar
