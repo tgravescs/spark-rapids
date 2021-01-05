@@ -52,7 +52,7 @@ class SerializeConcatHostBuffersDeserializeBatch(
   @transient private val buffers = data.map(_.buffer)
   @transient private var batchInternal: ColumnarBatch = null
 
-  def batch: ColumnarBatch = {
+  def batch: ColumnarBatch = this.synchronized {
     if (batchInternal == null) {
       // TODO we should come up with a better way for this to happen directly...
       val out = new ByteArrayOutputStream()
@@ -203,12 +203,8 @@ class GpuBroadcastMeta(
     exchange: BroadcastExchangeExec,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
-    rule: ConfKeysAndIncompat) extends
+    rule: DataFromReplacementRule) extends
   SparkPlanMeta[BroadcastExchangeExec](exchange, conf, parent, rule) {
-
-  override def isSupportedType(t: DataType): Boolean =
-    GpuOverrides.isSupportedType(t,
-      allowNull = true)
 
   override def tagPlanForGpu(): Unit = {
     if (!TrampolineUtil.isSupportedRelation(exchange.mode)) {

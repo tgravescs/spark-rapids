@@ -23,7 +23,7 @@
     <artifactId>rapids-4-spark-parent</artifactId>
     <name>RAPIDS Accelerator for Apache Spark Root Project</name>
     <description>The root project of the RAPIDS Accelerator for Apache Spark</description>
-    <version>0.3.0-SNAPSHOT</version>
+    <version>0.4.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <url>https://github.com/NVIDIA</url>
@@ -71,14 +71,15 @@
     </developers>
 
     <modules>
+        <module>api_validation</module>
         <module>dist</module>
+        <module>integration_tests</module>
+        <module>shims</module>
         <module>shuffle-plugin</module>
         <module>sql-plugin</module>
         <module>tests</module>
-        <module>integration_tests</module>
-        <module>shims</module>
-        <module>api_validation</module>
         <module>udf-compiler</module>
+        <module>udf-examples</module>
     </modules>
 
     <profiles>
@@ -135,6 +136,9 @@
         </profile>
         <profile>
             <id>spark310tests</id>
+            <modules>
+                <module>tests-spark310+</module>
+            </modules>
         </profile>
     </profiles>
 
@@ -143,7 +147,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <spark.version>3.0.0</spark.version>
         <cuda.version>cuda10-1</cuda.version>
-        <cudf.version>0.17-SNAPSHOT</cudf.version>
+        <cudf.version>0.18-SNAPSHOT</cudf.version>
         <scala.binary.version>2.12</scala.binary.version>
         <scala.version>2.12.8</scala.version>
         <orc.version>1.5.8</orc.version>
@@ -171,15 +175,11 @@
         <spark301.version>3.0.1</spark301.version>
         <spark302.version>3.0.2-SNAPSHOT</spark302.version>
         <spark310.version>3.1.0-SNAPSHOT</spark310.version>
+        <mockito.version>3.6.0</mockito.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
-            <dependency>
-                <groupId>org.apache.spark</groupId>
-                <artifactId>spark-annotation_${scala.binary.version}</artifactId>
-                <version>${spark.version}</version>
-            </dependency>
             <dependency>
                 <groupId>ai.rapids</groupId>
                 <artifactId>cudf</artifactId>
@@ -203,6 +203,17 @@
                 <artifactId>scala-library</artifactId>
                 <version>${scala.version}</version>
                 <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.spark</groupId>
+                <artifactId>spark-annotation_${scala.binary.version}</artifactId>
+                <version>${spark.version}</version>
+            </dependency>
+            <dependency>
+              <groupId>org.apache.spark</groupId>
+              <artifactId>spark-hive_${scala.binary.version}</artifactId>
+              <version>${spark.version}</version>
+              <scope>provided</scope>
             </dependency>
             <dependency>
               <groupId>org.apache.spark</groupId>
@@ -319,7 +330,7 @@
             <dependency>
               <groupId>org.mockito</groupId>
               <artifactId>mockito-core</artifactId>
-              <version>2.28.2</version>
+              <version>${mockito.version}</version>
               <scope>test</scope>
             </dependency>
         </dependencies>
@@ -522,6 +533,9 @@
                         <exclude>docs/demo/**/*.ipynb</exclude>
                         <exclude>docs/demo/**/*.zpln</exclude>
                         <exclude>**/src/main/resources/META-INF/services/*</exclude>
+                        <!-- Apache Rat excludes target folder for projects that are included by
+                        default, but there are some projects that are conditionally included.  -->
+                        <exclude>**/target/**/*</exclude>
                     </excludes>
                 </configuration>
             </plugin>

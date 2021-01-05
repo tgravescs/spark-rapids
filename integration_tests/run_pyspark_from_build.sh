@@ -28,7 +28,8 @@ else
     CUDF_JARS=$(echo "$SCRIPTPATH"/target/dependency/cudf-*.jar)
     PLUGIN_JARS=$(echo "$SCRIPTPATH"/../dist/target/rapids-4-spark*.jar)
     TEST_JARS=$(echo "$SCRIPTPATH"/target/rapids-4-spark-integration-tests*.jar)
-    ALL_JARS="$CUDF_JARS $PLUGIN_JARS $TEST_JARS"
+    UDF_EXAMPLE_JARS=$(echo "$SCRIPTPATH"/../udf-examples/target/rapids-4-spark-udf-examples*.jar)
+    ALL_JARS="$CUDF_JARS $PLUGIN_JARS $TEST_JARS $UDF_EXAMPLE_JARS"
     echo "AND PLUGIN JARS: $ALL_JARS"
     if [[ "${TEST}" != "" ]];
     then
@@ -81,8 +82,8 @@ else
     if [[ "${TEST_PARALLEL_OPTS}" != "" ]];
     then
         export PYSP_TEST_spark_driver_extraClassPath="${ALL_JARS// /:}"
-        export PYSP_TEST_spark_driver_extraJavaOptions="-ea -Duser.timezone=GMT $COVERAGE_SUBMIT_FLAGS"
-        export PYSP_TEST_spark_executor_extraJavaOptions='-ea -Duser.timezone=GMT'
+        export PYSP_TEST_spark_driver_extraJavaOptions="-ea -Duser.timezone=UTC $COVERAGE_SUBMIT_FLAGS"
+        export PYSP_TEST_spark_executor_extraJavaOptions='-ea -Duser.timezone=UTC'
         export PYSP_TEST_spark_ui_showConsoleProgress='false'
         export PYSP_TEST_spark_sql_session_timeZone='UTC'
         export PYSP_TEST_spark_sql_shuffle_partitions='12'
@@ -100,8 +101,8 @@ else
           "$@"
     else
         "$SPARK_HOME"/bin/spark-submit --jars "${ALL_JARS// /,}" \
-          --conf "spark.driver.extraJavaOptions=-ea -Duser.timezone=GMT $COVERAGE_SUBMIT_FLAGS" \
-          --conf 'spark.executor.extraJavaOptions=-ea -Duser.timezone=GMT' \
+          --conf "spark.driver.extraJavaOptions=-ea -Duser.timezone=UTC $COVERAGE_SUBMIT_FLAGS" \
+          --conf 'spark.executor.extraJavaOptions=-ea -Duser.timezone=UTC' \
           --conf 'spark.sql.session.timeZone=UTC' \
           --conf 'spark.sql.shuffle.partitions=12' \
           $SPARK_SUBMIT_FLAGS \

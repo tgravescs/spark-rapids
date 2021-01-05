@@ -333,6 +333,14 @@ object RapidsConf {
     .bytesConf(ByteUnit.BYTE)
     .createWithDefault(ByteUnit.GiB.toBytes(1))
 
+  val GDS_SPILL = conf("spark.rapids.memory.gpu.direct.storage.spill.enabled")
+    .doc("Should GPUDirect Storage (GDS) be used to spill GPU memory buffers directly to disk. " +
+      "GDS must be enabled and the directory `spark.local.dir` must support GDS. This is an " +
+      "experimental feature. For more information on GDS, see " +
+      "https://docs.nvidia.com/gpudirect-storage/.")
+    .booleanConf
+    .createWithDefault(false)
+
   val POOLED_MEM = conf("spark.rapids.memory.gpu.pooling.enabled")
     .doc("Should RMM act as a pooling allocator for GPU memory, or should it just pass " +
       "through to CUDA memory allocation directly. DEPRECATED: please use " +
@@ -457,6 +465,14 @@ object RapidsConf {
     .booleanConf
     .createWithDefault(false)
 
+  val DECIMAL_TYPE_ENABLED = conf("spark.rapids.sql.decimalType.enabled")
+      .doc("Enable decimal type support on the GPU.  Decimal support on the GPU is limited to " +
+          "less than 18 digits and is only supported by a small number of operations currently.  " +
+          "This can result in a lot of data movement to and from the GPU, which can slow down " +
+          "processing in some cases.")
+      .booleanConf
+      .createWithDefault(false)
+
   val ENABLE_REPLACE_SORTMERGEJOIN = conf("spark.rapids.sql.replaceSortMergeJoin.enabled")
     .doc("Allow replacing sortMergeJoin with HashJoin")
     .booleanConf
@@ -473,6 +489,14 @@ object RapidsConf {
       "a different precision than the default Java toString behavior.")
     .booleanConf
     .createWithDefault(false)
+
+  val ENABLE_CAST_FLOAT_TO_INTEGRAL_TYPES =
+    conf("spark.rapids.sql.castFloatToIntegralTypes.enabled")
+      .doc("Casting from floating point types to integral types on the GPU supports a " +
+          "slightly different range of values when using Spark 3.1.0 or later. Refer to the CAST " +
+          "documentation for more details.")
+      .booleanConf
+      .createWithDefault(false)
 
   val ENABLE_CAST_STRING_TO_FLOAT = conf("spark.rapids.sql.castStringToFloat.enabled")
     .doc("When set to true, enables casting from strings to float types (float, double) " +
@@ -787,6 +811,15 @@ object RapidsConf {
     .booleanConf
     .createWithDefault(false)
 
+  val ALLOW_DISABLE_ENTIRE_PLAN = conf("spark.rapids.allowDisableEntirePlan")
+    .internal()
+    .doc("The plugin has the ability to detect possibe incompatibility with some specific " +
+      "queries and cluster configurations. In those cases the plugin will disable GPU support " +
+      "for the entire query. Set this to false if you want to override that behavior, but use " +
+      "with caution.")
+    .booleanConf
+    .createWithDefault(true)
+
   private def printSectionHeader(category: String): Unit =
     println(s"\n### $category")
 
@@ -817,7 +850,7 @@ object RapidsConf {
         |On startup use: `--conf [conf key]=[conf value]`. For example:
         |
         |```
-        |${SPARK_HOME}/bin/spark --jars 'rapids-4-spark_2.12-0.3.0-SNAPSHOT.jar,cudf-0.17-SNAPSHOT-cuda10-1.jar' \
+        |${SPARK_HOME}/bin/spark --jars 'rapids-4-spark_2.12-0.4.0-SNAPSHOT.jar,cudf-0.18-SNAPSHOT-cuda10-1.jar' \
         |--conf spark.plugins=com.nvidia.spark.SQLPlugin \
         |--conf spark.rapids.sql.incompatibleOps.enabled=true
         |```
@@ -973,11 +1006,15 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
 
   lazy val hostSpillStorageSize: Long = get(HOST_SPILL_STORAGE_SIZE)
 
+  lazy val isGdsSpillEnabled: Boolean = get(GDS_SPILL)
+
   lazy val hasNans: Boolean = get(HAS_NANS)
 
   lazy val gpuTargetBatchSizeBytes: Long = get(GPU_BATCH_SIZE_BYTES)
 
   lazy val isFloatAggEnabled: Boolean = get(ENABLE_FLOAT_AGG)
+
+  lazy val decimalTypeEnabled: Boolean = get(DECIMAL_TYPE_ENABLED)
 
   lazy val explain: String = get(EXPLAIN)
 
@@ -1006,6 +1043,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val isCastStringToIntegerEnabled: Boolean = get(ENABLE_CAST_STRING_TO_INTEGER)
 
   lazy val isCastStringToFloatEnabled: Boolean = get(ENABLE_CAST_STRING_TO_FLOAT)
+
+  lazy val isCastFloatToIntegralTypesEnabled: Boolean = get(ENABLE_CAST_FLOAT_TO_INTEGRAL_TYPES)
 
   lazy val isCsvTimestampEnabled: Boolean = get(ENABLE_CSV_TIMESTAMPS)
 
@@ -1075,6 +1114,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val shimsProviderOverride: Option[String] = get(SHIMS_PROVIDER_OVERRIDE)
 
   lazy val cudfVersionOverride: Boolean = get(CUDF_VERSION_OVERRIDE)
+
+  lazy val allowDisableEntirePlan: Boolean = get(ALLOW_DISABLE_ENTIRE_PLAN)
 
   lazy val getCloudSchemes: Option[Seq[String]] = get(CLOUD_SCHEMES)
 

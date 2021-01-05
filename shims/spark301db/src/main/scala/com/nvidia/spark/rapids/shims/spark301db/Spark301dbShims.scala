@@ -32,6 +32,8 @@ import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.adaptive.ShuffleQueryStageExec
 import org.apache.spark.sql.execution.datasources.{BucketingUtils, DbPartitioningUtils, FilePartition, HadoopFsRelation, InMemoryFileIndex, PartitionDirectory, PartitionedFile, PartitioningAwareFileIndex}
+import org.apache.spark.sql.execution.datasources.json.JsonFileFormat
+import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BroadcastNestedLoopJoinExec, HashJoin, SortMergeJoinExec}
 import org.apache.spark.sql.execution.joins.ShuffledHashJoinExec
 import org.apache.spark.sql.execution.python.WindowInPandasExec
@@ -62,24 +64,17 @@ class Spark301dbShims extends Spark301Shims with Logging {
     GpuBroadcastExchangeExec(mode, child)
   }
 
-  override def isGpuHashJoin(plan: SparkPlan): Boolean = {
-    plan match {
-      case _: GpuHashJoin => true
-      case p => false
-    }
-  }
-
   override def isGpuBroadcastHashJoin(plan: SparkPlan): Boolean = {
     plan match {
       case _: GpuBroadcastHashJoinExec => true
-      case p => false
+      case _ => false
     }
   }
 
   override def isGpuShuffledHashJoin(plan: SparkPlan): Boolean = {
     plan match {
       case _: GpuShuffledHashJoinExec => true
-      case p => false
+      case _ => false
     }
   }
 
@@ -89,6 +84,9 @@ class Spark301dbShims extends Spark301Shims with Logging {
         "The backend for Window Aggregation Pandas UDF, Accelerates the data transfer between" +
           " the Java process and the Python process. It also supports scheduling GPU resources" +
           " for the Python process when enabled. For now it only supports row based window frame.",
+        ExecChecks(
+          (TypeSig.commonCudfTypes + TypeSig.ARRAY).nested(TypeSig.commonCudfTypes),
+          TypeSig.all),
         (winPy, conf, p, r) => new GpuWindowInPandasExecMetaBase(winPy, conf, p, r) {
           override def convertToGpu(): GpuExec = {
             GpuWindowInPandasExec(
@@ -101,18 +99,24 @@ class Spark301dbShims extends Spark301Shims with Logging {
         }).disabledByDefault("it only supports row based frame for now"),
       GpuOverrides.exec[FileSourceScanExec](
         "Reading data from files, often from Hive tables",
+        ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.STRUCT + TypeSig.MAP +
+            TypeSig.ARRAY).nested(), TypeSig.all),
         (fsse, conf, p, r) => new SparkPlanMeta[FileSourceScanExec](fsse, conf, p, r) {
-          override def isSupportedType(t: DataType): Boolean =
-            GpuOverrides.isSupportedType(t,
-              allowArray = true,
-              allowMaps = true,
-              allowStruct = true,
-              allowNesting = true)
-
           // partition filters and data filters are not run on the GPU
           override val childExprs: Seq[ExprMeta[_]] = Seq.empty
 
-          override def tagPlanForGpu(): Unit = GpuFileSourceScanExec.tagSupport(this)
+          override def tagPlanForGpu(): Unit = {
+            // this is very specific check to have any of the Delta log metadata queries
+            // fallback and run on the CPU since there is some incompatibilities in
+            // Databricks Spark and Apache Spark.
+            if (wrapped.relation.fileFormat.isInstanceOf[JsonFileFormat] &&
+              wrapped.relation.location.getClass.getCanonicalName() ==
+                "com.databricks.sql.transaction.tahoe.DeltaLogFileIndex") {
+              this.entirePlanWillNotWork("Plans that read Delta Index JSON files can not run " +
+                "any part of the plan on the GPU!")
+            }
+            GpuFileSourceScanExec.tagSupport(this)
+          }
 
           override def convertToGpu(): GpuExec = {
             val sparkSession = wrapped.relation.sparkSession
@@ -208,18 +212,20 @@ class Spark301dbShims extends Spark301Shims with Logging {
               // TODO: Does Databricks have coalesced bucketing implemented?
               None,
               wrapped.dataFilters,
-              wrapped.tableIdentifier,
-              conf)
+              wrapped.tableIdentifier)(conf)
           }
         }),
       GpuOverrides.exec[SortMergeJoinExec](
         "Sort merge join, replacing with shuffled hash join",
+        ExecChecks(TypeSig.commonCudfTypes + TypeSig.NULL, TypeSig.all),
         (join, conf, p, r) => new GpuSortMergeJoinMeta(join, conf, p, r)),
       GpuOverrides.exec[BroadcastHashJoinExec](
         "Implementation of join using broadcast data",
+        ExecChecks(TypeSig.commonCudfTypes + TypeSig.NULL, TypeSig.all),
         (join, conf, p, r) => new GpuBroadcastHashJoinMeta(join, conf, p, r)),
       GpuOverrides.exec[ShuffledHashJoinExec](
         "Implementation of join using hashed shuffled data",
+        ExecChecks(TypeSig.commonCudfTypes + TypeSig.NULL, TypeSig.all),
         (join, conf, p, r) => new GpuShuffledHashJoinMeta(join, conf, p, r))
     ).map(r => (r.getClassFor.asSubclass(classOf[SparkPlan]), r)).toMap
   }
@@ -288,13 +294,14 @@ class Spark301dbShims extends Spark301Shims with Logging {
   override def copyFileSourceScanExec(
       scanExec: GpuFileSourceScanExec,
       queryUsesInputFile: Boolean): GpuFileSourceScanExec = {
-    scanExec.copy(queryUsesInputFile=queryUsesInputFile)
+    scanExec.copy(queryUsesInputFile=queryUsesInputFile)(scanExec.rapidsConf)
   }
 
   override def getGpuShuffleExchangeExec(
       outputPartitioning: Partitioning,
       child: SparkPlan,
-      canChangeNumPartitions: Boolean): GpuShuffleExchangeExecBase = {
+      cpuShuffle: Option[ShuffleExchangeExec]): GpuShuffleExchangeExecBase = {
+    val canChangeNumPartitions = cpuShuffle.forall(_.canChangeNumPartitions)
     GpuShuffleExchangeExec(outputPartitioning, child, canChangeNumPartitions)
   }
 

@@ -46,7 +46,7 @@ object BenchUtils {
       filenameStub: String,
       iterations: Int,
       gcBetweenRuns: Boolean
-  ): Unit = {
+  ): BenchmarkReport = {
     runBench(
       spark,
       createDataFrame,
@@ -67,7 +67,7 @@ object BenchUtils {
       gcBetweenRuns: Boolean,
       path: String,
       mode: SaveMode = SaveMode.Overwrite,
-      writeOptions: Map[String, String] = Map.empty): Unit = {
+      writeOptions: Map[String, String] = Map.empty): BenchmarkReport = {
     runBench(
       spark,
       createDataFrame,
@@ -88,7 +88,7 @@ object BenchUtils {
       gcBetweenRuns: Boolean,
       path: String,
       mode: SaveMode = SaveMode.Overwrite,
-      writeOptions: Map[String, String] = Map.empty): Unit = {
+      writeOptions: Map[String, String] = Map.empty): BenchmarkReport = {
     runBench(
       spark,
       createDataFrame,
@@ -109,7 +109,7 @@ object BenchUtils {
       gcBetweenRuns: Boolean,
       path: String,
       mode: SaveMode = SaveMode.Overwrite,
-      writeOptions: Map[String, String] = Map.empty): Unit = {
+      writeOptions: Map[String, String] = Map.empty): BenchmarkReport = {
     runBench(
       spark,
       createDataFrame,
@@ -143,7 +143,7 @@ object BenchUtils {
       filenameStub: String,
       iterations: Int,
       gcBetweenRuns: Boolean
-  ): Unit = {
+  ): BenchmarkReport = {
 
     assert(iterations > 0)
 
@@ -179,11 +179,11 @@ object BenchUtils {
         resultsAction match {
           case Collect() => df.collect()
           case WriteCsv(path, mode, options) =>
-            df.write.mode(mode).options(options).csv(path)
+            ensureValidColumnNames(df).write.mode(mode).options(options).csv(path)
           case WriteOrc(path, mode, options) =>
-            df.write.mode(mode).options(options).orc(path)
+            ensureValidColumnNames(df).write.mode(mode).options(options).orc(path)
           case WriteParquet(path, mode, options) =>
-            df.write.mode(mode).options(options).parquet(path)
+            ensureValidColumnNames(df).write.mode(mode).options(options).parquet(path)
         }
 
         val end = System.nanoTime()
@@ -197,7 +197,7 @@ object BenchUtils {
           val elapsed = NANOSECONDS.toMillis(end - start)
           println(s"*** Iteration $i failed after $elapsed msec.")
           queryTimes.append(-1)
-          exceptions.append(BenchUtils.toString(e))
+          exceptions.append(BenchUtils.stackTraceAsString(e))
           e.printStackTrace()
       }
     }
@@ -241,9 +241,19 @@ object BenchUtils {
       sparkConf = df.sparkSession.conf.getAll,
       getSparkVersion)
 
+    // if the query plan is invalid, referencing the `executedPlan` lazy val
+    // can throw an exception
+    val executedPlanStr = try {
+      df.queryExecution.executedPlan.toString()
+    } catch {
+      case e: Exception =>
+        exceptions.append(stackTraceAsString(e))
+        "Failed to capture executedPlan - see exceptions in report"
+    }
+
     val queryPlan = QueryPlan(
       df.queryExecution.logical.toString(),
-      df.queryExecution.executedPlan.toString()
+      executedPlanStr
     )
 
     val report = resultsAction match {
@@ -301,6 +311,29 @@ object BenchUtils {
     }
 
     writeReport(report, filename)
+
+    report
+  }
+
+  /**
+   * Replace any invalid column names with c0, c1, and so on so that there are no columns with
+   * names based on expressions such as "round((sun_sales1 / sun_sales2), 2)". This is necessary
+   * when writing query output to Parquet.
+   */
+  private def ensureValidColumnNames(df: DataFrame): DataFrame = {
+    def isColumnStart(ch: Char) = ch.isLetter || ch == '_'
+    def isColumnPart(ch: Char) = ch.isLetterOrDigit || ch == '_'
+    def isValid(name: String) = name.length > 0 &&
+        isColumnStart(name.charAt(0)) &&
+        name.substring(1).toCharArray.forall(isColumnPart)
+    val renameColumnExprs = df.columns.zipWithIndex.map {
+      case (name, i) => if (isValid(name)) {
+        col(name)
+      } else {
+        col(name).as("c" + i)
+      }
+    }
+    df.select(renameColumnExprs: _*)
   }
 
   def readReport(file: File): BenchmarkReport = {
@@ -639,7 +672,7 @@ object BenchUtils {
     }
   }
 
-  def toString(e: Exception): String = {
+  def stackTraceAsString(e: Throwable): String = {
     val sw = new StringWriter()
     val w = new PrintWriter(sw)
     e.printStackTrace(w)
@@ -653,12 +686,21 @@ class BenchmarkListener(
     exceptions: ListBuffer[String]) extends QueryExecutionListener {
 
   override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {
-    queryPlans += toJson(qe.executedPlan)
+    addQueryPlan(qe)
   }
 
   override def onFailure(funcName: String, qe: QueryExecution, exception: Exception): Unit = {
-    queryPlans += toJson(qe.executedPlan)
-    exceptions += BenchUtils.toString(exception)
+    addQueryPlan(qe)
+    exceptions += BenchUtils.stackTraceAsString(exception)
+  }
+
+  private def addQueryPlan(qe: QueryExecution) = {
+    try {
+      queryPlans += toJson(qe.executedPlan)
+    } catch {
+      case e: Exception =>
+        exceptions.append(BenchUtils.stackTraceAsString(e))
+    }
   }
 
   private def toJson(plan: SparkPlan): SparkPlanNode = {

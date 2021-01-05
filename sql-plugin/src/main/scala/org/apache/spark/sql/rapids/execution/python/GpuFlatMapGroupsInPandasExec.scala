@@ -38,7 +38,7 @@ class GpuFlatMapGroupsInPandasExecMeta(
     flatPandas: FlatMapGroupsInPandasExec,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
-    rule: ConfKeysAndIncompat)
+    rule: DataFromReplacementRule)
   extends SparkPlanMeta[FlatMapGroupsInPandasExec](flatPandas, conf, parent, rule) {
 
   override def couldReplaceMessage: String = "could partially run on GPU"
@@ -96,7 +96,7 @@ case class GpuFlatMapGroupsInPandasExec(
   }
 
   override def requiredChildOrdering: Seq[Seq[SortOrder]] =
-    Seq(groupingAttributes.map(SortOrder(_, Ascending)))
+    Seq(groupingAttributes.map(ShimLoader.getSparkShims.sortOrder(_, Ascending)))
 
   override protected def doExecute(): RDD[InternalRow] = {
     lazy val isPythonOnGpuEnabled = GpuPythonHelper.isPythonOnGpuEnabled(conf)

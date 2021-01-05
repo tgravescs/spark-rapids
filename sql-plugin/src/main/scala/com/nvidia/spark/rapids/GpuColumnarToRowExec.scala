@@ -51,6 +51,8 @@ class AcceleratedColumnarToRowIterator(
 
   // for packMap the nth entry is the index of the original input column that we want at
   // the nth entry.
+  // TODO When we support DECIMAL32 we will need to add in a special case here
+  //  because defaultSize of DecimalType does not take that into account.
   private val packMap: Array[Int] = schema
       .zipWithIndex
       .sortWith(_._1.dataType.defaultSize > _._1.dataType.defaultSize)
@@ -94,35 +96,48 @@ class AcceleratedColumnarToRowIterator(
     new Table(rearrangedColumns : _*)
   }
 
-  def loadNextBatch(): Unit = {
+  private[this] def setupBatch(cb: ColumnarBatch): Boolean = {
+    if (numInputBatches != null) {
+      numInputBatches += 1
+    }
+    // In order to match the numOutputRows metric in the generated code we update
+    // numOutputRows for each batch. This is less accurate than doing it at output
+    // because it will over count the number of rows output in the case of a limit,
+    // but it is more efficient.
+    if (numOutputRows != null) {
+      numOutputRows += cb.numRows()
+    }
+    if (cb.numRows() > 0) {
+      val nvtxRange = if (totalTime != null) {
+        new NvtxWithMetrics("ColumnarToRow: batch", NvtxColor.RED, totalTime)
+      } else {
+        new NvtxRange("ColumnarToRow: batch", NvtxColor.RED)
+      }
+      withResource(nvtxRange) { _ =>
+        withResource(rearrangeRows(cb)) { table =>
+          withResource(table.convertToRows()) { rowsCvList =>
+            rowsCvList.foreach { rowsCv =>
+              pendingCvs += rowsCv.copyToHost()
+            }
+            setCurrentBatch(pendingCvs.dequeue())
+            return true
+          }
+        }
+      }
+    }
+    false
+  }
+
+  private[this] def loadNextBatch(): Unit = {
     closeCurrentBatch()
     if (!pendingCvs.isEmpty) {
       setCurrentBatch(pendingCvs.dequeue())
-    } else if (batches.hasNext) {
-      withResource(batches.next()) { cb =>
-        if (numInputBatches != null) {
-          numInputBatches += 1
-        }
-        // In order to match the numOutputRows metric in the generated code we update
-        // numOutputRows for each batch. This is less accurate than doing it at output
-        // because it will over count the number of rows output in the case of a limit,
-        // but it is more efficient.
-        if (numOutputRows != null) {
-          numOutputRows += cb.numRows()
-        }
-        val nvtxRange = if (totalTime != null) {
-          new NvtxWithMetrics("ColumnarToRow: batch", NvtxColor.RED, totalTime)
-        } else {
-          new NvtxRange("ColumnarToRow: batch", NvtxColor.RED)
-        }
-        withResource(nvtxRange) { _ =>
-          withResource(rearrangeRows(cb)) { table =>
-            withResource(table.convertToRows()) { rowsCvList =>
-              rowsCvList.foreach { rowsCv =>
-                pendingCvs += rowsCv.copyToHost()
-              }
-              setCurrentBatch(pendingCvs.dequeue())
-            }
+    } else {
+      while (batches.hasNext) {
+        withResource(batches.next()) { cb =>
+          if (setupBatch(cb)) {
+            GpuSemaphore.releaseIfNecessary(TaskContext.get())
+            return
           }
         }
       }
@@ -229,7 +244,7 @@ object CudfRowTransitions {
   def isSupportedType(dataType: DataType): Boolean = dataType match {
     // Only fixed width for now...
     case ByteType | ShortType | IntegerType | LongType |
-         FloatType | DoubleType | BooleanType | DateType | TimestampType => true
+         FloatType | DoubleType | BooleanType | DateType | TimestampType | _: DecimalType => true
     case _ => false
   }
 

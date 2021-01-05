@@ -29,6 +29,7 @@ import org.apache.spark.sql.catalyst.plans.physical.{Distribution, HashClustered
 import org.apache.spark.sql.execution.{BinaryExecNode, SparkPlan}
 import org.apache.spark.sql.execution.joins.ShuffledHashJoinExec
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
+import org.apache.spark.sql.rapids.execution.GpuHashJoin
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -49,7 +50,7 @@ class GpuShuffledHashJoinMeta(
     join: ShuffledHashJoinExec,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
-    rule: ConfKeysAndIncompat)
+    rule: DataFromReplacementRule)
   extends SparkPlanMeta[ShuffledHashJoinExec](join, conf, parent, rule) {
   val leftKeys: Seq[BaseExprMeta[_]] =
     join.leftKeys.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
@@ -60,10 +61,6 @@ class GpuShuffledHashJoinMeta(
 
   override val childExprs: Seq[BaseExprMeta[_]] = leftKeys ++ rightKeys ++ condition
 
-  override def isSupportedType(t: DataType): Boolean =
-    GpuOverrides.isSupportedType(t,
-      allowNull = true)
-
   override def tagPlanForGpu(): Unit = {
     GpuHashJoin.tagJoin(this, join.joinType, join.leftKeys, join.rightKeys, join.condition)
   }
@@ -73,7 +70,7 @@ class GpuShuffledHashJoinMeta(
       leftKeys.map(_.convertToGpu()),
       rightKeys.map(_.convertToGpu()),
       join.joinType,
-      join.buildSide,
+      GpuJoinUtils.getGpuBuildSide(join.buildSide),
       condition.map(_.convertToGpu()),
       childPlans(0).convertIfNeeded(),
       childPlans(1).convertIfNeeded())
@@ -83,7 +80,7 @@ case class GpuShuffledHashJoinExec(
     leftKeys: Seq[Expression],
     rightKeys: Seq[Expression],
     joinType: JoinType,
-    buildSide: BuildSide,
+    buildSide: GpuBuildSide,
     condition: Option[Expression],
     left: SparkPlan,
     right: SparkPlan) extends BinaryExecNode with GpuHashJoin {
@@ -105,8 +102,8 @@ case class GpuShuffledHashJoinExec(
   }
 
   override def childrenCoalesceGoal: Seq[CoalesceGoal] = buildSide match {
-    case BuildLeft => Seq(RequireSingleBatch, null)
-    case BuildRight => Seq(null, RequireSingleBatch)
+    case GpuBuildLeft => Seq(RequireSingleBatch, null)
+    case GpuBuildRight => Seq(null, RequireSingleBatch)
   }
 
   override def doExecuteColumnar() : RDD[ColumnarBatch] = {
@@ -131,11 +128,11 @@ case class GpuShuffledHashJoinExec(
           buildIter, localBuildOutput)) { buildBatch: ColumnarBatch =>
           withResource(GpuProjectExec.project(buildBatch, gpuBuildKeys)) { keys =>
             val combined = GpuHashJoin.incRefCount(combine(keys, buildBatch))
-            withResource(filterBuiltTableIfNeeded(combined)) { filtered =>
+            withResource(combined) { combined =>
               combinedSize =
-                  GpuColumnVector.extractColumns(filtered)
+                  GpuColumnVector.extractColumns(combined)
                       .map(_.getBase.getDeviceMemorySize).sum.toInt
-              GpuColumnVector.from(filtered)
+              GpuColumnVector.from(combined)
             }
           }
         }

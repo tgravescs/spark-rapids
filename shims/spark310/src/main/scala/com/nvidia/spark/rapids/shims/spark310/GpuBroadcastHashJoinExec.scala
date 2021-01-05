@@ -22,8 +22,8 @@ import com.nvidia.spark.rapids.shims.spark301.GpuBroadcastExchangeExec
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight, BuildSide}
+import org.apache.spark.sql.catalyst.expressions.{Expression, SortOrder}
+import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.physical.{BroadcastDistribution, Distribution, UnspecifiedDistribution}
 import org.apache.spark.sql.execution.{BinaryExecNode, SparkPlan}
@@ -31,7 +31,7 @@ import org.apache.spark.sql.execution.adaptive.BroadcastQueryStageExec
 import org.apache.spark.sql.execution.exchange.ReusedExchangeExec
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, HashedRelationBroadcastMode}
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
-import org.apache.spark.sql.rapids.execution.{GpuBroadcastExchangeExecBase, SerializeConcatHostBuffersDeserializeBatch}
+import org.apache.spark.sql.rapids.execution.{GpuHashJoin, SerializeConcatHostBuffersDeserializeBatch}
 import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -42,7 +42,7 @@ class GpuBroadcastHashJoinMeta(
     join: BroadcastHashJoinExec,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
-    rule: ConfKeysAndIncompat)
+    rule: DataFromReplacementRule)
   extends GpuBroadcastJoinMeta[BroadcastHashJoinExec](join, conf, parent, rule) {
 
   val leftKeys: Seq[BaseExprMeta[_]] =
@@ -53,10 +53,6 @@ class GpuBroadcastHashJoinMeta(
     join.condition.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
 
   override val childExprs: Seq[BaseExprMeta[_]] = leftKeys ++ rightKeys ++ condition
-
-  override def isSupportedType(t: DataType): Boolean =
-    GpuOverrides.isSupportedType(t,
-      allowNull = true)
 
   override def tagPlanForGpu(): Unit = {
     GpuHashJoin.tagJoin(this, join.joinType, join.leftKeys, join.rightKeys, join.condition)
@@ -73,7 +69,6 @@ class GpuBroadcastHashJoinMeta(
     if (!canThisBeReplaced) {
       buildSide.willNotWorkOnGpu("the BroadcastHashJoin this feeds is not on the GPU")
     }
-
   }
 
   override def convertToGpu(): GpuExec = {
@@ -88,7 +83,8 @@ class GpuBroadcastHashJoinMeta(
     GpuBroadcastHashJoinExec(
       leftKeys.map(_.convertToGpu()),
       rightKeys.map(_.convertToGpu()),
-      join.joinType, join.buildSide,
+      join.joinType,
+      GpuJoinUtils.getGpuBuildSide(join.buildSide),
       condition.map(_.convertToGpu()),
       left, right)
   }
@@ -98,7 +94,7 @@ case class GpuBroadcastHashJoinExec(
     leftKeys: Seq[Expression],
     rightKeys: Seq[Expression],
     joinType: JoinType,
-    buildSide: BuildSide,
+    buildSide: GpuBuildSide,
     condition: Option[Expression],
     left: SparkPlan,
     right: SparkPlan) extends BinaryExecNode with GpuHashJoin {
@@ -112,9 +108,9 @@ case class GpuBroadcastHashJoinExec(
   override def requiredChildDistribution: Seq[Distribution] = {
     val mode = HashedRelationBroadcastMode(buildKeys)
     buildSide match {
-      case BuildLeft =>
+      case GpuBuildLeft =>
         BroadcastDistribution(mode) :: UnspecifiedDistribution :: Nil
-      case BuildRight =>
+      case GpuBuildRight =>
         UnspecifiedDistribution :: BroadcastDistribution(mode) :: Nil
     }
   }
@@ -128,7 +124,8 @@ case class GpuBroadcastHashJoinExec(
   }
 
   override def doExecute(): RDD[InternalRow] =
-    throw new IllegalStateException("GpuBroadcastHashJoin does not support row-based processing")
+    throw new IllegalStateException(
+      "GpuBroadcastHashJoin does not support row-based processing")
 
   override def doExecuteColumnar() : RDD[ColumnarBatch] = {
     val numOutputRows = longMetric(NUM_OUTPUT_ROWS)
@@ -145,10 +142,14 @@ case class GpuBroadcastHashJoinExec(
     val boundCondition = condition.map(GpuBindReferences.bindReference(_, output))
 
     lazy val builtTable = {
-      // TODO clean up intermediate results...
-      val keys = GpuProjectExec.project(broadcastRelation.value.batch, gpuBuildKeys)
-      val combined = combine(keys, broadcastRelation.value.batch)
-      val ret = GpuColumnVector.from(combined)
+      val ret = withResource(
+        GpuProjectExec.project(broadcastRelation.value.batch, gpuBuildKeys)) { keys =>
+        val combined = GpuHashJoin.incRefCount(combine(keys, broadcastRelation.value.batch))
+        withResource(combined) { combined =>
+          GpuColumnVector.from(combined)
+        }
+      }
+
       // Don't warn for a leak, because we cannot control when we are done with this
       (0 until ret.getNumberOfColumns).foreach(ret.getColumn(_).noWarnLeakExpected())
       ret

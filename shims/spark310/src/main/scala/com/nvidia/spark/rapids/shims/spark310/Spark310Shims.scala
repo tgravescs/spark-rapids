@@ -21,20 +21,23 @@ import com.nvidia.spark.rapids.shims.spark301.Spark301Shims
 import com.nvidia.spark.rapids.spark310.RapidsShuffleManager
 
 import org.apache.spark.SparkEnv
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.JoinType
+import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.connector.read.Scan
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 import org.apache.spark.sql.execution.datasources.v2.orc.OrcScan
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
+import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BroadcastNestedLoopJoinExec, HashJoin, ShuffledHashJoinExec, SortMergeJoinExec}
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.sql.rapids.{GpuFileSourceScanExec, GpuStringReplace, ShuffleManagerShimBase}
-import org.apache.spark.sql.rapids.execution.GpuBroadcastNestedLoopJoinExecBase
+import org.apache.spark.sql.rapids.execution.{GpuBroadcastNestedLoopJoinExecBase, GpuShuffleExchangeExecBase}
 import org.apache.spark.sql.rapids.shims.spark310._
 import org.apache.spark.sql.types._
 import org.apache.spark.storage.{BlockId, BlockManagerId}
@@ -76,47 +79,109 @@ class Spark310Shims extends Spark301Shims {
     GpuBroadcastNestedLoopJoinExec(left, right, join, joinType, condition, targetSizeBytes)
   }
 
-  override def isGpuHashJoin(plan: SparkPlan): Boolean = {
-    plan match {
-      case _: GpuHashJoin => true
-      case p => false
-    }
-  }
-
   override def isGpuBroadcastHashJoin(plan: SparkPlan): Boolean = {
     plan match {
       case _: GpuBroadcastHashJoinExec => true
-      case p => false
+      case _ => false
     }
   }
 
   override def isGpuShuffledHashJoin(plan: SparkPlan): Boolean = {
     plan match {
       case _: GpuShuffledHashJoinExec => true
-      case p => false
+      case _ => false
     }
   }
 
   def exprs310: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = Seq(
+    GpuOverrides.expr[Cast](
+        "Convert a column of one type of data into another type",
+        new CastChecks(),
+        (cast, conf, p, r) => new CastExprMeta[Cast](cast, SparkSession.active.sessionState.conf
+            .ansiEnabled, conf, p, r) {
+          override def tagExprForGpu(): Unit = {
+            if (!conf.isCastFloatToIntegralTypesEnabled &&
+                (fromType == DataTypes.FloatType || fromType == DataTypes.DoubleType) &&
+                (toType == DataTypes.ByteType || toType == DataTypes.ShortType ||
+                    toType == DataTypes.IntegerType || toType == DataTypes.LongType)) {
+              willNotWorkOnGpu(buildTagMessage(RapidsConf.ENABLE_CAST_FLOAT_TO_INTEGRAL_TYPES))
+            }
+            super.tagExprForGpu()
+          }
+        }),
+    GpuOverrides.expr[AnsiCast](
+      "Convert a column of one type of data into another type",
+      new CastChecks() {
+        import TypeSig._
+        // nullChecks are the same
+
+        override val booleanChecks: TypeSig = integral + fp + BOOLEAN + STRING
+        override val sparkBooleanSig: TypeSig = numeric + BOOLEAN + STRING
+
+        override val integralChecks: TypeSig = integral + fp + BOOLEAN + STRING
+        override val sparkIntegralSig: TypeSig = numeric + BOOLEAN + STRING
+
+        override val fpChecks: TypeSig = integral + fp + BOOLEAN + STRING
+        override val sparkFpSig: TypeSig = numeric + BOOLEAN + STRING
+
+        override val dateChecks: TypeSig = TIMESTAMP + DATE + STRING
+        override val sparkDateSig: TypeSig = TIMESTAMP + DATE + STRING
+
+        override val timestampChecks: TypeSig = TIMESTAMP + DATE + STRING
+        override val sparkTimestampSig: TypeSig = TIMESTAMP + DATE + STRING
+
+        // stringChecks are the same
+        // binaryChecks are the same
+
+        override val decimalChecks: TypeSig = none
+        override val sparkDecimalSig: TypeSig = numeric + BOOLEAN + STRING
+
+        // calendarChecks are the same
+
+        override val arrayChecks: TypeSig = none
+        override val sparkArraySig: TypeSig = ARRAY.nested(all)
+
+        override val mapChecks: TypeSig = none
+        override val sparkMapSig: TypeSig = MAP.nested(all)
+
+        override val structChecks: TypeSig = none
+        override val sparkStructSig: TypeSig = STRUCT.nested(all)
+
+        override val udtChecks: TypeSig = none
+        override val sparkUdtSig: TypeSig = UDT
+      },
+      (cast, conf, p, r) => new CastExprMeta[AnsiCast](cast, true, conf, p, r) {
+        override def tagExprForGpu(): Unit = {
+          if (!conf.isCastFloatToIntegralTypesEnabled &&
+              (fromType == DataTypes.FloatType || fromType == DataTypes.DoubleType) &&
+              (toType == DataTypes.ByteType || toType == DataTypes.ShortType ||
+                  toType == DataTypes.IntegerType || toType == DataTypes.LongType)) {
+            willNotWorkOnGpu(buildTagMessage(RapidsConf.ENABLE_CAST_FLOAT_TO_INTEGRAL_TYPES))
+          }
+          super.tagExprForGpu()
+        }
+      }),
     GpuOverrides.expr[RegExpReplace](
       "RegExpReplace support for string literal input patterns",
+      ExprChecks.projectNotLambda(TypeSig.STRING, TypeSig.STRING,
+        Seq(ParamCheck("str", TypeSig.STRING, TypeSig.STRING),
+          ParamCheck("regex", TypeSig.lit(TypeEnum.STRING)
+              .withPsNote(TypeEnum.STRING, "very limited regex support"), TypeSig.STRING),
+          ParamCheck("rep", TypeSig.lit(TypeEnum.STRING), TypeSig.STRING),
+          ParamCheck("pos", TypeSig.lit(TypeEnum.INT)
+            .withPsNote(TypeEnum.INT, "only a value of 1 is supported"),
+            TypeSig.lit(TypeEnum.INT)))),
       (a, conf, p, r) => new ExprMeta[RegExpReplace](a, conf, p, r) {
         override def tagExprForGpu(): Unit = {
-          if (!GpuOverrides.isLit(a.rep)) {
-            willNotWorkOnGpu("Only literal values are supported for replacement string")
-          }
           if (GpuOverrides.isNullOrEmptyOrRegex(a.regexp)) {
             willNotWorkOnGpu(
               "Only non-null, non-empty String literals that are not regex patterns " +
                   "are supported by RegExpReplace on the GPU")
           }
-          if (!a.pos.foldable) {
-            willNotWorkOnGpu("Only foldable expressions are supported for the " +
-            "starting search position")
-          }
-          val posEval = a.pos.eval()
-          if (posEval.asInstanceOf[Int] != 1) {
-            willNotWorkOnGpu("Only a search starting position of 1 is supported")
+          GpuOverrides.extractLit(a.pos).foreach { lit =>
+            if (lit.value.asInstanceOf[Int] != 1) {
+              willNotWorkOnGpu("Only a search starting position of 1 is supported")
+            }
           }
         }
         override def convertToGpu(): GpuExpression = {
@@ -136,14 +201,9 @@ class Spark310Shims extends Spark301Shims {
     super.getExecs ++ Seq(
       GpuOverrides.exec[FileSourceScanExec](
         "Reading data from files, often from Hive tables",
+        ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.STRUCT + TypeSig.MAP +
+            TypeSig.ARRAY + TypeSig.DECIMAL).nested(), TypeSig.all),
         (fsse, conf, p, r) => new SparkPlanMeta[FileSourceScanExec](fsse, conf, p, r) {
-          override def isSupportedType(t: DataType): Boolean =
-            GpuOverrides.isSupportedType(t,
-              allowArray = true,
-              allowMaps = true,
-              allowStruct = true,
-              allowNesting = true)
-
           // partition filters and data filters are not run on the GPU
           override val childExprs: Seq[ExprMeta[_]] = Seq.empty
 
@@ -168,12 +228,12 @@ class Spark310Shims extends Spark301Shims {
               wrapped.optionalBucketSet,
               wrapped.optionalNumCoalescedBuckets,
               wrapped.dataFilters,
-              wrapped.tableIdentifier,
-              conf)
+              wrapped.tableIdentifier)(conf)
           }
         }),
       GpuOverrides.exec[InMemoryTableScanExec](
         "Implementation of InMemoryTableScanExec to use GPU accelerated Caching",
+        ExecChecks(TypeSig.commonCudfTypes, TypeSig.all),
         (scan, conf, p, r) => new SparkPlanMeta[InMemoryTableScanExec](scan, conf, p, r) {
           override def tagPlanForGpu(): Unit = {
             if (!scan.relation.cacheBuilder.serializer.isInstanceOf[ParquetCachedBatchSerializer]) {
@@ -189,12 +249,15 @@ class Spark310Shims extends Spark301Shims {
         }),
       GpuOverrides.exec[SortMergeJoinExec](
         "Sort merge join, replacing with shuffled hash join",
+        ExecChecks(TypeSig.commonCudfTypes + TypeSig.NULL, TypeSig.all),
         (join, conf, p, r) => new GpuSortMergeJoinMeta(join, conf, p, r)),
       GpuOverrides.exec[BroadcastHashJoinExec](
         "Implementation of join using broadcast data",
+        ExecChecks(TypeSig.commonCudfTypes + TypeSig.NULL, TypeSig.all),
         (join, conf, p, r) => new GpuBroadcastHashJoinMeta(join, conf, p, r)),
       GpuOverrides.exec[ShuffledHashJoinExec](
         "Implementation of join using hashed shuffled data",
+        ExecChecks(TypeSig.commonCudfTypes + TypeSig.NULL, TypeSig.all),
         (join, conf, p, r) => new GpuShuffledHashJoinMeta(join, conf, p, r))
     ).map(r => (r.getClassFor.asSubclass(classOf[SparkPlan]), r))
   }
@@ -240,7 +303,6 @@ class Spark310Shims extends Spark301Shims {
       })
   ).map(r => (r.getClassFor.asSubclass(classOf[Scan]), r)).toMap
 
-
   override def getBuildSide(join: HashJoin): GpuBuildSide = {
     GpuJoinUtils.getGpuBuildSide(join.buildSide)
   }
@@ -268,7 +330,7 @@ class Spark310Shims extends Spark301Shims {
   override def copyFileSourceScanExec(
       scanExec: GpuFileSourceScanExec,
       queryUsesInputFile: Boolean): GpuFileSourceScanExec = {
-    scanExec.copy(queryUsesInputFile=queryUsesInputFile)
+    scanExec.copy(queryUsesInputFile=queryUsesInputFile)(scanExec.rapidsConf)
   }
 
   override def getGpuColumnarToRowTransition(plan: SparkPlan,
@@ -289,4 +351,29 @@ class Spark310Shims extends Spark301Shims {
     GpuSchemaUtils.checkColumnNameDuplication(schema, colType, resolver)
   }
 
+  override def getGpuShuffleExchangeExec(
+      outputPartitioning: Partitioning,
+      child: SparkPlan,
+      cpuShuffle: Option[ShuffleExchangeExec]): GpuShuffleExchangeExecBase = {
+    val shuffleOrigin = cpuShuffle.map(_.shuffleOrigin).getOrElse(ENSURE_REQUIREMENTS)
+    GpuShuffleExchangeExec(outputPartitioning, child, shuffleOrigin)
+  }
+
+  override def sortOrderChildren(s: SortOrder): Seq[Expression] = s.children
+
+  override def sortOrder(
+      child: Expression,
+      direction: SortDirection,
+      nullOrdering: NullOrdering): SortOrder = SortOrder(child, direction, nullOrdering, Seq.empty)
+
+  override def copySortOrderWithNewChild(s: SortOrder, child: Expression) = {
+    s.copy(child = child)
+  }
+
+  override def alias(child: Expression, name: String)(
+      exprId: ExprId,
+      qualifier: Seq[String],
+      explicitMetadata: Option[Metadata]): Alias = {
+    Alias(child, name)(exprId, qualifier, explicitMetadata)
+  }
 }

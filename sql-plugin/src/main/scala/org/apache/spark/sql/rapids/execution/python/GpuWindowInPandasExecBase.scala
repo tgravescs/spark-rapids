@@ -43,7 +43,7 @@ abstract class GpuWindowInPandasExecMetaBase(
     winPandas: WindowInPandasExec,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
-    rule: ConfKeysAndIncompat)
+    rule: DataFromReplacementRule)
   extends SparkPlanMeta[WindowInPandasExec](winPandas, conf, parent, rule) {
 
   override def couldReplaceMessage: String = "could partially run on GPU"
@@ -76,9 +76,6 @@ abstract class GpuWindowInPandasExecMetaBase(
       .foreach(rf => willNotWorkOnGpu(because = s"Only support RowFrame for now," +
         s" but found ${rf.frameType}"))
   }
-
-  override def isSupportedType(t: DataType): Boolean =
-    GpuOverrides.isSupportedType(t, allowArray = true)
 }
 
 /**
@@ -201,7 +198,7 @@ trait GpuWindowInPandasExecBase extends UnaryExecNode with GpuExec {
   }
 
   override def requiredChildOrdering: Seq[Seq[SortOrder]] =
-    Seq(partitionSpec.map(SortOrder(_, Ascending)) ++ orderSpec)
+    Seq(partitionSpec.map(ShimLoader.getSparkShims.sortOrder(_, Ascending)) ++ orderSpec)
 
   override def outputOrdering: Seq[SortOrder] = child.outputOrdering
 
@@ -242,7 +239,7 @@ trait GpuWindowInPandasExecBase extends UnaryExecNode with GpuExec {
 
   // Similar with WindowExecBase.windowFrameExpressionFactoryPairs
   // but the functions are not needed here.
-  private lazy val windowFramesWithExpressions = {
+  protected lazy val windowFramesWithExpressions = {
     type FrameKey = (String, GpuSpecifiedWindowFrame)
     type ExpressionBuffer = mutable.Buffer[Expression]
     val framedExpressions = mutable.Map.empty[FrameKey, ExpressionBuffer]
@@ -526,52 +523,59 @@ trait GpuWindowInPandasExecBase extends UnaryExecNode with GpuExec {
         PythonWorkerSemaphore.acquireIfNecessary(TaskContext.get())
       }
 
-      val pyRunner = new GpuArrowPythonRunner(
-        pyFuncs,
-        PythonEvalType.SQL_WINDOW_AGG_PANDAS_UDF,
-        argOffsets,
-        pythonInputSchema,
-        sessionLocalTimeZone,
-        pythonRunnerConf,
-        /* The whole group data should be written in a single call, so here is unlimited */
-        Int.MaxValue,
-        () => queue.finish(),
-        pythonOutputSchema)
+      if (pyInputIterator.hasNext) {
+        val pyRunner = new GpuArrowPythonRunner(
+          pyFuncs,
+          PythonEvalType.SQL_WINDOW_AGG_PANDAS_UDF,
+          argOffsets,
+          pythonInputSchema,
+          sessionLocalTimeZone,
+          pythonRunnerConf,
+          /* The whole group data should be written in a single call, so here is unlimited */
+          Int.MaxValue,
+          () => queue.finish(),
+          pythonOutputSchema)
 
-      val outputBatchIterator = pyRunner.compute(pyInputIterator, context.partitionId(), context)
-      new Iterator[ColumnarBatch] {
-        // for hasNext we are waiting on the queue to have something inserted into it
-        // instead of waiting for a result to be ready from python. The reason for this
-        // is to let us know the target number of rows in the batch that we want when reading.
-        // It is a bit hacked up but it works. In the future when we support spilling we should
-        // store the number of rows separate from the batch. That way we can get the target batch
-        // size out without needing to grab the GpuSemaphore which we cannot do if we might block
-        // on a read operation.
-        override def hasNext: Boolean = queue.hasNext
+        val outputBatchIterator = pyRunner.compute(pyInputIterator, context.partitionId(), context)
+        new Iterator[ColumnarBatch] {
+          // for hasNext we are waiting on the queue to have something inserted into it
+          // instead of waiting for a result to be ready from python. The reason for this
+          // is to let us know the target number of rows in the batch that we want when reading.
+          // It is a bit hacked up but it works. In the future when we support spilling we should
+          // store the number of rows separate from the batch. That way we can get the target batch
+          // size out without needing to grab the GpuSemaphore which we cannot do if we might block
+          // on a read operation.
+          // Besides, when the queue is empty, need to call the `hasNext` of the out iterator to
+          // trigger reading and handling the control data followed with the stream data.
+          override def hasNext: Boolean = queue.hasNext || outputBatchIterator.hasNext
 
-        private [this] def combine(
-            origBatch: ColumnarBatch,
-            retBatch: ColumnarBatch): ColumnarBatch = {
-          val lColumns = GpuColumnVector.extractColumns(origBatch)
-          val rColumns = GpuColumnVector.extractColumns(retBatch)
-          new ColumnarBatch(lColumns.map(_.incRefCount()) ++ rColumns.map(_.incRefCount()),
-            origBatch.numRows())
-        }
+          private [this] def combine(
+                                      origBatch: ColumnarBatch,
+                                      retBatch: ColumnarBatch): ColumnarBatch = {
+            val lColumns = GpuColumnVector.extractColumns(origBatch)
+            val rColumns = GpuColumnVector.extractColumns(retBatch)
+            new ColumnarBatch(lColumns.map(_.incRefCount()) ++ rColumns.map(_.incRefCount()),
+              origBatch.numRows())
+          }
 
-        override def next(): ColumnarBatch = {
-          val numRows = queue.peekBatchSize
-          // Update the expected batch size for next read
-          pyRunner.minReadTargetBatchSize = numRows
-          withResource(outputBatchIterator.next()) { cbFromPython =>
-            assert(cbFromPython.numRows() == numRows)
-            withResource(queue.remove()) { origBatch =>
-              numOutputBatches += 1
-              numOutputRows += numRows
-              projectResult(combine(origBatch, cbFromPython))
+          override def next(): ColumnarBatch = {
+            val numRows = queue.peekBatchSize
+            // Update the expected batch size for next read
+            pyRunner.minReadTargetBatchSize = numRows
+            withResource(outputBatchIterator.next()) { cbFromPython =>
+              assert(cbFromPython.numRows() == numRows)
+              withResource(queue.remove()) { origBatch =>
+                numOutputBatches += 1
+                numOutputRows += numRows
+                projectResult(combine(origBatch, cbFromPython))
+              }
             }
           }
-        }
-      } // End of new Iterator
+        } // End of new Iterator
+      } else {
+        // Empty partition, return the input iterator directly
+        inputIter
+      }
 
     } // End of mapPartitions
   } // End of doExecuteColumnar

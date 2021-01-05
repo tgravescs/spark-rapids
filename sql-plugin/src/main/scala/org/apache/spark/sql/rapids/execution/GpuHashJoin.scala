@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.nvidia.spark.rapids.shims.spark300
+package org.apache.spark.sql.rapids.execution
 
 import ai.rapids.cudf.{NvtxColor, Table}
-import com.nvidia.spark.rapids._
+import com.nvidia.spark.rapids.{CoalesceGoal, GpuBindReferences, GpuBoundReference, GpuBuildLeft, GpuBuildRight, GpuBuildSide, GpuColumnVector, GpuExec, GpuExpression, GpuFilter, GpuIsNotNull, GpuProjectExec, NvtxWithMetrics, RapidsMeta, RequireSingleBatch}
 
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.{ExistenceJoin, FullOuter, InnerLike, JoinType, LeftAnti, LeftExistence, LeftOuter, LeftSemi, RightOuter}
-import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, HashJoin}
+import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.rapids.GpuAnd
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
@@ -47,7 +47,31 @@ object GpuHashJoin {
   }
 }
 
-trait GpuHashJoin extends GpuExec with HashJoin {
+trait GpuHashJoin extends GpuExec {
+  def left: SparkPlan
+  def right: SparkPlan
+  def joinType: JoinType
+  def condition: Option[Expression]
+  def leftKeys: Seq[Expression]
+  def rightKeys: Seq[Expression]
+  def buildSide: GpuBuildSide
+
+  protected lazy val (buildPlan, streamedPlan) = buildSide match {
+    case GpuBuildLeft => (left, right)
+    case GpuBuildRight => (right, left)
+  }
+
+  protected lazy val (buildKeys, streamedKeys) = {
+    require(leftKeys.length == rightKeys.length &&
+        leftKeys.map(_.dataType)
+            .zip(rightKeys.map(_.dataType))
+            .forall(types => types._1.sameType(types._2)),
+      "Join keys from two sides should have same length and types")
+    buildSide match {
+      case GpuBuildLeft => (leftKeys, rightKeys)
+      case GpuBuildRight => (rightKeys, leftKeys)
+    }
+  }
 
   override def output: Seq[Attribute] = {
     joinType match {
@@ -73,8 +97,8 @@ trait GpuHashJoin extends GpuExec with HashJoin {
   // core joins this will change
   override def outputBatching: CoalesceGoal = {
     val batching = buildSide match {
-      case BuildLeft => GpuExec.outputBatching(right)
-      case BuildRight => GpuExec.outputBatching(left)
+      case GpuBuildLeft => GpuExec.outputBatching(right)
+      case GpuBuildRight => GpuExec.outputBatching(left)
     }
     if (batching == RequireSingleBatch) {
       RequireSingleBatch
@@ -89,8 +113,8 @@ trait GpuHashJoin extends GpuExec with HashJoin {
     val lkeys = GpuBindReferences.bindGpuReferences(leftKeys, left.output)
     val rkeys = GpuBindReferences.bindGpuReferences(rightKeys, right.output)
     buildSide match {
-      case BuildLeft => (lkeys, rkeys)
-      case BuildRight => (rkeys, lkeys)
+      case GpuBuildLeft => (lkeys, rkeys)
+      case GpuBuildRight => (rkeys, lkeys)
     }
   }
 
@@ -130,65 +154,6 @@ trait GpuHashJoin extends GpuExec with HashJoin {
       val joinLength = joinKeyIndices.length
       output.indices.map (v => v + joinLength)
   }
-
-  // Spark adds in rules to filter out nulls for some types of joins, but it does not
-  // guarantee 100% that all nulls will be filtered out by the time they get to
-  // this point, but because of https://github.com/rapidsai/cudf/issues/6052
-  // we need to filter out the nulls ourselves until it is fixed.
-  // InnerLike | LeftSemi =>
-  //   filter left and right keys
-  // RightOuter =>
-  //   filter left keys
-  // LeftOuter | LeftAnti =>
-  //   filter right keys
-
-  private[this] lazy val shouldFilterBuiltTableForNulls: Boolean = {
-    val builtAnyNullable = gpuBuildKeys.exists(_.nullable)
-    (joinType, buildSide) match {
-      case (_: InnerLike | LeftSemi, _) => builtAnyNullable
-      case (RightOuter, BuildLeft) => builtAnyNullable
-      case (LeftOuter | LeftAnti, BuildRight) => builtAnyNullable
-      case _ => false
-    }
-  }
-
-  private[this] lazy val shouldFilterStreamTableForNulls: Boolean = {
-    val streamedAnyNullable = gpuStreamedKeys.exists(_.nullable)
-    (joinType, buildSide) match {
-      case (_: InnerLike | LeftSemi, _) => streamedAnyNullable
-      case (RightOuter, BuildRight) => streamedAnyNullable
-      case (LeftOuter | LeftAnti, BuildLeft) => streamedAnyNullable
-      case _ => false
-    }
-  }
-
-  private[this] def mkNullFilterExpr(exprs: Seq[GpuExpression]): GpuExpression =
-    exprs.zipWithIndex.map { kv =>
-      GpuIsNotNull(GpuBoundReference(kv._2, kv._1.dataType, kv._1.nullable))
-    }.reduce(GpuAnd)
-
-  private[this] lazy val builtTableNullFilterExpression: GpuExpression =
-    mkNullFilterExpr(gpuBuildKeys)
-
-  private[this] lazy val streamedTableNullFilterExpression: GpuExpression =
-    mkNullFilterExpr(gpuStreamedKeys)
-
-  /**
-   * Filter the builtBatch if needed.  builtBatch will be closed.
-   */
-  def filterBuiltTableIfNeeded(builtBatch: ColumnarBatch): ColumnarBatch =
-    if (shouldFilterBuiltTableForNulls) {
-      GpuFilter(builtBatch, builtTableNullFilterExpression)
-    } else {
-      builtBatch
-    }
-
-  private[this] def filterStreamedTableIfNeeded(streamedBatch:ColumnarBatch): ColumnarBatch =
-    if (shouldFilterStreamTableForNulls) {
-      GpuFilter(streamedBatch, streamedTableNullFilterExpression)
-    } else {
-      streamedBatch
-    }
 
   def doJoin(builtTable: Table,
       stream: Iterator[ColumnarBatch],
@@ -263,15 +228,15 @@ trait GpuHashJoin extends GpuExec with HashJoin {
           GpuHashJoin.incRefCount(combine(streamedKeysBatch, streamedBatch))
       }
     }
-    val streamedTable = withResource(filterStreamedTableIfNeeded(combined)) { cb =>
+    val streamedTable = withResource(combined) { cb =>
       GpuColumnVector.from(cb)
     }
 
     val nvtxRange = new NvtxWithMetrics("hash join", NvtxColor.ORANGE, joinTime)
     val joined = try {
       buildSide match {
-        case BuildLeft => doJoinLeftRight(builtTable, streamedTable)
-        case BuildRight => doJoinLeftRight(streamedTable, builtTable)
+        case GpuBuildLeft => doJoinLeftRight(builtTable, streamedTable)
+        case GpuBuildRight => doJoinLeftRight(streamedTable, builtTable)
       }
     } finally {
       streamedTable.close()
@@ -324,4 +289,5 @@ trait GpuHashJoin extends GpuExec with HashJoin {
       joinedTable.close()
     }
   }
+
 }

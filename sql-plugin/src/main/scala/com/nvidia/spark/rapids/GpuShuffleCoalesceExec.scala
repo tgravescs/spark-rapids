@@ -38,7 +38,7 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  * @note This should ALWAYS appear in the plan after a GPU shuffle when RAPIDS shuffle is
  *       not being used.
  */
-case class ShuffleCoalesceExec(child: SparkPlan, @transient rapidsConf: RapidsConf)
+case class GpuShuffleCoalesceExec(child: SparkPlan, targetBatchByteSize: Long)
     extends UnaryExecNode with GpuExec {
 
   import GpuMetricNames._
@@ -59,11 +59,11 @@ case class ShuffleCoalesceExec(child: SparkPlan, @transient rapidsConf: RapidsCo
 
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
     val metricsMap = metrics
-    val targetBatchByteSize = rapidsConf.gpuTargetBatchSizeBytes
+    val targetSize = targetBatchByteSize
     val sparkSchema = GpuColumnVector.extractTypes(schema)
 
     child.executeColumnar().mapPartitions { iter =>
-      new ShuffleCoalesceIterator(iter, targetBatchByteSize, sparkSchema, metricsMap)
+      new GpuShuffleCoalesceIterator(iter, targetSize, sparkSchema, metricsMap)
     }
   }
 }
@@ -74,7 +74,7 @@ case class ShuffleCoalesceExec(child: SparkPlan, @transient rapidsConf: RapidsCo
  * to the target batch size and then concatenated on the host before the data
  * is transferred to the GPU.
  */
-class ShuffleCoalesceIterator(
+class GpuShuffleCoalesceIterator(
     batchIter: Iterator[ColumnarBatch],
     targetBatchByteSize: Long,
     sparkSchema: Array[DataType],

@@ -17,12 +17,19 @@
 package com.nvidia.spark.rapids
 
 import java.io.File
+import java.lang.reflect.Method
 import java.nio.charset.StandardCharsets
 
+import ai.rapids.cudf.{ColumnVector, DType, Table, TableWriter}
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.ParquetFileReader
+import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
+import org.mockito.invocation.InvocationOnMock
 
 import org.apache.spark.{SparkConf, SparkException}
+import org.apache.spark.sql.types.{ByteType, DataType}
+import org.apache.spark.sql.vectorized.ColumnarBatch
 
 /**
  * Tests for writing Parquet files with the GPU.
@@ -73,19 +80,6 @@ class ParquetWriterSuite extends SparkQueryCompareTestSuite {
       })
     } finally {
       tempFile.delete()
-    }
-  }
-
-  testExpectedException[IllegalArgumentException](
-      "int96 timestamps not supported",
-      _.getMessage.startsWith("Part of the plan is not columnar"),
-      frameFromParquet("timestamp-date-test-msec.parquet"),
-      new SparkConf().set("spark.sql.parquet.outputTimestampType", "INT96")) {
-    val tempFile = File.createTempFile("int96", "parquet")
-    tempFile.delete()
-    frame => {
-      frame.write.mode("overwrite").parquet(tempFile.getAbsolutePath)
-      frame
     }
   }
 

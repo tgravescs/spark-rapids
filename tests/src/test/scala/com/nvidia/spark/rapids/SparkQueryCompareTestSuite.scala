@@ -294,11 +294,12 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
       maxFloatDiff: Double = 0.0,
       incompat: Boolean = false,
       execsAllowedNonGpu: Seq[String] = Seq.empty,
-      sortBeforeRepart: Boolean = false)
+      sortBeforeRepart: Boolean = false,
+      decimalTypeEnabled: Boolean = true)
       (fun: DataFrame => DataFrame): Unit = {
     val (testConf, qualifiedTestName) =
       setupTestConfAndQualifierName(testName, incompat, sort, conf, execsAllowedNonGpu,
-        maxFloatDiff, sortBeforeRepart)
+        maxFloatDiff, sortBeforeRepart, decimalTypeEnabled)
     test(qualifiedTestName) {
       val (fromCpu, _, fromGpu, gpuPlan) = runOnCpuAndGpuWithCapture(df, fun,
         conf = testConf,
@@ -321,27 +322,35 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
       df: SparkSession => DataFrame,
       fun: DataFrame => DataFrame,
       conf: SparkConf = new SparkConf(),
-      repart: Integer = 1): (Array[Row], Array[Row]) = {
+      repart: Integer = 1,
+      skipCanonicalizationCheck: Boolean = false): (Array[Row], Array[Row]) = {
     conf.setIfMissing("spark.sql.shuffle.partitions", "2")
-    val fromCpu = withCpuSparkSession( session => {
+    val (planCpu, canonicalizationMatchesCpu, fromCpu) = withCpuSparkSession( session => {
       var data = df(session)
       if (repart > 0) {
         // repartition the data so it is turned into a projection,
         // not folded into the table scan exec
         data = data.repartition(repart)
       }
-      fun(data).collect()
+      collect(fun, data)
     }, conf)
 
-    val fromGpu = withGpuSparkSession( session => {
+    val (planGpu, canonicalizationMatchesGpu, fromGpu) = withGpuSparkSession( session => {
       var data = df(session)
       if (repart > 0) {
         // repartition the data so it is turned into a projection,
         // not folded into the table scan exec
         data = data.repartition(repart)
       }
-      fun(data).collect()
+      collect(fun, data)
     }, conf)
+
+    if (!skipCanonicalizationCheck && (canonicalizationMatchesCpu != canonicalizationMatchesGpu)) {
+      fail(s"canonicalizationMatchesCpu=$canonicalizationMatchesCpu != " +
+          s"canonicalizationMatchesGpu=$canonicalizationMatchesGpu\n" +
+          s"CPU plan: $planCpu\n" +
+          s"GPU plan: $planGpu")
+    }
 
     (fromCpu, fromGpu)
   }
@@ -385,6 +394,16 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
     }, conf)
 
     (fromCpu, fromGpu)
+  }
+
+  def collect(
+      fun: DataFrame => DataFrame,
+      data: DataFrame): (SparkPlan, Boolean, Array[Row]) = {
+    val plan1 = fun(data)
+    val plan2 = fun(data)
+    val canonicalizationMatches = plan1.queryExecution.executedPlan.canonicalized ==
+        plan2.queryExecution.executedPlan.canonicalized
+    (plan1.queryExecution.executedPlan.canonicalized, canonicalizationMatches, plan1.collect())
   }
 
   def INCOMPAT_testSparkResultsAreEqual(
@@ -468,12 +487,14 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
       df: SparkSession => DataFrame,
       repart: Integer = 1,
       conf: SparkConf = new SparkConf(),
-      sortBeforeRepart: Boolean = false)(fun: DataFrame => DataFrame): Unit = {
+      sortBeforeRepart: Boolean = false,
+      skipCanonicalizationCheck: Boolean = false)(fun: DataFrame => DataFrame): Unit = {
     testSparkResultsAreEqual(testName, df,
       conf=conf,
       repart=repart,
       sort=true,
-      sortBeforeRepart = sortBeforeRepart)(fun)
+      sortBeforeRepart = sortBeforeRepart,
+      skipCanonicalizationCheck = skipCanonicalizationCheck)(fun)
   }
 
   def IGNORE_ORDER_testSparkResultsAreEqualWithCapture(
@@ -638,7 +659,8 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
       conf: SparkConf,
       execsAllowedNonGpu: Seq[String],
       maxFloatDiff: Double,
-      sortBeforeRepart: Boolean): (SparkConf, String) = {
+      sortBeforeRepart: Boolean,
+      decimalTypeEnabled: Boolean): (SparkConf, String) = {
 
     var qualifiers = Set[String]()
     var testConf = conf
@@ -656,6 +678,11 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
       val execStr = execsAllowedNonGpu.mkString(",")
       testConf = testConf.clone().set(RapidsConf.TEST_ALLOWED_NONGPU.key, execStr)
       qualifiers = qualifiers + s"NOT ON GPU[$execStr]"
+    }
+
+    if (decimalTypeEnabled) {
+      testConf = testConf.clone().set(RapidsConf.DECIMAL_TYPE_ENABLED.key, "true")
+      qualifiers = qualifiers + "WITH DECIMALS"
     }
 
     testConf.set("spark.sql.execution.sortBeforeRepartition", sortBeforeRepart.toString)
@@ -711,12 +738,14 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
       incompat: Boolean = false,
       execsAllowedNonGpu: Seq[String] = Seq.empty,
       sortBeforeRepart: Boolean = false,
-      assumeCondition: SparkSession => (Boolean, String) = null)
+      assumeCondition: SparkSession => (Boolean, String) = null,
+      decimalTypeEnabled: Boolean = true,
+      skipCanonicalizationCheck: Boolean = false)
       (fun: DataFrame => DataFrame): Unit = {
 
     val (testConf, qualifiedTestName) =
       setupTestConfAndQualifierName(testName, incompat, sort, conf, execsAllowedNonGpu,
-        maxFloatDiff, sortBeforeRepart)
+        maxFloatDiff, sortBeforeRepart, decimalTypeEnabled)
 
     test(qualifiedTestName) {
       if (assumeCondition != null) {
@@ -725,7 +754,8 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
       }
       val (fromCpu, fromGpu) = runOnCpuAndGpu(df, fun,
         conf = testConf,
-        repart = repart)
+        repart = repart,
+        skipCanonicalizationCheck = skipCanonicalizationCheck)
       compareResults(sort, maxFloatDiff, fromCpu, fromGpu)
     }
   }
@@ -740,12 +770,13 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
       incompat: Boolean = false,
       execsAllowedNonGpu: Seq[String] = Seq.empty,
       sortBeforeRepart: Boolean = false)
-      (fun: DataFrame => DataFrame)
+      (fun: DataFrame => DataFrame,
+      decimalTypeEnabled: Boolean = true)
       (validateCapturedPlans: (SparkPlan, SparkPlan) => Unit): Unit = {
 
     val (testConf, qualifiedTestName) =
       setupTestConfAndQualifierName(testName, incompat, sort, conf, execsAllowedNonGpu,
-        maxFloatDiff, sortBeforeRepart)
+        maxFloatDiff, sortBeforeRepart, decimalTypeEnabled)
     test(qualifiedTestName) {
       val (fromCpu, cpuPlan, fromGpu, gpuPlan) = runOnCpuAndGpuWithCapture(df, fun,
         conf = testConf,
@@ -786,10 +817,11 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
     maxFloatDiff: Double = 0.0,
     incompat: Boolean = false,
     execsAllowedNonGpu: Seq[String] = Seq.empty,
-    sortBeforeRepart: Boolean = false)(fun: DataFrame => DataFrame): Unit = {
+    sortBeforeRepart: Boolean = false,
+    decimalTypeEnabled: Boolean = true)(fun: DataFrame => DataFrame): Unit = {
     val (testConf, qualifiedTestName) =
       setupTestConfAndQualifierName(testName, incompat, sort, conf, execsAllowedNonGpu,
-        maxFloatDiff, sortBeforeRepart)
+        maxFloatDiff, sortBeforeRepart, decimalTypeEnabled)
 
     test(qualifiedTestName) {
       val t = Try({
@@ -821,12 +853,13 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
       maxFloatDiff: Double = 0.0,
       incompat: Boolean = false,
       execsAllowedNonGpu: Seq[String] = Seq.empty,
-      sortBeforeRepart: Boolean = false)
+      sortBeforeRepart: Boolean = false,
+      decimaTypeEnabled: Boolean = true)
       (fun: DataFrame => DataFrame)(implicit classTag: ClassTag[T]): Unit = {
     val clazz = classTag.runtimeClass
     val (testConf, qualifiedTestName) =
       setupTestConfAndQualifierName(testName, incompat, sort, conf, execsAllowedNonGpu,
-        maxFloatDiff, sortBeforeRepart)
+        maxFloatDiff, sortBeforeRepart, decimaTypeEnabled)
 
       test(qualifiedTestName) {
         val t = Try({
@@ -854,12 +887,13 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
       maxFloatDiff: Double = 0.0,
       incompat: Boolean = false,
       execsAllowedNonGpu: Seq[String] = Seq.empty,
-      sortBeforeRepart: Boolean = false)
+      sortBeforeRepart: Boolean = false,
+      decimalTypeEnabled: Boolean = true)
     (fun: (DataFrame, DataFrame) => DataFrame): Unit = {
 
     val (testConf, qualifiedTestName) =
       setupTestConfAndQualifierName(testName, incompat, sort, conf, execsAllowedNonGpu,
-        maxFloatDiff, sortBeforeRepart)
+        maxFloatDiff, sortBeforeRepart, decimalTypeEnabled)
 
     testConf.set("spark.sql.execution.sortBeforeRepartition", sortBeforeRepart.toString)
     test(qualifiedTestName) {
@@ -915,10 +949,11 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
       reader: (SparkSession, String) => DataFrame,
       conf: SparkConf = new SparkConf(),
       sortBeforeRepart: Boolean = false,
-      sort: Boolean = false): Unit = {
+      sort: Boolean = false,
+      decimalTypeEnabled: Boolean = true): Unit = {
     val (testConf, qualifiedTestName) =
       setupTestConfAndQualifierName(testName, false, sort, conf, Nil,
-        0.0, sortBeforeRepart)
+        0.0, sortBeforeRepart, decimalTypeEnabled)
 
     test(qualifiedTestName) {
       val (fromCpu, fromGpu) = writeWithCpuAndGpu(df, writer, reader, testConf)
@@ -955,11 +990,11 @@ trait SparkQueryCompareTestSuite extends FunSuite with Arm {
       Row(99, 400L, 4.0, "D", Decimal("1.5")),
       Row(98, 500L, 5.0, "E", Decimal("1.6")),
       Row(97, -100L, 6.0, "F", Decimal("1.7")),
-      Row(96, -500L, 0.0, "G", Decimal("1.8")),
+      Row(96, -500L, 0.0, "G", null),
       Row(95, -700L, 8.0, "E\u0480\u0481", Decimal("1.9")),
       Row(Int.MaxValue, Long.MinValue, Double.PositiveInfinity, "\u0000", Decimal("2.0")),
       Row(Int.MinValue, Long.MaxValue, Double.NaN, "\u0000", Decimal("100.123")),
-      Row(null, null, null, "actions are judged by intentions", Decimal("200.246")),
+      Row(null, null, null, "actions are judged by intentions", null),
       Row(94, -900L, 9.0, "g\nH", Decimal("300.369")),
       Row(92, -1200L, 12.0, "IJ\"\u0100\u0101\u0500\u0501", Decimal("-1.47e3")),
       Row(90, 1500L, 15.0, "\ud720\ud721", Decimal("-22.2345")))
