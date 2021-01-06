@@ -167,15 +167,15 @@ class Spark301dbShims extends Spark301Shims with Logging {
 
               // all files replaced s3:/ to alluxio://
               val inputFiles: Seq[Path] = listFiles.flatMap(partitionDir => {
-                partitionDir.files.map(f => 
+                partitionDir.files.map(f => {
                   val fstr = f.getPath.toString
                   val uri = new URI(fstr).getScheme()
                   if (uri == "dbfs") {
-                    new Path(f.getPath.toString.replaceFirst("dbfs:/", "alluxio://" + conf.alluxioIPPort)))
+                    new Path(f.getPath.toString.replaceFirst("dbfs:/", "alluxio://" + conf.alluxioIPPort))
                   } else {
-                    new Path(f.getPath.toString.replaceFirst("s3:/", "alluxio://" + conf.alluxioIPPort)))
+                    new Path(f.getPath.toString.replaceFirst("s3:/", "alluxio://" + conf.alluxioIPPort))
                   }
-              }).toSet.toSeq
+              })}).toSet.toSeq
 
               logInfo("Gary-Alluxio input file size:" + inputFiles.length)
 
