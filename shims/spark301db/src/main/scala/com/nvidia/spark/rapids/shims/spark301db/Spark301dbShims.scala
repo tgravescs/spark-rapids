@@ -122,14 +122,15 @@ class Spark301dbShims extends Spark301Shims with Logging {
             val sparkSession = wrapped.relation.sparkSession
             val options = wrapped.relation.options
 
-            val location = if (conf.alluxioEnabled
-              && wrapped.relation.location.getClass.getCanonicalName() ==
-              "com.databricks.sql.transaction.tahoe.stats.PreparedDeltaFileIndex") {
+            // val location = if (conf.alluxioEnabled
+            //   && wrapped.relation.location.getClass.getCanonicalName() ==
+             //  "com.databricks.sql.transaction.tahoe.stats.PreparedDeltaFileIndex") {
+            val location = if (conf.alluxioEnabled) {
 
               val start = System.currentTimeMillis
               logInfo("Gary-Alluxio ++++++++++++++++++ begin to replace S3:// to alluxio://")
-              val preparedDeltaFileIndex = wrapped.relation.location.asInstanceOf[PreparedDeltaFileIndex]
-              val deltaScanFileLength = preparedDeltaFileIndex.preparedScan.files.length
+              // val preparedDeltaFileIndex = wrapped.relation.location.asInstanceOf[PreparedDeltaFileIndex]
+              // val deltaScanFileLength = preparedDeltaFileIndex.preparedScan.files.length
               /*logInfo("Gary-Alluxio deltaScanFileLength : " + deltaScanFileLength)
               logInfo("Gary-Alluxio deltascan partitionFilters:" + preparedDeltaFileIndex.preparedScan.partitionFilters)
               logInfo("Gary-Alluxio deltascan dataFilters:" + preparedDeltaFileIndex.preparedScan.dataFilters)
@@ -143,8 +144,17 @@ class Spark301dbShims extends Spark301Shims with Logging {
               val alluxioStr = "alluxio://" + conf.alluxioIPPort
 
               // we need rootPaths from PreparedDeltaFileIndex to infer PartitionSpec
+              // val finalRootPaths = wrapped.relation.location.rootPaths.map(path => {
+                // new Path(path.toString.replaceFirst("s3:/", alluxioStr))
+              // })
+              import java.net.URI
               val finalRootPaths = wrapped.relation.location.rootPaths.map(path => {
-                new Path(path.toString.replaceFirst("s3:/", alluxioStr))
+                val uri = new URI(path.toString).getScheme()
+                if (uri == "dbfs") {
+                  new Path(path.toString.replaceFirst("dbfs:/", alluxioStr))
+                } else {
+                  new Path(path.toString.replaceFirst("s3:/", alluxioStr))
+                }
               })
               logInfo("Gary-Alluxio replaced rootPaths:" + finalRootPaths.mkString(","))
 
@@ -157,8 +167,14 @@ class Spark301dbShims extends Spark301Shims with Logging {
 
               // all files replaced s3:/ to alluxio://
               val inputFiles: Seq[Path] = listFiles.flatMap(partitionDir => {
-                partitionDir.files.map(f => new Path(
-                  f.getPath.toString.replaceFirst("s3:/", "alluxio://" + conf.alluxioIPPort)))
+                partitionDir.files.map(f => 
+                  val fstr = f.getPath.toString
+                  val uri = new URI(fstr).getScheme()
+                  if (uri == "dbfs") {
+                    new Path(f.getPath.toString.replaceFirst("dbfs:/", "alluxio://" + conf.alluxioIPPort)))
+                  } else {
+                    new Path(f.getPath.toString.replaceFirst("s3:/", "alluxio://" + conf.alluxioIPPort)))
+                  }
               }).toSet.toSeq
 
               logInfo("Gary-Alluxio input file size:" + inputFiles.length)
