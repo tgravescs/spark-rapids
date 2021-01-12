@@ -40,6 +40,8 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.util.SerializableConfiguration
 import org.apache.spark.util.collection.BitSet
 
+import org.apache.spark.internal.Logging
+
 /**
  * GPU version of Spark's `FileSourceScanExec`
  *
@@ -66,7 +68,7 @@ case class GpuFileSourceScanExec(
     dataFilters: Seq[Expression],
     tableIdentifier: Option[TableIdentifier],
     queryUsesInputFile: Boolean = false)(@transient val rapidsConf: RapidsConf)
-    extends GpuDataSourceScanExec with GpuExec {
+    extends GpuDataSourceScanExec with GpuExec with Logging {
 
   private val isParquetFileFormat: Boolean = relation.fileFormat.isInstanceOf[ParquetFileFormat]
   private val isPerFileReadEnabled = rapidsConf.isParquetPerFileReadEnabled || !isParquetFileFormat
@@ -82,6 +84,8 @@ case class GpuFileSourceScanExec(
   /**
    * Send the driver-side metrics. Before calling this function, selectedPartitions has
    * been initialized. See SPARK-26327 for more details.
+   *
+   * import org.apache.spark.internal.Logging
    */
   private def sendDriverMetrics(): Unit = {
     driverMetrics.foreach(e => metrics(e._1).add(e._2))
@@ -106,6 +110,7 @@ case class GpuFileSourceScanExec(
     val timeTakenMs = NANOSECONDS.toMillis(
       (System.nanoTime() - startTime) + optimizerMetadataTimeNs)
     driverMetrics("metadataTime") = timeTakenMs
+    logWarning("selected partitions are: " + ret.mkString(","))
     ret
   }.toArray
 
@@ -495,9 +500,11 @@ case class GpuFileSourceScanExec(
       .getPartitionSplitFiles(selectedPartitions, maxSplitBytes, relation)
       .sortBy(_.length)(implicitly[Ordering[Long]].reverse)
 
+    logWarning(s"split files are: " +  splitFiles.mkString(","))
     val partitions =
       FilePartition.getFilePartitions(relation.sparkSession, splitFiles, maxSplitBytes)
 
+    logWarning("file partitions is: " + partitions.mkString(","))
     if (isPerFileReadEnabled) {
       logInfo("Using the original per file parquet reader")
       ShimLoader.getSparkShims.getFileScanRDD(fsRelation.sparkSession, readFile.get, partitions)

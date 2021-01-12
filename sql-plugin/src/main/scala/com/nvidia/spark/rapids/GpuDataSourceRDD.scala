@@ -22,6 +22,7 @@ import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader, Par
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceRDD, DataSourceRDDPartition}
 import org.apache.spark.sql.rapids.execution.TrampolineUtil
 import org.apache.spark.sql.vectorized.ColumnarBatch
+import org.apache.spark.internal.Logging
 
 /**
  * A replacement for DataSourceRDD that does NOT compute the bytes read input metric.
@@ -34,11 +35,17 @@ class GpuDataSourceRDD(
     sc: SparkContext,
     @transient private val inputPartitions: Seq[InputPartition],
     partitionReaderFactory: PartitionReaderFactory)
-    extends DataSourceRDD(sc, inputPartitions, partitionReaderFactory, columnarReads = true) {
+    extends DataSourceRDD(sc, inputPartitions, partitionReaderFactory, columnarReads = true) with Logging {
 
   private def castPartition(split: Partition): DataSourceRDDPartition = split match {
     case p: DataSourceRDDPartition => p
     case _ => throw new SparkException(s"[BUG] Not a DataSourceRDDPartition: $split")
+  }
+
+  override def getPreferredLocations(split: Partition): Seq[String] = {
+    val ret = castPartition(split).inputPartition.preferredLocations()
+    logWarning("preferred location for split: " + split + " is " + ret.mkString(","))
+    ret
   }
 
   override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
