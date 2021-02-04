@@ -40,7 +40,7 @@ import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
 import org.apache.spark.sql.execution.datasources.json.JsonFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources.text.TextFileFormat
-import org.apache.spark.sql.execution.datasources.v2.{AlterNamespaceSetPropertiesExec, AlterTableExec, AtomicReplaceTableExec, BatchScanExec, CreateNamespaceExec, CreateTableExec, DeleteFromTableExec, DescribeNamespaceExec, DescribeTableExec, DropNamespaceExec, DropTableExec, RefreshTableExec, RenameTableExec, ReplaceTableExec, SetCatalogAndNamespaceExec, ShowCurrentNamespaceExec, ShowNamespacesExec, ShowTablePropertiesExec, ShowTablesExec}
+import org.apache.spark.sql.execution.datasources.v2.{AlterNamespaceSetPropertiesExec, AlterTableExec, AtomicReplaceTableExec, BatchScanExec, CreateNamespaceExec, CreateTableAsSelectExec, CreateTableExec, DeleteFromTableExec, DescribeNamespaceExec, DescribeTableExec, DropNamespaceExec, DropTableExec, RefreshTableExec, RenameTableExec, ReplaceTableExec, SetCatalogAndNamespaceExec, ShowCurrentNamespaceExec, ShowNamespacesExec, ShowTablePropertiesExec, ShowTablesExec}
 import org.apache.spark.sql.execution.datasources.v2.csv.CSVScan
 import org.apache.spark.sql.execution.exchange.{BroadcastExchangeExec, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.joins._
@@ -2460,6 +2460,22 @@ object GpuOverrides {
           GpuDataWritingCommandExec(childDataWriteCmds.head.convertToGpu(),
             childPlans.head.convertIfNeeded())
       }),
+    /*
+    exec[CreateTableAsSelectExec](
+      "DataSourceV2 Writing data",
+      ExecChecks(TypeSig.commonCudfTypes, TypeSig.all),
+      (p, conf, parent, r) => new SparkPlanMeta[CreateTableAsSelectExec](p, conf, parent, r) {
+
+        override def tagPlanForGpu(): Unit = {
+          if (catalog.) {
+            willNotWorkOnGpu("string literal values are not supported in a sort")
+          }
+        }
+        override def convertToGpu(): GpuExec =
+          GpuDataWritingCommandExec(childDataWriteCmds.head.convertToGpu(),
+            childPlans.head.convertIfNeeded())
+      }),
+      */
     exec[TakeOrderedAndProjectExec](
       "Take the first limit elements as defined by the sortOrder, and do projection if needed.",
       ExecChecks(TypeSig.commonCudfTypes + TypeSig.DECIMAL + TypeSig.NULL, TypeSig.all),
@@ -2695,6 +2711,8 @@ case class GpuQueryStagePrepOverrides() extends Rule[SparkPlan] with Logging {
     plan
   }
 }
+
+trait GpuWriteArrowColumnar
 
 case class GpuOverrides() extends Rule[SparkPlan] with Logging {
   override def apply(plan: SparkPlan): SparkPlan = {

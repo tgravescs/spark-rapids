@@ -22,7 +22,7 @@ import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.adaptive.{AdaptiveSparkPlanExec, BroadcastQueryStageExec, CustomShuffleReaderExec, QueryStageExec, ShuffleQueryStageExec}
 import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
 import org.apache.spark.sql.execution.command.ExecutedCommandExec
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanExecBase
+import org.apache.spark.sql.execution.datasources.v2.{CreateTableAsSelectExec, DataSourceV2ScanExecBase}
 import org.apache.spark.sql.execution.exchange.{Exchange, ReusedExchangeExec, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BroadcastNestedLoopJoinExec}
 import org.apache.spark.sql.rapids.{GpuDataSourceScanExec, GpuFileSourceScanExec, GpuInputFileBlockLength, GpuInputFileBlockStart, GpuInputFileName, GpuShuffleEnv}
@@ -310,8 +310,20 @@ class GpuTransitionOverrides extends Rule[SparkPlan] {
    * Inserts a transition to be running on the CPU columnar
    */
   private def insertColumnarFromGpu(plan: SparkPlan): SparkPlan = {
+    logWarning("in insertColumnarFromGpu")
+
     if (plan.supportsColumnar && plan.isInstanceOf[GpuExec]) {
+      logWarning("in insertColumnarFromGpu bring back to host column for plan: " + plan)
       GpuBringBackToHost(insertColumnarToGpu(plan))
+    } else if (plan.isInstanceOf[CreateTableAsSelectExec]) {
+      if (plan.supportsColumnar) {
+        logWarning("createTableAsSelect supports columnar")
+
+      } else {
+        logWarning("createTableAsSelect NOT supports columnar")
+      }
+
+      plan.withNewChildren(plan.children.map(insertColumnarFromGpu))
     } else {
       plan.withNewChildren(plan.children.map(insertColumnarFromGpu))
     }
