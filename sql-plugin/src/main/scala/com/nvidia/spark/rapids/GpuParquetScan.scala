@@ -1302,7 +1302,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
     }
   }
 
-  override protected def afterExecute(r: Runnable , t: Throwable ): Unit = {
+  override protected def afterExecute(r: Runnable , t: Throwable ): Unit = synchronized {
     logWarning("after execute")
     // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
     // super.execute(ftask)
@@ -1348,7 +1348,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
   //   logWarning("new task for class:" + c.getClass())
   //}
 
-  override def submit[T](task: Callable[T]): Future[T] = {
+  override def submit[T](task: Callable[T]): Future[T] = synchronized {
     val runner = task.asInstanceOf[RunnerWithTaskAttemptId]
     if (GpuSemaphore.contains(runner.taskAttemptId)) {
       logWarning("semaphore acquired by submitting task " + runner.taskAttemptId)
