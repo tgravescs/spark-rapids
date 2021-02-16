@@ -1296,7 +1296,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
       taskWaiting.foreach { case(t, queue) => {
         if (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)) {
           if (queue != null && !queue.isEmpty) {
-            logWarning(s"adding task for taskid ${t} total: " + totalTasksRunning)
+            logWarning(s"adding task for task ${t} total: " + totalTasksRunning)
             totalTasksRunning += 1
             super.execute(queue.dequeue())
           }
@@ -1320,7 +1320,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
               if (taskWaiting.contains(t) && taskWaiting.get(t).get.size > 0) {
                 while (!taskWaiting.get(t).get.isEmpty) {
                   val r = taskWaiting.get(t).get.dequeue()
-                  logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning)
+                  logWarning(s"adding active task for task ${t} total: " + totalTasksRunning)
                   execute(r)
                   totalTasksRunning += 1
                 }
@@ -1349,7 +1349,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
 
   override def submit[T](task: Callable[T]): Future[T] = synchronized {
     val runner = task.asInstanceOf[RunnerWithTaskAttemptId]
-    logWarning(s"in submit for ${runner.taskAttemptId}")
+    logWarning(s"in submit for task ${runner.taskAttemptId}")
     val res = if (GpuSemaphore.contains(runner.taskAttemptId)) {
       logWarning("semaphore acquired by submitting task " + runner.taskAttemptId)
       totalTasksRunning +=1
@@ -1358,11 +1358,11 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
       // todo - MIN 2? slight race here
       if (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)) {
         totalTasksRunning += 1
-        logWarning(s"does not have the seamphore submitting task for: ${runner.taskAttemptId} total tasks: ${totalTasksRunning}")
+        logWarning(s"does not have the seamphore submitting task ${runner.taskAttemptId} total tasks: ${totalTasksRunning}")
         super.submit(task)
       } else {
         val ftask: RunnableFuture[T] = newTaskFor(task);
-        logWarning(s"does not have the seamphore skipping ${runner.taskAttemptId} total tasks: ${totalTasksRunning}")
+        logWarning(s"does not have the seamphore skipping task ${runner.taskAttemptId} total tasks: ${totalTasksRunning}")
         val queue = taskWaiting.getOrElse(runner.taskAttemptId,
           new scala.collection.mutable.Queue[Runnable]()
         )
@@ -1498,7 +1498,7 @@ class MultiFileCloudParquetPartitionReader(
      * Note that the TaskContext is not set in these threads and should not be used.
      */
     override def call(): HostMemoryBuffersWithMetaData = {
-      logWarning(s"in call function for task: $taskAttemptId")
+      logWarning(s"in call function for task $taskAttemptId")
       val startingBytesRead = fileSystemBytesRead()
       val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
       try {
