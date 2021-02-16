@@ -1360,7 +1360,7 @@ class MultiFileCloudParquetPartitionReader(
     }
 
     override protected def afterExecute(r: Runnable , t: Throwable ): Unit = {
-      logWarning("after execute class is: " + r.getClass())
+      logWarning("after execute")
       // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
       // super.execute(ftask)
       totalTasksRunning.decrementAndGet()
@@ -1386,7 +1386,7 @@ class MultiFileCloudParquetPartitionReader(
         }
       }
     }
-
+/*
     override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
       if (r.isInstanceOf[ReadBatchRunner]) {
         logWarning("before execute is ReadBatchRunner")
@@ -1395,8 +1395,10 @@ class MultiFileCloudParquetPartitionReader(
       }
       // GpuSemaphore.contains()
     }
+*/
 
     import java.util.concurrent.RunnableFuture
+
 
     // override protected def newTaskFor[V](c: Callable[V]): RunnableFuture[V] = {
     //   logWarning("new task for class:" + c.getClass())
@@ -1412,11 +1414,11 @@ class MultiFileCloudParquetPartitionReader(
         // todo - MIN 2? slight race here
         if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
           totalTasksRunning.incrementAndGet()
-          logWarning(s"does not have the seamphore submitting task for: ${runner.taskAttemptId}")
+          logWarning(s"does not have the seamphore submitting task for: ${runner.taskAttemptId} total tasks: ${totalTasksRunning.get()}")
           super.submit(task)
         } else {
           val ftask: RunnableFuture[T] = newTaskFor(task);
-          logWarning(s"does not have the seamphore skipping ${runner.taskAttemptId} ftask is: " + ftask.getClass())
+          logWarning(s"does not have the seamphore skipping ${runner.taskAttemptId} total tasks: ${totalTasksRunning.get()}")
           val queue = taskWaiting.computeIfAbsent(runner.taskAttemptId, _ => {
             new ConcurrentLinkedQueue[Runnable]()
           })
@@ -1540,6 +1542,7 @@ class MultiFileCloudParquetPartitionReader(
   private def initAndStartReaders(): Unit = {
     // limit the number we submit at once according to the config if set
     val limit = math.min(maxNumFileProcessed, files.length)
+    logWarning("init and Start readers")
     for (i <- 0 until limit) {
       val file = files(i)
       // Add these in the order as we got them so that we can make sure
@@ -1603,6 +1606,7 @@ class MultiFileCloudParquetPartitionReader(
         currentFileHostBuffers = None
         if (filesToRead > 0 && !isDone) {
           val fileBufsAndMeta = tasks.poll.get()
+          logWarning("got back first task " + fileBufsAndMeta)
           filesToRead -= 1
           TrampolineUtil.incBytesRead(inputMetrics, fileBufsAndMeta.bytesRead)
           InputFileUtils.setInputFileBlock(fileBufsAndMeta.fileName, fileBufsAndMeta.fileStart,
