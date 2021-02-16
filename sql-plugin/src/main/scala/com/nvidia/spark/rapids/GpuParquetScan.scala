@@ -1288,17 +1288,17 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
   private val taskWaiting = new scala.collection.mutable.HashMap[Long, scala.collection.mutable.Queue[Runnable]]()
 
   // private val
-  private val totalTasksRunning = new AtomicInteger(0)
+  private var totalTasksRunning: Int = 0
 
   private def addSome(): Unit = synchronized {
-    while (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
+    while (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)) {
       taskWaiting.foreach { case(t, queue) => {
-        if (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
+        if (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)) {
           if (queue != null && !queue.isEmpty) {
-            logWarning(s"adding task for taskid ${t} total: " + totalTasksRunning.get())
-            totalTasksRunning.incrementAndGet()
+            logWarning(s"adding task for taskid ${t} total: " + totalTasksRunning)
+            totalTasksRunning += 1
             super.execute(queue.dequeue())
-            logWarning(s"after adding task for taskid ${t} total: " + totalTasksRunning.get())
+            logWarning(s"after adding task for taskid ${t} total: " + totalTasksRunning)
 
           }
         }
@@ -1311,9 +1311,9 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
     super.afterExecute(r, t)
       // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
       // super.execute(ftask)
-      totalTasksRunning.decrementAndGet()
-      logWarning(s"after execute total tasks is ${totalTasksRunning.get()} ${r.getClass()}")
-      if (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
+      totalTasksRunning -= 1
+      logWarning(s"after execute total tasks is ${totalTasksRunning} ${r.getClass()}")
+      if (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)) {
         val activeTasks = GpuSemaphore.getActive()
         if (activeTasks.nonEmpty) {
           logWarning("active tasks not empty: " + activeTasks.mkString(","))
@@ -1321,13 +1321,13 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
           synchronized {
             activeTasks.foreach { t =>
               if (taskWaiting.contains(t) && taskWaiting.get(t).get.size > 0) {
-                logWarning("waiting task queue is empty? : " + taskWaiting.get(t).get.isEmpty
+                logWarning("waiting task queue is empty? : " + taskWaiting.get(t).get.isEmpty)
                 while (!taskWaiting.get(t).get.isEmpty) {
                   val r = taskWaiting.get(t).get.dequeue()
-                  logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning.get())
+                  logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning)
                   execute(r)
-                  logWarning(s"after adding active task for taskid ${t} total: " + totalTasksRunning.get())
-                  totalTasksRunning.incrementAndGet()
+                  logWarning(s"after adding active task for taskid ${t} total: " + totalTasksRunning)
+                  totalTasksRunning += 1
                 }
               }
             }
@@ -1359,17 +1359,17 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
     logWarning(s"in submit for ${runner.taskAttemptId}")
     val res = if (GpuSemaphore.contains(runner.taskAttemptId)) {
       logWarning("semaphore acquired by submitting task " + runner.taskAttemptId)
-      totalTasksRunning.incrementAndGet()
+      totalTasksRunning +=1
       super.submit(task)
     } else {
       // todo - MIN 2? slight race here
-      if (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
-        totalTasksRunning.incrementAndGet()
-        logWarning(s"does not have the seamphore submitting task for: ${runner.taskAttemptId} total tasks: ${totalTasksRunning.get()}")
+      if (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)) {
+        totalTasksRunning += 1
+        logWarning(s"does not have the seamphore submitting task for: ${runner.taskAttemptId} total tasks: ${totalTasksRunning}")
         super.submit(task)
       } else {
         val ftask: RunnableFuture[T] = newTaskFor(task);
-        logWarning(s"does not have the seamphore skipping ${runner.taskAttemptId} total tasks: ${totalTasksRunning.get()}")
+        logWarning(s"does not have the seamphore skipping ${runner.taskAttemptId} total tasks: ${totalTasksRunning}")
         val queue = taskWaiting.getOrElse(runner.taskAttemptId,
           new scala.collection.mutable.Queue[Runnable]()
         )
