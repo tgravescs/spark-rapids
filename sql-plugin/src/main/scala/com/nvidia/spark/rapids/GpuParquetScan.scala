@@ -1275,6 +1275,155 @@ class MultiFileParquetPartitionReader(
   }
 }
 
+class CustomThreadPoolExecutor(corePoolSize: Int,
+    maximumPoolSize: Int,
+    keepAliveTime: Long,
+    unit: TimeUnit,
+    workQueue: BlockingQueue[Runnable],
+    threadFactory: ThreadFactory)
+  extends ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime,
+    unit, workQueue, threadFactory) with Logging {
+
+  private val taskWaiting = new ConcurrentHashMap[Long,  ConcurrentLinkedQueue[Runnable]]()
+  // private val
+  private val totalTasksRunning = new AtomicInteger(0)
+
+  private def addSome(): Unit = {
+    while (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
+      taskWaiting.forEach((t, queue) => {
+        if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
+          if (!queue.isEmpty()) {
+            logWarning(s"adding task for taskid ${t} total: " + totalTasksRunning.get())
+            totalTasksRunning.incrementAndGet()
+            super.execute(queue.poll())
+          }
+        }
+      })
+    }
+  }
+
+  override protected def afterExecute(r: Runnable , t: Throwable ): Unit = {
+    logWarning("after execute")
+    // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
+    // super.execute(ftask)
+    totalTasksRunning.decrementAndGet()
+    if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
+      val activeTasks = GpuSemaphore.getActive()
+      if (activeTasks.nonEmpty) {
+        logWarning("active tasks not empty: " + activeTasks.mkString(","))
+        // add all for active tasks that have the semaphore
+        activeTasks.foreach { t =>
+          if (taskWaiting.contains(t) && taskWaiting.get(t).size() > 0) {
+            logWarning("waiting task queue is empty? : " + taskWaiting.get(t).isEmpty())
+            while (!taskWaiting.get(t).isEmpty()) {
+              val r = taskWaiting.get(t).poll()
+              logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning.get())
+              super.execute(r)
+              totalTasksRunning.incrementAndGet()
+            }
+          }
+        }
+        // also check if still room for 3/4 full
+        addSome()
+      } else {
+        addSome()
+      }
+    }
+  }
+  /*
+      override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
+        if (r.isInstanceOf[ReadBatchRunner]) {
+          logWarning("before execute is ReadBatchRunner")
+        } else {
+          logWarning("before execute class is: " + r.getClass())
+        }
+        // GpuSemaphore.contains()
+      }
+  */
+
+  import java.util.concurrent.RunnableFuture
+
+
+  // override protected def newTaskFor[V](c: Callable[V]): RunnableFuture[V] = {
+  //   logWarning("new task for class:" + c.getClass())
+  //}
+
+  override def submit[T](task: Callable[T]): Future[T] = {
+    val runner = task.asInstanceOf[RunnerWithTaskAttemptId]
+    if (GpuSemaphore.contains(runner.taskAttemptId)) {
+      logWarning("semaphore acquired by submitting task " + runner.taskAttemptId)
+      totalTasksRunning.incrementAndGet()
+      super.submit(task)
+    } else {
+      // todo - MIN 2? slight race here
+      if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
+        totalTasksRunning.incrementAndGet()
+        logWarning(s"does not have the seamphore submitting task for: ${runner.taskAttemptId} total tasks: ${totalTasksRunning.get()}")
+        super.submit(task)
+      } else {
+        val ftask: RunnableFuture[T] = newTaskFor(task);
+        logWarning(s"does not have the seamphore skipping ${runner.taskAttemptId} total tasks: ${totalTasksRunning.get()}")
+        val queue = taskWaiting.computeIfAbsent(runner.taskAttemptId, _ => {
+          new ConcurrentLinkedQueue[Runnable]()
+        })
+        queue.add(ftask)
+        ftask
+        // super.submit(task)
+
+      }
+    }
+  }
+}
+
+abstract class RunnerWithTaskAttemptId(val taskAttemptId: Long)
+
+// Singleton threadpool that is used across all the tasks.
+// Please note that the TaskContext is not set in these threads and should not be used.
+object MultiFileCloudThreadPoolFactory extends Logging {
+
+  private var threadPool: Option[ThreadPoolExecutor] = None
+
+  private def initThreadPool(
+      maxThreads: Int = 20,
+      keepAliveSeconds: Long = 60): ThreadPoolExecutor = synchronized {
+    logWarning(s"init thread pool with $maxThreads")
+    if (!threadPool.isDefined) {
+      val threadFactory = new ThreadFactoryBuilder()
+        .setNameFormat("parquet reader worker-%d")
+        .setDaemon(true)
+        .build()
+
+      threadPool = Some(new CustomThreadPoolExecutor(
+        maxThreads, // corePoolSize: max number of threads to create before queuing the tasks
+        maxThreads, // maximumPoolSize: because we use LinkedBlockingDeque, this is not used
+        keepAliveSeconds,
+        TimeUnit.SECONDS,
+        new LinkedBlockingQueue[Runnable],
+        threadFactory))
+      threadPool.get.allowCoreThreadTimeOut(true)
+    }
+    threadPool.get
+  }
+
+  def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = {
+    val pool = threadPool.getOrElse(initThreadPool(numThreads))
+    pool.submit(task)
+  }
+}
+
+case class HostMemoryBuffersWithMetaData(
+    isCorrectRebaseMode: Boolean,
+    clippedSchema: MessageType,
+    partValues: InternalRow,
+    memBuffersAndSizes: Array[(HostMemoryBuffer, Long)],
+    fileName: String,
+    fileStart: Long,
+    fileLength: Long,
+    bytesRead: Long)
+
+
+
+
 /**
  * A PartitionReader that can read multiple Parquet files in parallel. This is most efficient
  * running in a cloud environment where the I/O of reading is slow.
@@ -1315,15 +1464,6 @@ class MultiFileCloudParquetPartitionReader(
   extends FileParquetPartitionReaderBase(conf, isSchemaCaseSensitive, readDataSchema,
     debugDumpPrefix, execMetrics) {
 
-  case class HostMemoryBuffersWithMetaData(
-      isCorrectRebaseMode: Boolean,
-      clippedSchema: MessageType,
-      partValues: InternalRow,
-      memBuffersAndSizes: Array[(HostMemoryBuffer, Long)],
-      fileName: String,
-      fileStart: Long,
-      fileLength: Long,
-      bytesRead: Long)
 
   private var filesToRead = 0
   private var currentFileHostBuffers: Option[HostMemoryBuffersWithMetaData] = None
@@ -1332,144 +1472,13 @@ class MultiFileCloudParquetPartitionReader(
   private val tasksToRun = new Queue[ReadBatchRunner]()
   private[this] val inputMetrics = TaskContext.get.taskMetrics().inputMetrics
 
-  class CustomThreadPoolExecutor(corePoolSize: Int,
-      maximumPoolSize: Int,
-      keepAliveTime: Long,
-      unit: TimeUnit,
-      workQueue: BlockingQueue[Runnable],
-      threadFactory: ThreadFactory)
-    extends ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime,
-      unit, workQueue, threadFactory) with Logging {
-
-    private val taskWaiting = new ConcurrentHashMap[Long,  ConcurrentLinkedQueue[Runnable]]()
-    // private val
-    private val totalTasksRunning = new AtomicInteger(0)
-
-    private def addSome(): Unit = {
-      while (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
-        taskWaiting.forEach((t, queue) => {
-          if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
-            if (!queue.isEmpty()) {
-              logWarning(s"adding task for taskid ${t} total: " + totalTasksRunning.get())
-              totalTasksRunning.incrementAndGet()
-              super.execute(queue.poll())
-            }
-          }
-        })
-      }
-    }
-
-    override protected def afterExecute(r: Runnable , t: Throwable ): Unit = {
-      logWarning("after execute")
-      // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
-      // super.execute(ftask)
-      totalTasksRunning.decrementAndGet()
-      if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
-        val activeTasks = GpuSemaphore.getActive()
-        if (activeTasks.nonEmpty) {
-          logWarning("active tasks not empty: " + activeTasks)
-          // add all for active tasks that have the semaphore
-          activeTasks.foreach { t =>
-            if (taskWaiting.contains(t) && taskWaiting.get(t).size() > 0) {
-              while (!taskWaiting.get(t).isEmpty()) {
-                val r = taskWaiting.get(t).poll()
-                logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning.get())
-                super.execute(r)
-                totalTasksRunning.incrementAndGet()
-              }
-            }
-          }
-          // also check if still room for 3/4 full
-          addSome()
-        } else {
-          addSome()
-        }
-      }
-    }
-/*
-    override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
-      if (r.isInstanceOf[ReadBatchRunner]) {
-        logWarning("before execute is ReadBatchRunner")
-      } else {
-        logWarning("before execute class is: " + r.getClass())
-      }
-      // GpuSemaphore.contains()
-    }
-*/
-
-    import java.util.concurrent.RunnableFuture
-
-
-    // override protected def newTaskFor[V](c: Callable[V]): RunnableFuture[V] = {
-    //   logWarning("new task for class:" + c.getClass())
-    //}
-
-    override def submit[T](task: Callable[T]): Future[T] = {
-      val runner = task.asInstanceOf[ReadBatchRunner]
-      if (GpuSemaphore.contains(runner.taskAttemptId)) {
-        logWarning("semaphore acquired by submitting task " + runner.taskAttemptId)
-        totalTasksRunning.incrementAndGet()
-        super.submit(task)
-      } else {
-        // todo - MIN 2? slight race here
-        if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
-          totalTasksRunning.incrementAndGet()
-          logWarning(s"does not have the seamphore submitting task for: ${runner.taskAttemptId} total tasks: ${totalTasksRunning.get()}")
-          super.submit(task)
-        } else {
-          val ftask: RunnableFuture[T] = newTaskFor(task);
-          logWarning(s"does not have the seamphore skipping ${runner.taskAttemptId} total tasks: ${totalTasksRunning.get()}")
-          val queue = taskWaiting.computeIfAbsent(runner.taskAttemptId, _ => {
-            new ConcurrentLinkedQueue[Runnable]()
-          })
-          queue.add(ftask)
-          ftask
-          // super.submit(task)
-
-        }
-      }
-    }
-  }
-
-  // Singleton threadpool that is used across all the tasks.
-  // Please note that the TaskContext is not set in these threads and should not be used.
-  object MultiFileCloudThreadPoolFactory {
-
-    private var threadPool: Option[ThreadPoolExecutor] = None
-
-    private def initThreadPool(
-        maxThreads: Int = 20,
-        keepAliveSeconds: Long = 60): ThreadPoolExecutor = synchronized {
-      if (!threadPool.isDefined) {
-        val threadFactory = new ThreadFactoryBuilder()
-          .setNameFormat("parquet reader worker-%d")
-          .setDaemon(true)
-          .build()
-
-        threadPool = Some(new CustomThreadPoolExecutor(
-          maxThreads, // corePoolSize: max number of threads to create before queuing the tasks
-          maxThreads, // maximumPoolSize: because we use LinkedBlockingDeque, this is not used
-          keepAliveSeconds,
-          TimeUnit.SECONDS,
-          new LinkedBlockingQueue[Runnable],
-          threadFactory))
-        threadPool.get.allowCoreThreadTimeOut(true)
-      }
-      threadPool.get
-    }
-
-    def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = {
-      val pool = threadPool.getOrElse(initThreadPool(numThreads))
-      pool.submit(task)
-    }
-  }
-
-
-  private class ReadBatchRunner(filterHandler: GpuParquetFileFilterHandler,
+  class ReadBatchRunner(filterHandler: GpuParquetFileFilterHandler,
       file: PartitionedFile,
       conf: Configuration,
       filters: Array[Filter],
-      val taskAttemptId: Long) extends Callable[HostMemoryBuffersWithMetaData] with Logging {
+      taskAttemptId: Long)
+    extends RunnerWithTaskAttemptId(taskAttemptId)
+      with Callable[HostMemoryBuffersWithMetaData] with Logging {
 
     private var blockChunkIter: BufferedIterator[BlockMetaData] = null
 
@@ -1538,6 +1547,8 @@ class MultiFileCloudParquetPartitionReader(
       }
     }
   }
+
+
 
   private def initAndStartReaders(): Unit = {
     // limit the number we submit at once according to the config if set
