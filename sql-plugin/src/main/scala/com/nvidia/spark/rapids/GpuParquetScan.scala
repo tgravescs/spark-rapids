@@ -1553,7 +1553,7 @@ class MultiFileCloudParquetPartitionReader(
   private def initAndStartReaders(): Unit = {
     // limit the number we submit at once according to the config if set
     val limit = math.min(maxNumFileProcessed, files.length)
-    logWarning(s"init and Start readers ${TaskContext.get().taskAttemptId()}")
+    logWarning(s"init and Start readers ${TaskContext.get().taskAttemptId()} number files ${files.length} max $maxNumFileProcessed")
     for (i <- 0 until limit) {
       val file = files(i)
       // Add these in the order as we got them so that we can make sure
