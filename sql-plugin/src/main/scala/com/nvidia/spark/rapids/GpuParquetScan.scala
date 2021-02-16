@@ -1405,7 +1405,7 @@ object MultiFileCloudThreadPoolFactory extends Logging {
     threadPool.get
   }
 
-  def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = {
+  def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = synchronized {
     val pool = threadPool.getOrElse(initThreadPool(numThreads))
     pool.submit(task)
   }
