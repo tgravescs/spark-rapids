@@ -1304,7 +1304,6 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
 
   override protected def afterExecute(r: Runnable , t: Throwable ): Unit = {
     super.afterExecute(r, t)
-    synchronized {
       // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
       // super.execute(ftask)
       totalTasksRunning.decrementAndGet()
@@ -1332,7 +1331,6 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
         }
       }
       logWarning(" done in after execute")
-    }
   }
      /* override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
 
@@ -1348,7 +1346,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
   //   logWarning("new task for class:" + c.getClass())
   //}
 
-  override def submit[T](task: Callable[T]): Future[T] = synchronized {
+  override def submit[T](task: Callable[T]): Future[T] =  {
     val runner = task.asInstanceOf[RunnerWithTaskAttemptId]
     logWarning(s"in submit for ${runner.taskAttemptId}")
     val res = if (GpuSemaphore.contains(runner.taskAttemptId)) {
