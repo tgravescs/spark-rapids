@@ -1351,7 +1351,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
   override def submit[T](task: Callable[T]): Future[T] = synchronized {
     val runner = task.asInstanceOf[RunnerWithTaskAttemptId]
     logWarning(s"in submit for ${runner.taskAttemptId}")
-    if (GpuSemaphore.contains(runner.taskAttemptId)) {
+    val res = if (GpuSemaphore.contains(runner.taskAttemptId)) {
       logWarning("semaphore acquired by submitting task " + runner.taskAttemptId)
       totalTasksRunning.incrementAndGet()
       super.submit(task)
@@ -1373,7 +1373,8 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
 
       }
     }
-    logWarning("done submit for ${runner.taskAttemptId}\")
+    logWarning(s"done submit for ${runner.taskAttemptId}")
+    res
   }
 }
 
