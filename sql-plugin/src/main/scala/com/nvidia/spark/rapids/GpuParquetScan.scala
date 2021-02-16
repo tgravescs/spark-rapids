@@ -1345,7 +1345,7 @@ class MultiFileCloudParquetPartitionReader(
 
     override protected def afterExecute(r: Runnable , t: Throwable ): Unit = {
       logWarning("after execute class is: " + r.getClass())
-      val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
+      // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
     }
 
     override protected def beforeExecute(t: Thread, r: Runnable): Unit = {

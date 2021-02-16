@@ -127,6 +127,7 @@ private final class GpuSemaphore(tasksPerGpu: Int) extends Logging {
           refs.increment()
         } else {
           // first time this task has been seen
+          logWarning(s"task ${taskAttemptId} has the semaphore")
           activeTasks.put(taskAttemptId, new MutableInt(1))
           context.addTaskCompletionListener[Unit](completeTask)
         }
@@ -155,6 +156,8 @@ private final class GpuSemaphore(tasksPerGpu: Int) extends Logging {
 
   def completeTask(context: TaskContext): Unit = {
     val taskAttemptId = context.taskAttemptId()
+    logWarning(s"task ${taskAttemptId} completed semaphore")
+
     val refs = activeTasks.remove(taskAttemptId)
     if (refs == null) {
       throw new IllegalStateException(s"Completion of unknown task $taskAttemptId")
