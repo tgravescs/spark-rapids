@@ -1303,10 +1303,10 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
   }
 
   override protected def afterExecute(r: Runnable , t: Throwable ): Unit = synchronized {
-    logWarning("after execute")
     // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
     // super.execute(ftask)
     totalTasksRunning.decrementAndGet()
+    logWarning(s"after execute total tasks is ${totalTasksRunning.get()}")
     if (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
       val activeTasks = GpuSemaphore.getActive()
       if (activeTasks.nonEmpty) {
