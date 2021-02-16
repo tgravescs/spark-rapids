@@ -1606,7 +1606,7 @@ class MultiFileCloudParquetPartitionReader(
         currentFileHostBuffers = None
         if (filesToRead > 0 && !isDone) {
           val fileBufsAndMeta = tasks.poll.get()
-          logWarning("got back first task  ${TaskContext.get().taskAttemptId()}")
+          logWarning(s"got back first task  ${TaskContext.get().taskAttemptId()}")
           filesToRead -= 1
           TrampolineUtil.incBytesRead(inputMetrics, fileBufsAndMeta.bytesRead)
           InputFileUtils.setInputFileBlock(fileBufsAndMeta.fileName, fileBufsAndMeta.fileStart,
