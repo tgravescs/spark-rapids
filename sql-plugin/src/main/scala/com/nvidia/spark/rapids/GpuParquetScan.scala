@@ -1491,6 +1491,7 @@ class MultiFileCloudParquetPartitionReader(
      * Note that the TaskContext is not set in these threads and should not be used.
      */
     override def call(): HostMemoryBuffersWithMetaData = {
+      logWarning(s"in call function for task: $taskAttemptId")
       val startingBytesRead = fileSystemBytesRead()
       val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
       try {
