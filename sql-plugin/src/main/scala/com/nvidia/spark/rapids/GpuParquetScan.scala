@@ -1359,12 +1359,17 @@ class MultiFileCloudParquetPartitionReader(
 
     import java.util.concurrent.RunnableFuture
 
-    override protected def newTaskFor[V](c: Callable[V]): RunnableFuture[V] = {
-      logWarning("new task for class:" + c.getClass())
-      super.newTaskFor(c)
-    }
+    // override protected def newTaskFor[V](c: Callable[V]): RunnableFuture[V] = {
+    //   logWarning("new task for class:" + c.getClass())
+    //}
 
     override def submit[T](task: Callable[T]): Future[T] = {
+      val runner = task.asInstanceOf[ReadBatchRunner]
+      if (GpuSemaphore.contains(runner.taskAttemptId)) {
+        logWarning("semaphore acquired by " + runner.taskAttemptId)
+      } else {
+        logWarning(s" task: ${runner.taskAttemptId} does not have the seamphore")
+      }
       super.submit(task)
     }
   }
@@ -1406,7 +1411,8 @@ class MultiFileCloudParquetPartitionReader(
   private class ReadBatchRunner(filterHandler: GpuParquetFileFilterHandler,
       file: PartitionedFile,
       conf: Configuration,
-      filters: Array[Filter]) extends Callable[HostMemoryBuffersWithMetaData] with Logging {
+      filters: Array[Filter],
+      val taskAttemptId: Long) extends Callable[HostMemoryBuffersWithMetaData] with Logging {
 
     private var blockChunkIter: BufferedIterator[BlockMetaData] = null
 
@@ -1484,12 +1490,14 @@ class MultiFileCloudParquetPartitionReader(
       // Add these in the order as we got them so that we can make sure
       // we process them in the same order as CPU would.
       tasks.add(MultiFileCloudThreadPoolFactory.submitToThreadPool(
-        new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
+        new ReadBatchRunner(filterHandler, file, conf, filters,
+          TaskContext.get().taskAttemptId()), numThreads))
     }
     // queue up any left to add once others finish
     for (i <- limit until files.length) {
       val file = files(i)
-      tasksToRun.enqueue(new ReadBatchRunner(filterHandler, file, conf, filters))
+      tasksToRun.enqueue(new ReadBatchRunner(filterHandler, file, conf, filters,
+        TaskContext.get().taskAttemptId()))
     }
     isInitted = true
     filesToRead = files.length
