@@ -1296,10 +1296,13 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
             logWarning(s"adding task for taskid ${t} total: " + totalTasksRunning.get())
             totalTasksRunning.incrementAndGet()
             super.execute(queue.poll())
+            logWarning(s"after adding task for taskid ${t} total: " + totalTasksRunning.get())
+
           }
         }
       })
     }
+    logWarning("done adding some")
   }
 
   override protected def afterExecute(r: Runnable , t: Throwable ): Unit = {
@@ -1320,6 +1323,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
                 val r = taskWaiting.get(t).poll()
                 logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning.get())
                 execute(r)
+                logWarning(s"after adding active task for taskid ${t} total: " + totalTasksRunning.get())
                 totalTasksRunning.incrementAndGet()
               }
             }
@@ -1346,7 +1350,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
   //   logWarning("new task for class:" + c.getClass())
   //}
 
-  override def submit[T](task: Callable[T]): Future[T] =  {
+  override def submit[T](task: Callable[T]): Future[T] = synchronized {
     val runner = task.asInstanceOf[RunnerWithTaskAttemptId]
     logWarning(s"in submit for ${runner.taskAttemptId}")
     val res = if (GpuSemaphore.contains(runner.taskAttemptId)) {
