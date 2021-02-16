@@ -1306,7 +1306,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
     // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
     // super.execute(ftask)
     totalTasksRunning.decrementAndGet()
-    logWarning(s"after execute total tasks is ${totalTasksRunning.get()}")
+    logWarning(s"after execute total tasks is ${totalTasksRunning.get()} ${r.getClass()} tid: ${r.asInstanceOf[RunnerWithTaskAttemptId].taskAttemptId}")
     if (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
       val activeTasks = GpuSemaphore.getActive()
       if (activeTasks.nonEmpty) {
