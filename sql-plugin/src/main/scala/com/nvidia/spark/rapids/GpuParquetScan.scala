@@ -1299,14 +1299,10 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
             logWarning(s"adding task for taskid ${t} total: " + totalTasksRunning)
             totalTasksRunning += 1
             super.execute(queue.dequeue())
-
-            logWarning(s"after adding task for taskid ${t} total: " + totalTasksRunning)
-
           }
         }
       }}
     }
-    logWarning("done adding some")
   }
 
   override protected def afterExecute(r: Runnable , t: Throwable ): Unit = synchronized {
@@ -1322,12 +1318,10 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
           // add all for active tasks that have the semaphore
             activeTasks.foreach { t =>
               if (taskWaiting.contains(t) && taskWaiting.get(t).get.size > 0) {
-                logWarning("waiting task queue is empty? : " + taskWaiting.get(t).get.isEmpty)
                 while (!taskWaiting.get(t).get.isEmpty) {
                   val r = taskWaiting.get(t).get.dequeue()
                   logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning)
                   execute(r)
-                  logWarning(s"after adding active task for taskid ${t} total: " + totalTasksRunning)
                   totalTasksRunning += 1
                 }
               }
@@ -1338,7 +1332,6 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
           addSome()
         }
       }
-      logWarning(" done in after execute")
   }
      /* override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
 
@@ -1380,7 +1373,6 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
 
       }
     }
-    logWarning(s"done submit for ${runner.taskAttemptId}")
     res
   }
 }
@@ -1416,14 +1408,11 @@ object MultiFileCloudThreadPoolFactory extends Logging {
   }
 
   def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = {
-    logWarning("submitToThreadPool")
     val pool = synchronized {
       threadPool.getOrElse(initThreadPool(numThreads))
     }
-    logWarning("submitToThreadPool 2")
 
     val fut = pool.submit(task)
-    logWarning("submitted to pool")
 
     fut
   }
