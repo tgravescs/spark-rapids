@@ -1306,7 +1306,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
     // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
     // super.execute(ftask)
     totalTasksRunning.decrementAndGet()
-    logWarning(s"after execute total tasks is ${totalTasksRunning.get()} ${r.getClass()} tid: ${r.asInstanceOf[RunnerWithTaskAttemptId].taskAttemptId}")
+    logWarning(s"after execute total tasks is ${totalTasksRunning.get()} ${r.getClass()}")
     if (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
       val activeTasks = GpuSemaphore.getActive()
       if (activeTasks.nonEmpty) {
@@ -1330,16 +1330,12 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
       }
     }
   }
-  /*
       override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
-        if (r.isInstanceOf[ReadBatchRunner]) {
-          logWarning("before execute is ReadBatchRunner")
-        } else {
+
           logWarning("before execute class is: " + r.getClass())
-        }
         // GpuSemaphore.contains()
       }
-  */
+
 
   import java.util.concurrent.RunnableFuture
 
