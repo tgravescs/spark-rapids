@@ -1284,15 +1284,15 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
   extends ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime,
     unit, workQueue, threadFactory) with Logging {
 
-  private val taskWaiting = new ConcurrentHashMap[Long,  ConcurrentLinkedQueue[Runnable]]()
+  private val taskWaiting = new ConcurrentHashMap[Long, ConcurrentLinkedQueue[Runnable]]()
   // private val
   private val totalTasksRunning = new AtomicInteger(0)
 
-  private def addSome(): Unit = {
+  private def addSome(): Unit = synchronized {
     while (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
       taskWaiting.forEach((t, queue) => {
         if (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
-          if (!queue.isEmpty()) {
+          if (queue != null && !queue.isEmpty()) {
             logWarning(s"adding task for taskid ${t} total: " + totalTasksRunning.get())
             totalTasksRunning.incrementAndGet()
             super.execute(queue.poll())
@@ -1316,15 +1316,17 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
         if (activeTasks.nonEmpty) {
           logWarning("active tasks not empty: " + activeTasks.mkString(","))
           // add all for active tasks that have the semaphore
-          activeTasks.foreach { t =>
-            if (taskWaiting.contains(t) && taskWaiting.get(t).size() > 0) {
-              logWarning("waiting task queue is empty? : " + taskWaiting.get(t).isEmpty())
-              while (!taskWaiting.get(t).isEmpty()) {
-                val r = taskWaiting.get(t).poll()
-                logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning.get())
-                execute(r)
-                logWarning(s"after adding active task for taskid ${t} total: " + totalTasksRunning.get())
-                totalTasksRunning.incrementAndGet()
+          synchronized {
+            activeTasks.foreach { t =>
+              if (taskWaiting.contains(t) && taskWaiting.get(t).size() > 0) {
+                logWarning("waiting task queue is empty? : " + taskWaiting.get(t).isEmpty())
+                while (!taskWaiting.get(t).isEmpty()) {
+                  val r = taskWaiting.get(t).poll()
+                  logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning.get())
+                  execute(r)
+                  logWarning(s"after adding active task for taskid ${t} total: " + totalTasksRunning.get())
+                  totalTasksRunning.incrementAndGet()
+                }
               }
             }
           }
