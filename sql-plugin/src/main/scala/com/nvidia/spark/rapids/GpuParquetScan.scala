@@ -1302,33 +1302,36 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
     }
   }
 
-  override protected def afterExecute(r: Runnable , t: Throwable ): Unit = synchronized {
+  override protected def afterExecute(r: Runnable , t: Throwable ): Unit = {
     super.afterExecute(r, t)
-    // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
-    // super.execute(ftask)
-    totalTasksRunning.decrementAndGet()
-    logWarning(s"after execute total tasks is ${totalTasksRunning.get()} ${r.getClass()}")
-    if (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
-      val activeTasks = GpuSemaphore.getActive()
-      if (activeTasks.nonEmpty) {
-        logWarning("active tasks not empty: " + activeTasks.mkString(","))
-        // add all for active tasks that have the semaphore
-        activeTasks.foreach { t =>
-          if (taskWaiting.contains(t) && taskWaiting.get(t).size() > 0) {
-            logWarning("waiting task queue is empty? : " + taskWaiting.get(t).isEmpty())
-            while (!taskWaiting.get(t).isEmpty()) {
-              val r = taskWaiting.get(t).poll()
-              logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning.get())
-              execute(r)
-              totalTasksRunning.incrementAndGet()
+    synchronized {
+      // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
+      // super.execute(ftask)
+      totalTasksRunning.decrementAndGet()
+      logWarning(s"after execute total tasks is ${totalTasksRunning.get()} ${r.getClass()}")
+      if (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
+        val activeTasks = GpuSemaphore.getActive()
+        if (activeTasks.nonEmpty) {
+          logWarning("active tasks not empty: " + activeTasks.mkString(","))
+          // add all for active tasks that have the semaphore
+          activeTasks.foreach { t =>
+            if (taskWaiting.contains(t) && taskWaiting.get(t).size() > 0) {
+              logWarning("waiting task queue is empty? : " + taskWaiting.get(t).isEmpty())
+              while (!taskWaiting.get(t).isEmpty()) {
+                val r = taskWaiting.get(t).poll()
+                logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning.get())
+                execute(r)
+                totalTasksRunning.incrementAndGet()
+              }
             }
           }
+          // also check if still room for 3/4 full
+          addSome()
+        } else {
+          addSome()
         }
-        // also check if still room for 3/4 full
-        addSome()
-      } else {
-        addSome()
       }
+      logWarning(" done in after execute")
     }
   }
      /* override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
@@ -1347,6 +1350,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
 
   override def submit[T](task: Callable[T]): Future[T] = synchronized {
     val runner = task.asInstanceOf[RunnerWithTaskAttemptId]
+    logWarning(s"in submit for ${runner.taskAttemptId}")
     if (GpuSemaphore.contains(runner.taskAttemptId)) {
       logWarning("semaphore acquired by submitting task " + runner.taskAttemptId)
       totalTasksRunning.incrementAndGet()
@@ -1405,6 +1409,8 @@ object MultiFileCloudThreadPoolFactory extends Logging {
   def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = synchronized {
     logWarning("submitToThreadPool")
     val pool = threadPool.getOrElse(initThreadPool(numThreads))
+    logWarning("submitToThreadPool 2")
+
     val fut = pool.submit(task)
     logWarning("submitted to pool")
 
