@@ -104,6 +104,14 @@ object GpuSemaphore {
       false
     }
   }
+
+  def getActive(): Array[Long] = {
+    if (enabled) {
+      getInstance.getActive()
+    } else {
+      Array.empty[Long]
+    }
+  }
 }
 
 private final class GpuSemaphore(tasksPerGpu: Int) extends Logging {
@@ -113,6 +121,10 @@ private final class GpuSemaphore(tasksPerGpu: Int) extends Logging {
 
   def contains(tid: Long): Boolean = {
     activeTasks.contains(tid)
+  }
+
+  def getActive(): Array[Long] = {
+    activeTasks.keySet().toArray(new Array[Long](activeTasks.size()))
   }
 
   def acquireIfNecessary(context: TaskContext): Unit = {

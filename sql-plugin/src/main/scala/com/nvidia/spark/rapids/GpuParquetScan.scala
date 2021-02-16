@@ -21,6 +21,7 @@ import java.net.{URI, URISyntaxException}
 import java.nio.charset.StandardCharsets
 import java.util.{Collections, Locale}
 import java.util.concurrent._
+import java.util.concurrent.atomic.AtomicInteger
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -1340,14 +1341,50 @@ class MultiFileCloudParquetPartitionReader(
     extends ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime,
       unit, workQueue, threadFactory) with Logging {
 
-    private val taskWaiting = new ConcurrentHashMap[Long,  ConcurrentLinkedQueue[RunnableFuture]]()
-    private var totalTasksRunning: Int = 0
+    private val taskWaiting = new ConcurrentHashMap[Long,  ConcurrentLinkedQueue[Runnable]]()
+    // private val
+    private val totalTasksRunning = new AtomicInteger(0)
+
+    private def addSome(): Unit = {
+      while (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
+        taskWaiting.forEach((t, queue) => {
+          if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
+            if (!queue.isEmpty()) {
+              logWarning(s"adding task for taskid ${t} total: " + totalTasksRunning.get())
+              totalTasksRunning.incrementAndGet()
+              super.execute(queue.poll())
+            }
+          }
+        })
+      }
+    }
 
     override protected def afterExecute(r: Runnable , t: Throwable ): Unit = {
       logWarning("after execute class is: " + r.getClass())
       // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
-      super.execute(ftask)
-
+      // super.execute(ftask)
+      totalTasksRunning.decrementAndGet()
+      if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
+        val activeTasks = GpuSemaphore.getActive()
+        if (activeTasks.nonEmpty) {
+          logWarning("active tasks not empty: " + activeTasks)
+          // add all for active tasks that have the semaphore
+          activeTasks.foreach { t =>
+            if (taskWaiting.contains(t) && taskWaiting.get(t).size() > 0) {
+              while (!taskWaiting.get(t).isEmpty()) {
+                val r = taskWaiting.get(t).poll()
+                logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning.get())
+                super.execute(r)
+                totalTasksRunning.incrementAndGet()
+              }
+            }
+          }
+          // also check if still room for 3/4 full
+          addSome()
+        } else {
+          addSome()
+        }
+      }
     }
 
     override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
@@ -1369,21 +1406,23 @@ class MultiFileCloudParquetPartitionReader(
       val runner = task.asInstanceOf[ReadBatchRunner]
       if (GpuSemaphore.contains(runner.taskAttemptId)) {
         logWarning("semaphore acquired by " + runner.taskAttemptId)
+        totalTasksRunning.incrementAndGet()
         super.submit(task)
       } else {
         logWarning(s" task: ${runner.taskAttemptId} does not have the seamphore")
-        // todo - MIN 2?
-        if (totalTasksRunning < Math.min(maximumPoolSize * 0.75, 2)) {
+        // todo - MIN 2? slight race here
+        if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
+          totalTasksRunning.incrementAndGet()
           super.submit(task)
         } else {
           val ftask: RunnableFuture[T] = newTaskFor(task);
           logWarning("ftask is: " + ftask.getClass())
           val queue = taskWaiting.computeIfAbsent(runner.taskAttemptId, _ => {
-            new ConcurrentLinkedQueue[RunnableFuture]()
+            new ConcurrentLinkedQueue[Runnable]()
           })
-          // queue.add(ftask)
-          // ftask
-          super.submit(task)
+          queue.add(ftask)
+          ftask
+          // super.submit(task)
 
         }
       }
