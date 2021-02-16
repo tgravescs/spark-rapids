@@ -1542,7 +1542,7 @@ class MultiFileCloudParquetPartitionReader(
   private def initAndStartReaders(): Unit = {
     // limit the number we submit at once according to the config if set
     val limit = math.min(maxNumFileProcessed, files.length)
-    logWarning("init and Start readers")
+    logWarning(s"init and Start readers ${TaskContext.get().taskAttemptId()}")
     for (i <- 0 until limit) {
       val file = files(i)
       // Add these in the order as we got them so that we can make sure
@@ -1606,7 +1606,7 @@ class MultiFileCloudParquetPartitionReader(
         currentFileHostBuffers = None
         if (filesToRead > 0 && !isDone) {
           val fileBufsAndMeta = tasks.poll.get()
-          logWarning("got back first task " + fileBufsAndMeta)
+          logWarning("got back first task  ${TaskContext.get().taskAttemptId()}")
           filesToRead -= 1
           TrampolineUtil.incBytesRead(inputMetrics, fileBufsAndMeta.bytesRead)
           InputFileUtils.setInputFileBlock(fileBufsAndMeta.fileName, fileBufsAndMeta.fileStart,
