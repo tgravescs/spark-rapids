@@ -1394,7 +1394,7 @@ object MultiFileCloudThreadPoolFactory extends Logging {
 
   private def initThreadPool(
       maxThreads: Int = 20,
-      keepAliveSeconds: Long = 60): CustomThreadPoolExecutor = synchronized {
+      keepAliveSeconds: Long = 60): CustomThreadPoolExecutor = {
     logWarning(s"init thread pool with $maxThreads")
     if (!threadPool.isDefined) {
       val threadFactory = new ThreadFactoryBuilder()
@@ -1414,9 +1414,11 @@ object MultiFileCloudThreadPoolFactory extends Logging {
     threadPool.get
   }
 
-  def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = synchronized {
+  def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = {
     logWarning("submitToThreadPool")
-    val pool = threadPool.getOrElse(initThreadPool(numThreads))
+    val pool = synchronized {
+      threadPool.getOrElse(initThreadPool(numThreads))
+    }
     logWarning("submitToThreadPool 2")
 
     val fut = pool.submit(task)

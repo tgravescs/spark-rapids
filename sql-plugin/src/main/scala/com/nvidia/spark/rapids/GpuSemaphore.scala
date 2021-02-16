@@ -99,7 +99,7 @@ object GpuSemaphore {
     }
   }
 
-  def contains(tid: Long): Boolean = synchronized {
+  def contains(tid: Long): Boolean =  {
     if (enabled) {
       getInstance.contains(tid)
     } else {
