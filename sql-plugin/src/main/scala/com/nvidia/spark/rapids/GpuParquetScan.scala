@@ -1405,7 +1405,7 @@ class MultiFileCloudParquetPartitionReader(
     override def submit[T](task: Callable[T]): Future[T] = {
       val runner = task.asInstanceOf[ReadBatchRunner]
       if (GpuSemaphore.contains(runner.taskAttemptId)) {
-        logWarning("semaphore acquired by " + runner.taskAttemptId)
+        logWarning("semaphore acquired by submitting task " + runner.taskAttemptId)
         totalTasksRunning.incrementAndGet()
         super.submit(task)
       } else {
@@ -1413,10 +1413,11 @@ class MultiFileCloudParquetPartitionReader(
         // todo - MIN 2? slight race here
         if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
           totalTasksRunning.incrementAndGet()
+          logWarning(s"submitting task for: ${runner.taskAttemptId}")
           super.submit(task)
         } else {
           val ftask: RunnableFuture[T] = newTaskFor(task);
-          logWarning("ftask is: " + ftask.getClass())
+          logWarning(s"skipping ${runner.taskAttemptId} ftask is: " + ftask.getClass())
           val queue = taskWaiting.computeIfAbsent(runner.taskAttemptId, _ => {
             new ConcurrentLinkedQueue[Runnable]()
           })
