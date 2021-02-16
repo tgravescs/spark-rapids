@@ -18,6 +18,8 @@ package com.nvidia.spark.rapids
 
 import java.util.concurrent.{ConcurrentHashMap, Semaphore}
 
+import scala.collection.JavaConverters._
+
 import ai.rapids.cudf.{NvtxColor, NvtxRange}
 import org.apache.commons.lang3.mutable.MutableInt
 
@@ -105,11 +107,11 @@ object GpuSemaphore {
     }
   }
 
-  def getActive(): Array[Long] = {
+  def getActive(): Seq[Long] = {
     if (enabled) {
       getInstance.getActive()
     } else {
-      Array.empty[Long]
+      Seq.empty[Long]
     }
   }
 }
@@ -123,8 +125,8 @@ private final class GpuSemaphore(tasksPerGpu: Int) extends Logging {
     activeTasks.contains(tid)
   }
 
-  def getActive(): Array[Long] = {
-    activeTasks.keySet().toArray(new Array[Long](activeTasks.size()))
+  def getActive(): Seq[Long] = {
+    activeTasks.keys.asScala.toSeq
   }
 
   def acquireIfNecessary(context: TaskContext): Unit = {
