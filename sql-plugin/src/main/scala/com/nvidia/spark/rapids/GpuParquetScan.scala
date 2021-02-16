@@ -1303,6 +1303,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
   }
 
   override protected def afterExecute(r: Runnable , t: Throwable ): Unit = synchronized {
+    super.afterExecute(r, t)
     // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
     // super.execute(ftask)
     totalTasksRunning.decrementAndGet()
@@ -1318,7 +1319,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
             while (!taskWaiting.get(t).isEmpty()) {
               val r = taskWaiting.get(t).poll()
               logWarning(s"adding active task for taskid ${t} total: " + totalTasksRunning.get())
-              super.execute(r)
+              execute(r)
               totalTasksRunning.incrementAndGet()
             }
           }
@@ -1329,7 +1330,6 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
         addSome()
       }
     }
-    super.afterExecute(r, t)
   }
      /* override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
 
@@ -1378,11 +1378,11 @@ abstract class RunnerWithTaskAttemptId(val taskAttemptId: Long)
 // Please note that the TaskContext is not set in these threads and should not be used.
 object MultiFileCloudThreadPoolFactory extends Logging {
 
-  private var threadPool: Option[ThreadPoolExecutor] = None
+  private var threadPool: Option[CustomThreadPoolExecutor] = None
 
   private def initThreadPool(
       maxThreads: Int = 20,
-      keepAliveSeconds: Long = 60): ThreadPoolExecutor = synchronized {
+      keepAliveSeconds: Long = 60): CustomThreadPoolExecutor = synchronized {
     logWarning(s"init thread pool with $maxThreads")
     if (!threadPool.isDefined) {
       val threadFactory = new ThreadFactoryBuilder()
@@ -1403,8 +1403,12 @@ object MultiFileCloudThreadPoolFactory extends Logging {
   }
 
   def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = synchronized {
+    logWarning("submitToThreadPool")
     val pool = threadPool.getOrElse(initThreadPool(numThreads))
-    pool.submit(task)
+    val fut = pool.submit(task)
+    logWarning("submitted to pool")
+
+    fut
   }
 }
 
