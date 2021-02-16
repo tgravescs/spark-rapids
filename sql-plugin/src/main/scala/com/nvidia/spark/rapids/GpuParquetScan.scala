@@ -1329,13 +1329,14 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
         addSome()
       }
     }
+    super.afterExecute(r, t)
   }
-      override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
+     /* override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
 
           logWarning("before execute class is: " + r.getClass())
         // GpuSemaphore.contains()
       }
-
+*/
 
   import java.util.concurrent.RunnableFuture
 
