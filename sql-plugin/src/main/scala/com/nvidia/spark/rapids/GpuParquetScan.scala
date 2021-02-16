@@ -1290,7 +1290,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
   // private val
   private var totalTasksRunning: Int = 0
 
-  private def addSome(): Unit = synchronized {
+  private def addSome(): Unit =  {
     while (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)
         && taskWaiting.values.map(_.size).sum > 0 ) {
       taskWaiting.foreach { case(t, queue) => {
@@ -1309,7 +1309,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
     logWarning("done adding some")
   }
 
-  override protected def afterExecute(r: Runnable , t: Throwable ): Unit = {
+  override protected def afterExecute(r: Runnable , t: Throwable ): Unit = synchronized {
     super.afterExecute(r, t)
       // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
       // super.execute(ftask)
@@ -1320,7 +1320,6 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
         if (activeTasks.nonEmpty) {
           logWarning("active tasks not empty: " + activeTasks.mkString(","))
           // add all for active tasks that have the semaphore
-          synchronized {
             activeTasks.foreach { t =>
               if (taskWaiting.contains(t) && taskWaiting.get(t).get.size > 0) {
                 logWarning("waiting task queue is empty? : " + taskWaiting.get(t).get.isEmpty)
@@ -1332,7 +1331,6 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
                   totalTasksRunning += 1
                 }
               }
-            }
           }
           // also check if still room for 3/4 full
           addSome()
