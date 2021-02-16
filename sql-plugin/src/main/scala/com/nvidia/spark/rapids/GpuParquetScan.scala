@@ -854,6 +854,8 @@ object MultiFileThreadPoolFactory {
   }
 }
 
+
+
 /**
  * A PartitionReader that can read multiple Parquet files up to the certain size. It will
  * coalesce small files together and copy the block data in a separate thread pool to speed
@@ -1329,6 +1331,71 @@ class MultiFileCloudParquetPartitionReader(
   private val tasksToRun = new Queue[ReadBatchRunner]()
   private[this] val inputMetrics = TaskContext.get.taskMetrics().inputMetrics
 
+  class CustomThreadPoolExecutor(corePoolSize: Int,
+      maximumPoolSize: Int,
+      keepAliveTime: Long,
+      unit: TimeUnit,
+      workQueue: BlockingQueue[Runnable],
+      threadFactory: ThreadFactory)
+    extends ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime,
+      unit, workQueue, threadFactory) with Logging {
+
+    private val taskWaiting = new ConcurrentHashMap[Long,  ConcurrentLinkedQueue[Long]]()
+
+
+    override protected def afterExecute(r: Runnable , t: Throwable ): Unit = {
+      logWarning("after execute class is: " + r.getClass())
+    }
+
+    override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
+      if (r.isInstanceOf[ReadBatchRunner]) {
+        logWarning("before execute is ReadBatchRunner")
+      } else {
+        logWarning("before execute class is: " + r.getClass())
+      }
+      // GpuSemaphore.contains()
+    }
+
+
+    override def submit[T](task: Callable[T]): Future[T] = {
+      super.submit(task)
+    }
+  }
+
+  // Singleton threadpool that is used across all the tasks.
+  // Please note that the TaskContext is not set in these threads and should not be used.
+  object MultiFileCloudThreadPoolFactory {
+
+    private var threadPool: Option[ThreadPoolExecutor] = None
+
+    private def initThreadPool(
+        maxThreads: Int = 20,
+        keepAliveSeconds: Long = 60): ThreadPoolExecutor = synchronized {
+      if (!threadPool.isDefined) {
+        val threadFactory = new ThreadFactoryBuilder()
+          .setNameFormat("parquet reader worker-%d")
+          .setDaemon(true)
+          .build()
+
+        threadPool = Some(new CustomThreadPoolExecutor(
+          maxThreads, // corePoolSize: max number of threads to create before queuing the tasks
+          maxThreads, // maximumPoolSize: because we use LinkedBlockingDeque, this is not used
+          keepAliveSeconds,
+          TimeUnit.SECONDS,
+          new LinkedBlockingQueue[Runnable],
+          threadFactory))
+        threadPool.get.allowCoreThreadTimeOut(true)
+      }
+      threadPool.get
+    }
+
+    def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = {
+      val pool = threadPool.getOrElse(initThreadPool(numThreads))
+      pool.submit(task)
+    }
+  }
+
+
   private class ReadBatchRunner(filterHandler: GpuParquetFileFilterHandler,
       file: PartitionedFile,
       conf: Configuration,
@@ -1409,7 +1476,7 @@ class MultiFileCloudParquetPartitionReader(
       val file = files(i)
       // Add these in the order as we got them so that we can make sure
       // we process them in the same order as CPU would.
-      tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(
+      tasks.add(MultiFileCloudThreadPoolFactory.submitToThreadPool(
         new ReadBatchRunner(filterHandler, file, conf, filters), numThreads))
     }
     // queue up any left to add once others finish
@@ -1445,7 +1512,7 @@ class MultiFileCloudParquetPartitionReader(
   private def addNextTaskIfNeeded(): Unit = {
     if (tasksToRun.size > 0 && !isDone) {
       val runner = tasksToRun.dequeue()
-      tasks.add(MultiFileThreadPoolFactory.submitToThreadPool(runner, numThreads))
+      tasks.add(MultiFileCloudThreadPoolFactory.submitToThreadPool(runner, numThreads))
     }
   }
 

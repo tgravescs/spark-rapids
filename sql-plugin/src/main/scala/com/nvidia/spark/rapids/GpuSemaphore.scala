@@ -96,12 +96,24 @@ object GpuSemaphore {
       instance = null
     }
   }
+
+  def contains(tid: Long): Boolean = synchronized {
+    if (enabled) {
+      getInstance.contains(tid)
+    } else {
+      false
+    }
+  }
 }
 
 private final class GpuSemaphore(tasksPerGpu: Int) extends Logging {
   private val semaphore = new Semaphore(tasksPerGpu)
   // Map to track which tasks have acquired the semaphore.
   private val activeTasks = new ConcurrentHashMap[Long, MutableInt]
+
+  def contains(tid: Long): Boolean = {
+    activeTasks.contains(tid)
+  }
 
   def acquireIfNecessary(context: TaskContext): Unit = {
     val nvtxRange = new NvtxRange("Acquire GPU", NvtxColor.RED)
