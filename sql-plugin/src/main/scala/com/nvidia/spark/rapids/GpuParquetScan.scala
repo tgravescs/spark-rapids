@@ -1374,6 +1374,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
           new scala.collection.mutable.Queue[Runnable]()
         )
         queue.enqueue(ftask)
+        taskWaiting(runner.taskAttemptId) = queue
         ftask
         // super.submit(task)
 
