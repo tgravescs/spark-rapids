@@ -1291,13 +1291,15 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
   private var totalTasksRunning: Int = 0
 
   private def addSome(): Unit = synchronized {
-    while (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)) {
+    while (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)
+        && taskWaiting.values.map(_.size).sum > 0 ) {
       taskWaiting.foreach { case(t, queue) => {
         if (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)) {
           if (queue != null && !queue.isEmpty) {
             logWarning(s"adding task for taskid ${t} total: " + totalTasksRunning)
             totalTasksRunning += 1
             super.execute(queue.dequeue())
+
             logWarning(s"after adding task for taskid ${t} total: " + totalTasksRunning)
 
           }
