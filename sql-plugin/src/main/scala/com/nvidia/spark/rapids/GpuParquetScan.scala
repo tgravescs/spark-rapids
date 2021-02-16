@@ -1289,9 +1289,9 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
   private val totalTasksRunning = new AtomicInteger(0)
 
   private def addSome(): Unit = {
-    while (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
+    while (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
       taskWaiting.forEach((t, queue) => {
-        if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
+        if (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
           if (!queue.isEmpty()) {
             logWarning(s"adding task for taskid ${t} total: " + totalTasksRunning.get())
             totalTasksRunning.incrementAndGet()
@@ -1307,7 +1307,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
     // val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
     // super.execute(ftask)
     totalTasksRunning.decrementAndGet()
-    if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
+    if (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
       val activeTasks = GpuSemaphore.getActive()
       if (activeTasks.nonEmpty) {
         logWarning("active tasks not empty: " + activeTasks.mkString(","))
@@ -1356,7 +1356,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
       super.submit(task)
     } else {
       // todo - MIN 2? slight race here
-      if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
+      if (totalTasksRunning.get() < Math.max(maximumPoolSize * 0.75, 2)) {
         totalTasksRunning.incrementAndGet()
         logWarning(s"does not have the seamphore submitting task for: ${runner.taskAttemptId} total tasks: ${totalTasksRunning.get()}")
         super.submit(task)
