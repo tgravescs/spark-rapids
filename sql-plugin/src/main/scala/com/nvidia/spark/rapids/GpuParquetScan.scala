@@ -1345,6 +1345,7 @@ class MultiFileCloudParquetPartitionReader(
 
     override protected def afterExecute(r: Runnable , t: Throwable ): Unit = {
       logWarning("after execute class is: " + r.getClass())
+      val foo = r.asInstanceOf[java.util.concurrent.FutureTask]
     }
 
     override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
@@ -1356,6 +1357,12 @@ class MultiFileCloudParquetPartitionReader(
       // GpuSemaphore.contains()
     }
 
+    import java.util.concurrent.RunnableFuture
+
+    override protected def newTaskFor[V](c: Callable[V]): RunnableFuture[V] = {
+      logWarning("new task for class:" + c.getClass())
+      super.newTaskFor(c)
+    }
 
     override def submit[T](task: Callable[T]): Future[T] = {
       super.submit(task)
