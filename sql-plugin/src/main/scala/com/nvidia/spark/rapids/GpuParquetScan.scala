@@ -1409,15 +1409,14 @@ class MultiFileCloudParquetPartitionReader(
         totalTasksRunning.incrementAndGet()
         super.submit(task)
       } else {
-        logWarning(s" task: ${runner.taskAttemptId} does not have the seamphore")
         // todo - MIN 2? slight race here
         if (totalTasksRunning.get() < Math.min(maximumPoolSize * 0.75, 2)) {
           totalTasksRunning.incrementAndGet()
-          logWarning(s"submitting task for: ${runner.taskAttemptId}")
+          logWarning(s"does not have the seamphore submitting task for: ${runner.taskAttemptId}")
           super.submit(task)
         } else {
           val ftask: RunnableFuture[T] = newTaskFor(task);
-          logWarning(s"skipping ${runner.taskAttemptId} ftask is: " + ftask.getClass())
+          logWarning(s"does not have the seamphore skipping ${runner.taskAttemptId} ftask is: " + ftask.getClass())
           val queue = taskWaiting.computeIfAbsent(runner.taskAttemptId, _ => {
             new ConcurrentLinkedQueue[Runnable]()
           })
