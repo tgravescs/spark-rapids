@@ -1290,11 +1290,11 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
   // private val
   private var totalTasksRunning: Int = 0
 
-  private def addSome(): Unit =  {
-    while (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)
+  private def addSome(percent: Double): Unit =  {
+    while (totalTasksRunning < Math.max(maximumPoolSize * percent, 2)
         && taskWaiting.values.map(_.size).sum > 0 ) {
       taskWaiting.foreach { case(t, queue) => {
-        if (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)) {
+        if (totalTasksRunning < Math.max(maximumPoolSize * percent, 2)) {
           if (queue != null && !queue.isEmpty) {
             logWarning(s"adding task for task ${t} total: " + totalTasksRunning)
             totalTasksRunning += 1
@@ -1311,8 +1311,7 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
       // super.execute(ftask)
       totalTasksRunning -= 1
       logWarning(s"after execute total tasks is ${totalTasksRunning} ${r.getClass()}")
-      if (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)) {
-        val activeTasks = GpuSemaphore.getActive()
+      val activeTasks = GpuSemaphore.getActive()
         if (activeTasks.nonEmpty) {
           logWarning("active tasks not empty: " + activeTasks.mkString(","))
           // add all for active tasks that have the semaphore
@@ -1326,12 +1325,13 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
                 }
               }
           }
-          // also check if still room for 3/4 full
-          addSome()
+          // also check if still room if we put all active tasks in
+          addSome(1.0)
         } else {
-          addSome()
+          addSome(0.75)
         }
-      }
+      // if (totalTasksRunning < Math.max(maximumPoolSize * 0.9, 2)) {
+      // }
   }
      /* override protected def beforeExecute(t: Thread, r: Runnable): Unit = {
 
@@ -1355,8 +1355,13 @@ class CustomThreadPoolExecutor(corePoolSize: Int,
       totalTasksRunning +=1
       super.submit(task)
     } else {
+      val queueDefined = taskWaiting.get(runner.taskAttemptId).isDefined
+      if (!queueDefined) {
+        taskWaiting(runner.taskAttemptId) = new scala.collection.mutable.Queue[Runnable]()
+      }
+      // add a single task for each task
       // todo - MIN 2? slight race here
-      if (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2)) {
+      if (totalTasksRunning < Math.max(maximumPoolSize * 0.75, 2) || !queueDefined) {
         totalTasksRunning += 1
         logWarning(s"does not have the seamphore submitting task ${runner.taskAttemptId} total tasks: ${totalTasksRunning}")
         super.submit(task)
