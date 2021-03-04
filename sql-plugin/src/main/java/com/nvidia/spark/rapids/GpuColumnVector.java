@@ -24,6 +24,9 @@ import ai.rapids.cudf.Scalar;
 import ai.rapids.cudf.Schema;
 import ai.rapids.cudf.Table;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.types.*;
 import org.apache.spark.sql.vectorized.ColumnVector;
@@ -39,6 +42,8 @@ import java.util.List;
  * We also provide GPU accelerated versions of the transitions to and from rows.
  */
 public class GpuColumnVector extends GpuColumnVectorBase {
+
+  private static final Logger logger = LoggerFactory.getLogger(GpuColumnVector.class);
 
   /**
    * Print to standard error the contents of a table. Note that this should never be
@@ -191,6 +196,7 @@ public class GpuColumnVector extends GpuColumnVectorBase {
     }
 
     protected ColumnVector buildAndPutOnDevice(int builderIndex) {
+      logger.warn("building and putting on device type: " + fields[builderIndex].dataType() + " index: " + builderIndex);
       ai.rapids.cudf.ColumnVector cv = builders[builderIndex].buildAndPutOnDevice();
       GpuColumnVector gcv = new GpuColumnVector(fields[builderIndex].dataType(), cv);
       builders[builderIndex] = null;

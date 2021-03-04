@@ -121,8 +121,9 @@ class ArrowColumnarDataSourceV2 extends TestingV2Source {
   class MyScanBuilder(options: CaseInsensitiveStringMap) extends SimpleScanBuilder {
 
     override def planInputPartitions(): Array[InputPartition] = {
-      Array(ArrowInputPartition(TestingV2Source.dataTypesToUse, 100, 1),
-        ArrowInputPartition(TestingV2Source.dataTypesToUse, 100, 101))
+      Array(ArrowInputPartition(TestingV2Source.dataTypesToUse, 3000000, 1),
+        ArrowInputPartition(TestingV2Source.dataTypesToUse, 3000000, 3000001),
+        ArrowInputPartition(TestingV2Source.dataTypesToUse, 3000000, 6000001))
     }
 
     override def createReaderFactory(): PartitionReaderFactory = {
@@ -139,7 +140,7 @@ class ArrowColumnarDataSourceV2 extends TestingV2Source {
 
 class ColumnarReaderFactory(options: CaseInsensitiveStringMap)
     extends PartitionReaderFactory {
-  private final val BATCH_SIZE = 20
+  private final val BATCH_SIZE = 50000
 
   override def supportColumnarReads(partition: InputPartition): Boolean = true
 

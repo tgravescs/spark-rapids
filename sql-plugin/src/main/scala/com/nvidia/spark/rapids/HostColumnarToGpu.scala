@@ -18,6 +18,7 @@ package com.nvidia.spark.rapids
 
 import java.nio.ByteBuffer
 
+import org.apache.arrow.vector._
 import org.apache.arrow.vector.ValueVector
 
 import org.apache.spark.TaskContext
@@ -89,6 +90,9 @@ object HostColumnarToGpu extends Logging {
       case e: UnsupportedOperationException =>
         // swallow the exception and assume no offsets buffer
     }
+    logWarning(s"adding arrow column copy rows; $rows nulls: $nullCount databuf: $dataBuf validity: $validity offsets: $offsets valVector class: ${valVector.getClass()}")
+    // val arrvector = valVector.asInstanceOf[VarCharVector]
+    // logWarning(s"value at index 1 is: ${arrvector.getObject(1).toString()}")
     ab.addBatch(rows, nullCount, dataBuf, validity, offsets)
   }
 
@@ -248,7 +252,7 @@ class HostToGpuCoalesceIterator(iter: Iterator[ColumnarBatch],
     collectTime,
     concatTime,
     totalTime,
-    opName) {
+    opName) with Logging {
 
   // RequireSingleBatch goal is intentionally not supported in this iterator
   assert(goal != RequireSingleBatch)
@@ -279,6 +283,11 @@ class HostToGpuCoalesceIterator(iter: Iterator[ColumnarBatch],
     // schema and desired batch size
     batchRowLimit = GpuBatchUtils.estimateRowCount(goal.targetSizeBytes,
       GpuBatchUtils.estimateGpuMemory(schema, 512), 512)
+    logWarning(s"in iniit new batch row limit is: $batchRowLimit columsn is: ${batch.numCols()}")
+    if (batch.numCols() == 0) {
+      batchRowLimit = 100000000
+      logWarning(s"init set row limit:  $batchRowLimit columsn is: ${batch.numCols()}")
+    }
 
     // if no columns then probably a count operation so doesn't matter which builder we use
     // as we won't actually copy any data and we can't tell what type of data it is without
@@ -287,10 +296,10 @@ class HostToGpuCoalesceIterator(iter: Iterator[ColumnarBatch],
       arrowTypesSupported(schema) &&
       (batch.column(0).isInstanceOf[ArrowColumnVector] ||
         batch.column(0).isInstanceOf[AccessibleArrowColumnVector])) {
-      logDebug("Using GpuArrowColumnarBatchBuilder")
+      logWarning(s"Using GpuArrowColumnarBatchBuilder num cols is: ${batch.numCols()}")
       batchBuilder = new GpuColumnVector.GpuArrowColumnarBatchBuilder(schema, batchRowLimit, batch)
     } else {
-      logDebug("Using GpuColumnarBatchBuilder")
+      logWarning("Using GpuColumnarBatchBuilder")
       batchBuilder = new GpuColumnVector.GpuColumnarBatchBuilder(schema, batchRowLimit, null)
     }
     totalRows = 0
@@ -309,6 +318,7 @@ class HostToGpuCoalesceIterator(iter: Iterator[ColumnarBatch],
   }
 
   override def concatAllAndPutOnGPU(): ColumnarBatch = {
+    logWarning("in concatAllAndPutOnGPU")
     // About to place data back on the GPU
     GpuSemaphore.acquireIfNecessary(TaskContext.get())
 

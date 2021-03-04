@@ -264,12 +264,16 @@ abstract class AbstractGpuCoalesceIterator(
 
       // check if there is a batch "on deck" from a previous call to next()
       if (hasOnDeck) {
+        logWarning(s"Coalesce Batch next num rows: $numRows bytes: $numBytes")
         val batch = popOnDeck()
         numRows += batch.numRows()
         numBytes += getBatchDataSize(batch)
+        // logWarning(s"Coalesce Batch next total num rows: $numRows bytes: $numBytes")
         addBatch(batch)
       }
 
+      logWarning(s"Coalesce Batch before while num rows: $numRows numBytes : $numBytes")
+      var numBatchesAdded = 0
       // there is a hard limit of 2^31 rows
       while (numRows < Int.MaxValue && !hasOnDeck && iterHasNext) {
         closeOnExcept(iterNext()) { cb =>
@@ -285,6 +289,7 @@ abstract class AbstractGpuCoalesceIterator(
             // output batch
             val wouldBeRows = numRows + nextRows
             val wouldBeBytes = numBytes + nextBytes
+            logWarning(s"Coalesce Batch checking next set of num rows: $nextRows bytes: $nextBytes limit: $batchRowLimit")
 
             if (wouldBeRows > Int.MaxValue) {
               if (goal == RequireSingleBatch) {
@@ -294,17 +299,23 @@ abstract class AbstractGpuCoalesceIterator(
               }
               saveOnDeck(cb)
             } else if (batchRowLimit > 0 && wouldBeRows > batchRowLimit) {
+              logWarning(s"Coalesce hit row limit $wouldBeRows limit: $batchRowLimit")
               saveOnDeck(cb)
             } else if (wouldBeBytes > goal.targetSizeBytes && numBytes > 0) {
+              logWarning("saving on deck")
               // There are no explicit checks for the concatenate result exceeding the cudf 2^31
               // row count limit for any column. We are relying on cudf's concatenate to throw
               // an exception if this occurs and limiting performance-oriented goals to under
               // 2GB data total to avoid hitting that error.
               saveOnDeck(cb)
             } else {
-              addBatch(cb)
-              numRows = wouldBeRows
-              numBytes = wouldBeBytes
+              // if (numBatchesAdded < 3) {
+                addBatch(cb)
+                numBatchesAdded += 1
+                numRows = wouldBeRows
+                numBytes = wouldBeBytes
+                logWarning(s"Coalesce Batch add Batch total num rows: $numRows bytes: $numBytes num batches added: $numBatchesAdded")
+              // }
             }
           } else {
             cb.close()
@@ -320,6 +331,7 @@ abstract class AbstractGpuCoalesceIterator(
 
       numOutputRows += numRows
       numOutputBatches += 1
+      logWarning(s"going to concat and put on gpu batches: ${numOutputBatches.value}")
       withResource(new NvtxWithMetrics(s"$opName concat", NvtxColor.CYAN, concatTime)) { _ =>
         concatAllAndPutOnGPU()
       }

@@ -23,6 +23,7 @@ import ai.rapids.cudf.NvtxColor
 import com.nvidia.spark.rapids.GpuMetric._
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.TaskContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -306,7 +307,7 @@ case class GpuHashAggregateExec(
     aggregateAttributes: Seq[Attribute],
     initialInputBufferOffset: Int,
     resultExpressions: Seq[NamedExpression],
-    child: SparkPlan) extends UnaryExecNode with GpuExec with Arm {
+    child: SparkPlan) extends UnaryExecNode with GpuExec with Arm with Logging {
 
   override def verboseStringWithOperatorId(): String = {
     s"""
@@ -794,6 +795,7 @@ case class GpuHashAggregateExec(
                        merge : Boolean,
                        computeAggTime: GpuMetric): ColumnarBatch  = {
     val nvtxRange = new NvtxWithMetrics("computeAggregate", NvtxColor.CYAN, computeAggTime)
+    logWarning(s"in compute aggregate, expressions: ${groupingExpressions} size aggrgate cvs: ${toAggregateCvs.size}")
     try {
       if (groupingExpressions.nonEmpty) {
         // Perform group by aggregation
@@ -816,7 +818,9 @@ case class GpuHashAggregateExec(
           }
           tbl = new cudf.Table(toAggregateCvs.map(_.getBase): _*)
 
+          logWarning(s"group by before")
           result = tbl.groupBy(groupingExpressions.indices: _*).aggregate(cudfAggregates: _*)
+          logWarning(s"group by after")
 
           // Turn aggregation into a ColumnarBatch for the result evaluation
           // Note that the resulting ColumnarBatch has the following shape:

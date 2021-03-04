@@ -16,13 +16,14 @@
 
 package com.nvidia.spark.rapids
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.types.{ArrayType, DataType, DataTypes, MapType, StructType}
 
 /**
  * Utility class with methods for calculating various metrics about GPU memory usage
  * prior to allocation.
  */
-object GpuBatchUtils {
+object GpuBatchUtils extends Logging {
 
   /** Validity buffers are 64 byte aligned */
   val VALIDITY_BUFFER_BOUNDARY_BYTES = 64
@@ -40,11 +41,14 @@ object GpuBatchUtils {
       currentBatchRowCount: Long): Int = {
     assert(currentBatchRowCount > 0, "batch must contain at least one row")
     val targetRowCount: Long = if (currentBatchSize > desiredBatchSizeBytes) {
+      logWarning(s"returning current batch row count: $currentBatchRowCount")
       currentBatchRowCount
     } else if (currentBatchSize == 0) {
       //  batch size can be 0 when doing a count() operation and the actual data isn't needed
+      logWarning(s"returning current batch row count as size 0 : $currentBatchRowCount")
       currentBatchRowCount
     } else {
+      logWarning(s"calculating: ${((desiredBatchSizeBytes / currentBatchSize.floatValue()) * currentBatchRowCount).toLong}")
       ((desiredBatchSizeBytes / currentBatchSize.floatValue()) * currentBatchRowCount).toLong
     }
     targetRowCount.min(Integer.MAX_VALUE).toInt
