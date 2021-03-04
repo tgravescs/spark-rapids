@@ -279,6 +279,9 @@ class HostToGpuCoalesceIterator(iter: Iterator[ColumnarBatch],
     // schema and desired batch size
     batchRowLimit = GpuBatchUtils.estimateRowCount(goal.targetSizeBytes,
       GpuBatchUtils.estimateGpuMemory(schema, 512), 512)
+    if (batch.numCols() == 0) {
+      batchRowLimit = Integer.MAX_VALUE
+    }
 
     // if no columns then probably a count operation so doesn't matter which builder we use
     // as we won't actually copy any data and we can't tell what type of data it is without
