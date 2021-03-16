@@ -458,12 +458,6 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
     val tasks = new java.util.ArrayList[Future[ParquetFileInfoWithBlockMeta]]()
     // val start = System.nanoTime()
-    files.map { file =>
-      val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
-      clippedBlocks ++= singleFileInfo.blocks.map(
-        ParquetFileInfoWithSingleBlockMeta(singleFileInfo.filePath, _, file.partitionValues,
-          singleFileInfo.schema, singleFileInfo.isCorrectedRebaseMode))
-    }
 
     files.map { file =>
       tasks.add(MultiFileFilterThreadPoolFactory.submitToThreadPool(
