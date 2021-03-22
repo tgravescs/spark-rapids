@@ -365,6 +365,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   private val maxReadBatchSizeRows = rapidsConf.maxReadBatchSizeRows
   private val maxReadBatchSizeBytes = rapidsConf.maxReadBatchSizeBytes
   private val numThreads = rapidsConf.parquetMultiThreadReadNumThreads
+  private val filterThreads = rapidsConf.parquetMultiThreadReadNumFilterThreads
   private val maxNumFileProcessed = rapidsConf.maxNumParquetFilesParallel
   private val canUseMultiThreadReader = rapidsConf.isParquetMultiThreadReadEnabled
   // we can't use the coalescing files reader when InputFileName, InputFileBlockStart,
@@ -445,10 +446,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     extends Callable[ParquetFileInfoWithBlockMeta] with Logging {
 
     override def call(): ParquetFileInfoWithBlockMeta = {
-      // val start = System.nanoTime()
-      val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
-      // logWarning(s"done filter blocks took: ${System.nanoTime() - start}")
-      singleFileInfo
+      filterHandler.filterBlocks(file, conf, filters, readDataSchema)
     }
   }
 
@@ -456,57 +454,33 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       files: Array[PartitionedFile]): PartitionReader[ColumnarBatch] = {
     val conf = broadcastedConf.value.value
     val clippedBlocks = ArrayBuffer[ParquetFileInfoWithSingleBlockMeta]()
-    val tasks = new java.util.ArrayList[Future[ParquetFileInfoWithBlockMeta]]()
-    // val start = System.nanoTime()
 
-    files.map { file =>
-      tasks.add(MultiFileFilterThreadPoolFactory.submitToThreadPool(
-        new ReadFilterRunner(file, conf), numThreads))
-    }
+    if (filterThreads <= 0) {
+      files.map { file =>
+        val singleFileInfo = filterHandler.filterBlocks(file, conf, filters, readDataSchema)
+        clippedBlocks ++= singleFileInfo.blocks.map(
+          ParquetFileInfoWithSingleBlockMeta(singleFileInfo.filePath, _, file.partitionValues,
+            singleFileInfo.schema, singleFileInfo.isCorrectedRebaseMode))
+      }
+    } else {
+      val tasks = new java.util.ArrayList[Future[ParquetFileInfoWithBlockMeta]]()
+      files.map { file =>
+        tasks.add(MultiFileFilterThreadPoolFactory.submitToThreadPool(
+          new ReadFilterRunner(file, conf), filterThreads))
+      }
 
-    for (future <- tasks.asScala) {
-      val result = future.get()
-      clippedBlocks ++= result.blocks.map(
-        ParquetFileInfoWithSingleBlockMeta(result.filePath, _, result.partValues,
-          result.schema, result.isCorrectedRebaseMode))
+      for (future <- tasks.asScala) {
+        val result = future.get()
+        clippedBlocks ++= result.blocks.map(
+          ParquetFileInfoWithSingleBlockMeta(result.filePath, _, result.partValues,
+            result.schema, result.isCorrectedRebaseMode))
+      }
     }
-    // logWarning(s"time to filter blocks is ${System.nanoTime() - start}")
 
     new MultiFileParquetPartitionReader(conf, files, clippedBlocks,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
       maxReadBatchSizeRows, maxReadBatchSizeBytes, metrics,
       partitionSchema, numThreads)
-  }
-}
-
-object MultiFileFilterThreadPoolFactory {
-
-  var threadPool: Option[ThreadPoolExecutor] = None
-
-  private def initThreadPool(
-      maxThreads: Int = 20,
-      keepAliveSeconds: Long = 60): ThreadPoolExecutor = synchronized {
-    if (!threadPool.isDefined) {
-      val threadFactory = new ThreadFactoryBuilder()
-        .setNameFormat("parquet filter reader worker-%d")
-        .setDaemon(true)
-        .build()
-
-      threadPool = Some(new ThreadPoolExecutor(
-        maxThreads, // corePoolSize: max number of threads to create before queuing the tasks
-        maxThreads, // maximumPoolSize: because we use LinkedBlockingDeque, this is not used
-        keepAliveSeconds,
-        TimeUnit.SECONDS,
-        new LinkedBlockingQueue[Runnable],
-        threadFactory))
-      threadPool.get.allowCoreThreadTimeOut(true)
-    }
-    threadPool.get
-  }
-
-  def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = {
-    val pool = threadPool.getOrElse(initThreadPool(numThreads))
-    pool.submit(task)
   }
 }
 
@@ -869,6 +843,40 @@ abstract class FileParquetPartitionReaderBase(
 
   protected def fileSystemBytesRead(): Long = {
     FileSystem.getAllStatistics.asScala.map(_.getThreadStatistics.getBytesRead).sum
+  }
+}
+
+// Singleton threadpool that is used across all the tasks specifically for filtering blocks
+// with the COALESCING reader.
+// Please note that the TaskContext is not set in these threads and should not be used.
+object MultiFileFilterThreadPoolFactory {
+
+  var threadPool: Option[ThreadPoolExecutor] = None
+
+  private def initThreadPool(
+      maxThreads: Int = 20,
+      keepAliveSeconds: Long = 60): ThreadPoolExecutor = synchronized {
+    if (!threadPool.isDefined) {
+      val threadFactory = new ThreadFactoryBuilder()
+        .setNameFormat("parquet filter reader worker-%d")
+        .setDaemon(true)
+        .build()
+
+      threadPool = Some(new ThreadPoolExecutor(
+        maxThreads, // corePoolSize: max number of threads to create before queuing the tasks
+        maxThreads, // maximumPoolSize: because we use LinkedBlockingDeque, this is not used
+        keepAliveSeconds,
+        TimeUnit.SECONDS,
+        new LinkedBlockingQueue[Runnable],
+        threadFactory))
+      threadPool.get.allowCoreThreadTimeOut(true)
+    }
+    threadPool.get
+  }
+
+  def submitToThreadPool[T](task: Callable[T], numThreads: Int): Future[T] = {
+    val pool = threadPool.getOrElse(initThreadPool(numThreads))
+    pool.submit(task)
   }
 }
 

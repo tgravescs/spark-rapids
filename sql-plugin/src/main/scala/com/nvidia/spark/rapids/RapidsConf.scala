@@ -630,6 +630,16 @@ object RapidsConf {
       .integerConf
       .createWithDefault(20)
 
+  val PARQUET_MULTITHREAD_READ_NUM_FILTER_THREADS =
+    conf("spark.rapids.sql.format.parquet.multiThreadedRead.numFilterThreads")
+      .doc("The maximum number of threads, on the executor, to use for filtering blocks in " +
+        "parquet reader. If set to 0, filtering doesn't happen in a separate " +
+        "thread pool. This can not be changed at runtime after the executor has " +
+        "started. Used with COALESCING reader only, see " +
+        "spark.rapids.sql.format.parquet.reader.type.")
+      .integerConf
+      .createWithDefault(20)
+
   val PARQUET_MULTITHREAD_READ_MAX_NUM_FILES_PARALLEL =
     conf("spark.rapids.sql.format.parquet.multiThreadedRead.maxNumFilesParallel")
       .doc("A limit on the maximum number of files per task processed in parallel on the CPU " +
@@ -1131,6 +1141,9 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
     ParquetReaderType.withName(get(PARQUET_READER_TYPE)) == ParquetReaderType.MULTITHREADED
 
   lazy val parquetMultiThreadReadNumThreads: Int = get(PARQUET_MULTITHREAD_READ_NUM_THREADS)
+
+  lazy val parquetMultiThreadReadNumFilterThreads: Int =
+    get(PARQUET_MULTITHREAD_READ_NUM_FILTER_THREADS)
 
   lazy val maxNumParquetFilesParallel: Int = get(PARQUET_MULTITHREAD_READ_MAX_NUM_FILES_PARALLEL)
 
