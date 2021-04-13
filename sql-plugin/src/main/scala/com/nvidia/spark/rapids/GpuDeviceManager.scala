@@ -127,6 +127,8 @@ object GpuDeviceManager extends Logging {
   }
 
   def shutdown(): Unit = synchronized {
+    Rmm.getMaxTotalBytesAllocated()
+    logWarning(s"Max RMM allocation ${Rmm.getMaxTotalBytesAllocated()} )")
     Rmm.shutdown()
     singletonMemoryInitialized = false
   }
