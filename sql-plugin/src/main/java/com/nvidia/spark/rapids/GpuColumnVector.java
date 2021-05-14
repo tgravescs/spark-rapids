@@ -81,7 +81,7 @@ public class GpuColumnVector extends GpuColumnVectorBase {
    * @param name the name of the column to print out.
    * @param col the column to print out.
    */
-  public static synchronized void debug(String name, ai.rapids.cudf.ColumnVector col) {
+  public static synchronized void debug(String name, ai.rapids.cudf.ColumnView col) {
     try (HostColumnVector hostCol = col.copyToHost()) {
       debug(name, hostCol);
     }
@@ -671,7 +671,8 @@ public class GpuColumnVector extends GpuColumnVectorBase {
    */
   static boolean typeConversionAllowed(Table table, DataType[] colTypes) {
     final int numColumns = table.getNumberOfColumns();
-    assert numColumns == colTypes.length: "The number of columns and the number of types don't match";
+    assert numColumns == colTypes.length: "The number of columns and the number of types don't " +
+        "match " + table + " " + Arrays.toString(colTypes);
     boolean ret = true;
     for (int colIndex = 0; colIndex < numColumns; colIndex++) {
       ret = ret && typeConversionAllowed(table.getColumn(colIndex), colTypes[colIndex]);
@@ -730,9 +731,56 @@ public class GpuColumnVector extends GpuColumnVectorBase {
    * but not both.
    */
   public static GpuColumnVector from(ai.rapids.cudf.ColumnVector cudfCv, DataType type) {
-    assert typeConversionAllowed(cudfCv, type) : "Type conversion is not allowed from " + cudfCv +
-        " to " + type;
+    assert typeConversionAllowed(cudfCv, type) : "Type conversion is not allowed from " +
+        buildColumnTypeString(cudfCv) + " to " + type + " expected " + buildColumnTypeString(type);
     return new GpuColumnVector(type, cudfCv);
+  }
+
+  private static String buildColumnTypeString(ai.rapids.cudf.ColumnView view) {
+    DType type = view.getType();
+    if (type.isNestedType()) {
+      StringBuilder sb = new StringBuilder(type.toString());
+      sb.append("(");
+      for (int i = 0; i < view.getNumChildren(); i++) {
+        if (i != 0) {
+          sb.append(",");
+        }
+        try (ColumnView childView = view.getChildColumnView(i)) {
+          sb.append(buildColumnTypeString(childView));
+        }
+      }
+      sb.append(")");
+      return sb.toString();
+    }
+    return type.toString();
+  }
+
+  private static String buildColumnTypeString(DataType sparkType) {
+    DType dtype = toRapidsOrNull(sparkType);
+    if (dtype != null) {
+      return dtype.toString();
+    }
+    StringBuilder sb = new StringBuilder();
+    if (sparkType instanceof ArrayType) {
+      ArrayType arrayType = (ArrayType) sparkType;
+      sb.append("LIST(");
+      sb.append(buildColumnTypeString(arrayType.elementType()));
+      sb.append(")");
+    } else if (sparkType instanceof MapType) {
+      MapType mapType = (MapType) sparkType;
+      sb.append("LIST(STRUCT(");
+      sb.append(buildColumnTypeString(mapType.keyType()));
+      sb.append(",");
+      sb.append(buildColumnTypeString(mapType.valueType()));
+      sb.append("))");
+    } else if (sparkType instanceof StructType) {
+      StructType structType = (StructType) sparkType;
+      sb.append(structType.iterator().map(f -> buildColumnTypeString(f.dataType()))
+          .mkString("STRUCT(", ",", ")"));
+    } else {
+      throw new IllegalArgumentException("Unexpected data type: " + sparkType);
+    }
+    return sb.toString();
   }
 
   /**
@@ -744,8 +792,9 @@ public class GpuColumnVector extends GpuColumnVectorBase {
    */
   public static GpuColumnVector fromChecked(ai.rapids.cudf.ColumnVector cudfCv, DataType type) {
     if (!typeConversionAllowed(cudfCv, type)) {
-      throw new IllegalArgumentException("Type conversion is not allowed from " + cudfCv +
-          " to " + type);
+      throw new IllegalArgumentException("Type conversion error to " + type +
+          ": expected cudf type " + buildColumnTypeString(type) +
+          " found cudf type " + buildColumnTypeString(cudfCv));
     }
     return new GpuColumnVector(type, cudfCv);
   }
