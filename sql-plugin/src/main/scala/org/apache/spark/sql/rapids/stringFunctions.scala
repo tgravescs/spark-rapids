@@ -340,7 +340,7 @@ case class GpuConcatWs(children: Seq[Expression])
               logWarning("gpu vector array")
               withResource(vector) { vec =>
                 withResource(GpuScalar.from("", StringType)) { emptyStrScalar =>
-                  columns += ColumnVector.stringConcatenateListElements(vec.getBase, columns.head)
+                  columns += vec.getBase.stringConcatenateListElements(columns.head)
                 }
               }
             case _ =>
@@ -360,7 +360,7 @@ case class GpuConcatWs(children: Seq[Expression])
               logWarning("gpu vector array")
               withResource(GpuColumnVector.from(s, rows, s.dataType)) { vec =>
                 withResource(GpuScalar.from("", StringType)) { emptyStrScalar =>
-                  columns += ColumnVector.stringConcatenateListElements(vec.getBase, columns.head)
+                  columns += vec.getBase.stringConcatenateListElements(columns.head)
                 }
               }
             case _ =>
