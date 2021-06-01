@@ -36,24 +36,20 @@ class QualificationSuite extends FunSuite {
   private val expRoot = ProfilingTestUtils.getTestResourceFile("QualificationExpectations")
   private val logDir = ProfilingTestUtils.getTestResourcePath("spark-events-qualification")
 
-  test("test udf event logs") {
+  private def runQualificationTest(eventLogs: Array[String], expectFileName: String) = {
     TrampolineUtil.withTempDir { outpath =>
-      val resultExpectation = new File(expRoot, "qual_test_simple_expectation.csv")
+      val resultExpectation = new File(expRoot, expectFileName)
       val appArgs = new ProfileArgs(Array(
         "--output-directory",
-        outpath.getAbsolutePath(),
-        s"$logDir/dataset_eventlog",
-        s"$logDir/dsAndDf_eventlog",
-        s"$logDir/udf_dataset_eventlog",
-        s"$logDir/udf_func_eventlog"
-      ))
+        outpath.getAbsolutePath()) ++ eventLogs
+      )
 
       val (exit, dfQualOpt) =
         QualificationMain.mainInternal(sparkSession, appArgs, writeOutput=false)
       assert(exit == 0)
       // make sure to change null value so empty strings don't show up as nulls
       val dfExpect = sparkSession.read.option("header", "true").
-        option("nullValue", "\"-\"").csv(resultExpectation.getPath)
+        option("nullValue", "\"null\"").csv(resultExpectation.getPath)
       val diffCount = dfQualOpt.map { dfQual =>
         dfQual.except(dfExpect).union(dfExpect.except(dfExpect)).count
       }.getOrElse(-1)
@@ -62,18 +58,30 @@ class QualificationSuite extends FunSuite {
     }
   }
 
+  test("test udf event logs") {
+    val logFiles = Array(
+      s"$logDir/dataset_eventlog",
+      s"$logDir/dsAndDf_eventlog",
+      s"$logDir/udf_dataset_eventlog",
+      s"$logDir/udf_func_eventlog"
+    )
+    runQualificationTest(logFiles, "qual_test_simple_expectation.csv")
+  }
+
   test("test missing sql end") {
-    TrampolineUtil.withTempPath { csvOutpath =>
+    TrampolineUtil.withTempDir { outpath =>
       val resultExpectation = new File(expRoot, "qual_test_missing_sql_end_expectation.csv")
 
       val appArgs = new ProfileArgs(Array(
+        "--output-directory",
+        outpath.getAbsolutePath(),
         s"$logDir/join_missing_sql_end"
       ))
 
-      val (exit, dfQualOpt) = QualificationMain.mainInternal(spark, appArgs, writeOutput=false)
+      val (exit, dfQualOpt) = QualificationMain.mainInternal(sparkSession, appArgs, writeOutput=false)
 
       // make sure to change null value so empty strings don't show up as nulls
-      val dfExpect = spark.read.option("header", "true").option("nullValue", "\"-\"").csv(resultExpectation.getPath)
+      val dfExpect = sparkSession.read.option("header", "true").option("nullValue", "\"-\"").csv(resultExpectation.getPath)
       val diffCount = dfQualOpt.map { dfQual =>
         dfQual.except(dfExpect).union(dfExpect.except(dfExpect)).count
       }.getOrElse(-1)
