@@ -642,6 +642,8 @@ class ApplicationInfo(
     s"""select $index as appIndex, '$appId' as appID,
        |sq.sqlID, sq.description,
        |count(*) as numTasks, max(sq.duration) as Duration,
+       |sum(executorCPUTime) as executorCPUTime,
+       |sum(executorRunTime) as executorRunTime,
        |round(sum(executorCPUTime)/sum(executorRunTime)*100,2) executorCPURatio
        |$generateAggSQLString
        |from taskDF_$index t, stageDF_$index s,
@@ -720,7 +722,8 @@ class ApplicationInfo(
     s"""select
        |sq.appIndex, sq.appID, sq.appName, sq.sqlID, sq.duration,
        |sq.appDuration, sq.description, sq.potentialProblems,
-       |sq.dfDuration, m.executorCPURatio
+       |sq.dfDuration, m.executorCPURatio, m.executorCPUTime,
+       |m.executorRunTime
        |from (${qualificationSetDurationSQL.stripLineEnd}) sq
        |left join sqlAggMetricsDF m
        |on $index = m.appIndex and sq.sqlID = m.sqlID
@@ -734,7 +737,7 @@ class ApplicationInfo(
        |concat_ws(",", collect_list(potentialProblems)) as potentialProblems,
        |sum(dfDuration) as dfDurationFinal,
        |first(appDuration) as appDuration,
-       |sum(executorCPURatio) as executorCPURatio
+       |round(sum(executorCPUTime)/sum(executorRunTime)*100,2) executorCPURatio
        |from (${qualificationAddPercentIO.stripLineEnd})
        |""".stripMargin
   }

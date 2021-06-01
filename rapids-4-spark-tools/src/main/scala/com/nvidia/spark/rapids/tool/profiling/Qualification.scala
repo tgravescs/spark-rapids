@@ -29,7 +29,7 @@ object Qualification extends Logging {
   def qualifyApps(apps: ArrayBuffer[ApplicationInfo]): DataFrame = {
     val query = apps
       .filter(p => p.allDataFrames.contains(s"sqlDF_${p.index}"))
-      .map("(" + _.qualificationDurationSumAndPercentIOSQL + ")")
+      .map("(" + _.qualificationDurationSumSQL + ")")
       .mkString(" union ")
     val df = apps.head.runQuery(query + " order by dfRankTotal desc, appDuration desc")
     df
