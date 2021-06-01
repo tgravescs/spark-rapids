@@ -731,7 +731,7 @@ class ApplicationInfo(
   }
 
   def qualificationDurationSumSQL: String = {
-    s"""select first(sqlID) as sqlID, first(appName) as appName,
+    s"""select first(appName) as appName,
        |first(appID) as appID,
        |ROUND((sum(dfDuration) * 100) / first(appDuration), 2) as dfRankTotal,
        |concat_ws(",", collect_list(potentialProblems)) as potentialProblems,
