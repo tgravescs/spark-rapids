@@ -49,7 +49,7 @@ class QualificationSuite extends FunSuite {
       assert(exit == 0)
       // make sure to change null value so empty strings don't show up as nulls
       val dfExpect = sparkSession.read.option("header", "true").
-        option("nullValue", "\"null\"").csv(resultExpectation.getPath)
+        option("nullValue", "-").csv(resultExpectation.getPath)
       val diffCount = dfQualOpt.map { dfQual =>
         dfQual.except(dfExpect).union(dfExpect.except(dfExpect)).count
       }.getOrElse(-1)
@@ -69,32 +69,7 @@ class QualificationSuite extends FunSuite {
   }
 
   test("test missing sql end") {
-    TrampolineUtil.withTempDir { outpath =>
-      // val logfiles = Array(s"$logDir/join_missing_sql_end")
-      // runQualificationTest(logFiles, "qual_test_missing_sql_end_expectation.csv")
-      val resultExpectation = new File(expRoot, "qual_test_missing_sql_end_expectation.csv")
-
-      val appArgs = new QualificationArgs(Array(
-        "--output-directory",
-        outpath.getAbsolutePath(),
-        s"$logDir/join_missing_sql_end"
-      ))
-
-      val (exit, dfQualOpt) = QualificationMain.mainInternal(sparkSession, appArgs, writeOutput=false)
-
-      // make sure to change null value so empty strings don't show up as nulls
-      val dfExpect = sparkSession.read.option("header", "true").option("nullValue", "-").csv(resultExpectation.getPath)
-      dfExpect.write.csv("dfexpect")
-      dfQualOpt.get.repartition(1).write.csv("dfqual")
-      val diffCount = dfQualOpt.map { dfQual =>
-        dfQual.show()
-        dfExpect.show()
-         dfQual.except(dfExpect).show()
-         dfExpect.except(dfExpect).show()
-        dfQual.except(dfExpect).union(dfExpect.except(dfExpect)).count
-      }.getOrElse(-1)
-
-      assert(diffCount == 0)
-    }
+    val logFiles = Array(s"$logDir/join_missing_sql_end")
+    runQualificationTest(logFiles, "qual_test_missing_sql_end_expectation.csv")
   }
 }
