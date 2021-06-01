@@ -358,8 +358,8 @@ class ApplicationInfo(
         val jobNew = res.copy(endTime = thisEndTime,
           duration = durationResult,
           durationStr = durationString,
-          jobResult = Some(jobEndResult(res.jobID)),
-          failedReason = jobFailedReason(res.jobID)
+          jobResult = jobEndResult.get(res.jobID),
+          failedReason = jobFailedReason.get(res.jobID)
         )
         jobStartNew += jobNew
       }

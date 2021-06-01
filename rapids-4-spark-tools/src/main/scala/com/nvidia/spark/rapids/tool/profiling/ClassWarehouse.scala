@@ -92,7 +92,7 @@ case class JobCase(
     startTime: Long,
     endTime: Option[Long],
     jobResult: Option[String],
-    failedReason: String,
+    failedReason: Option[String],
     duration: Option[Long],
     durationStr: String,
     gpuMode: Boolean)

@@ -89,7 +89,7 @@ object QualificationMain extends Logging {
     logInfo(s"Output log location:  $outputDirectory/$logFileName")
 
     sparkSession.catalog.dropTempView("sqlAggMetricsDF")
-    apps.foreach( _.dropAllTempViews())
+    // apps.foreach( _.dropAllTempViews())
     fileWriter.flush()
     fileWriter.close()
     (0, Some(df))

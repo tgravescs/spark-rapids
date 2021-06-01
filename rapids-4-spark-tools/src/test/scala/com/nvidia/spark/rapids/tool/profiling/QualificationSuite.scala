@@ -59,4 +59,24 @@ class QualificationSuite extends FunSuite with Logging {
       assert(diffCount == 0)
     }
   }
+
+  test("test missing sql end") {
+    TrampolineUtil.withTempPath { csvOutpath =>
+      val resultExpectation = new File(expRoot, "qual_test_missing_sql_end_expectation.csv")
+
+      val appArgs = new ProfileArgs(Array(
+        s"$logDir/join_missing_sql_end"
+      ))
+
+      val (exit, dfQualOpt) = QualificationMain.mainInternal(spark, appArgs, writeOutput=false)
+
+      // make sure to change null value so empty strings don't show up as nulls
+      val dfExpect = spark.read.option("header", "true").option("nullValue", "\"-\"").csv(resultExpectation.getPath)
+      val diffCount = dfQualOpt.map { dfQual =>
+        dfQual.except(dfExpect).union(dfExpect.except(dfExpect)).count
+      }.getOrElse(-1)
+
+      assert(diffCount == 0)
+    }
+  }
 }
