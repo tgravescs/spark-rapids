@@ -694,7 +694,7 @@ class ApplicationInfo(
        |reason as potentialProblems,
        | CASE WHEN ds.sqlID IS NULL THEN 0 ELSE 1 END AS containsDataset
        |from sqlDF_$index sq, appdf_$index app
-       |left join problematicSQLDF_$index pb on pb.sqlID==sq.sqlID
+       |left join problematicSQLDF_$index pb on pb.sqlID == sq.sqlID
        |left join datasetSQLDF_$index ds ON ds.sqlID == sq.sqlID
        |""".stripMargin
   }
@@ -716,23 +716,26 @@ class ApplicationInfo(
        |""".stripMargin
   }
 
+  def qualificationAddPercentIO: String = {
+    s"""select
+       |sq.appIndex, sq.appID, sq.appName, sq.sqlID, sq.duration,
+       |sq.appDuration, sq.description, sq.potentialProblems,
+       |sq.dfDuration, m.executorCPURatio
+       |from (${qualificationSetDurationSQL.stripLineEnd}) sq
+       |left join sqlAggMetricsDF m
+       |on $index = m.appIndex and sq.sqlID = m.sqlID
+       |""".stripMargin
+  }
+
   def qualificationDurationSumSQL: String = {
     s"""select first(sqlID) as sqlID, first(appName) as appName,
        |first(appID) as appID,
        |ROUND((sum(dfDuration) * 100) / first(appDuration), 2) as dfRankTotal,
        |concat_ws(",", collect_list(potentialProblems)) as potentialProblems,
        |sum(dfDuration) as dfDurationFinal,
-       |first(appDuration) as appDuration
-       |from (${qualificationSetDurationSQL.stripLineEnd})
-       |""".stripMargin
-  }
-
-  def qualificationDurationSumAndPercentIOSQL: String = {
-    s"""select sq.appName, sq.appID, sq.dfRankTotal,
-       |sq.potentialProblems, sq.dfDurationFinal, sq.appDuration,
-       |m.executorCPURatio
-       |from (${qualificationDurationSumSQL}) sq , sqlAggMetricsDF m
-       |where $index = m.appIndex and sq.sqlID = m.sqlID
+       |first(appDuration) as appDuration,
+       |sum(executorCPURatio) as executorCPURatio
+       |from (${qualificationAddPercentIO.stripLineEnd})
        |""".stripMargin
   }
 

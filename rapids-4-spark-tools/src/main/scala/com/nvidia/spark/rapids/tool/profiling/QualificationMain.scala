@@ -70,7 +70,7 @@ object QualificationMain extends Logging {
 
     var index: Int = 1
     val apps: ArrayBuffer[ApplicationInfo] = ArrayBuffer[ApplicationInfo]()
-    for (path <- allPaths.filter(p => !p.getName.contains("."))) {
+    for (path <- allPaths.filterNot(_.getName.contains("."))) {
       // This apps only contains 1 app in each loop.
       val app = new ApplicationInfo(appArgs, sparkSession, fileWriter, path, index, true)
       apps += app

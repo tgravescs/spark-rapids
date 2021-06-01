@@ -27,18 +27,11 @@ import org.apache.spark.sql.rapids.tool.profiling._
 object Qualification extends Logging {
 
   def qualifyApps(apps: ArrayBuffer[ApplicationInfo]): DataFrame = {
-    var query = ""
-    val appsWithSQL = apps.filter(p => p.allDataFrames.contains(s"sqlDF_${p.index}"))
-    for (app <- appsWithSQL) {
-      if (query.isEmpty) {
-        query += app.qualificationDurationSumAndPercentIOSQL
-      } else {
-        query += " union (" + app.qualificationDurationSumAndPercentIOSQL + ")"
-      }
-    }
-    val messageHeader = "SQL qualify app union:"
+    val query = apps
+      .filter(p => p.allDataFrames.contains(s"sqlDF_${p.index}"))
+      .map("(" + _.qualificationDurationSumAndPercentIOSQL + ")")
+      .mkString(" union ")
     val df = apps.head.runQuery(query + " order by dfRankTotal desc, appDuration desc")
-
     df
   }
 
