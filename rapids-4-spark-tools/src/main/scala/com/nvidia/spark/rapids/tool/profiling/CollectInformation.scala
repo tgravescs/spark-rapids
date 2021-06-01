@@ -79,7 +79,7 @@ class CollectInformation(apps: ArrayBuffer[ApplicationInfo]) {
     }
   }
 
-  def generateDot(): Unit = {
+  def generateDot(outputDirectory: String): Unit = {
     for (app <- apps) {
       val requiredDataFrames = Seq("sqlMetricsDF", "driverAccumDF",
           "taskStageAccumDF", "taskStageAccumDF")
@@ -95,7 +95,7 @@ class CollectInformation(apps: ArrayBuffer[ApplicationInfo]) {
           val list = map.getOrElseUpdate(row.getLong(0), new ArrayBuffer[(Long, Long)]())
           list += row.getLong(1) -> row.getLong(2)
         }
-        val outDir = new File(app.args.outputDirectory())
+        val outDir = new File(outputDirectory)
         for ((sqlID, planInfo) <- app.sqlPlan) {
           val fileDir = new File(outDir, s"${app.appId}-query-$sqlID")
           fileDir.mkdirs()

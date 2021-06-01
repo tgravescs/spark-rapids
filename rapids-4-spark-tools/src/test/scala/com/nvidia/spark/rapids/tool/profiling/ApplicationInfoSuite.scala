@@ -44,7 +44,7 @@ class ApplicationInfoSuite extends FunSuite with Logging {
       var index: Int = 1
       val eventlogPaths = appArgs.eventlog()
       for (path <- eventlogPaths) {
-        apps += new ApplicationInfo(appArgs, sparkSession, fileWriter,
+        apps += new ApplicationInfo(appArgs.numOutputRows.getOrElse(1000), sparkSession, fileWriter,
           ProfileUtils.stringToPath(path)(0), index)
         index += 1
       }

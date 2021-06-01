@@ -37,7 +37,7 @@ object QualificationMain extends Logging {
    */
   def main(args: Array[String]) {
     val sparkSession = ProfileUtils.createSparkSession
-    val (exitCode, optDf) = mainInternal(sparkSession, new ProfileArgs(args))
+    val (exitCode, optDf) = mainInternal(sparkSession, new QualificationArgs(args))
     if (exitCode != 0) {
       System.exit(exitCode)
     }
@@ -46,7 +46,7 @@ object QualificationMain extends Logging {
   /**
    * Entry point for tests
    */
-  def mainInternal(sparkSession: SparkSession, appArgs: ProfileArgs,
+  def mainInternal(sparkSession: SparkSession, appArgs: QualificationArgs,
       writeOutput: Boolean = true): (Int, Option[DataFrame]) = {
 
     // This tool's output log file name
@@ -72,7 +72,8 @@ object QualificationMain extends Logging {
     val apps: ArrayBuffer[ApplicationInfo] = ArrayBuffer[ApplicationInfo]()
     for (path <- allPaths.filterNot(_.getName.contains("."))) {
       // This apps only contains 1 app in each loop.
-      val app = new ApplicationInfo(appArgs, sparkSession, fileWriter, path, index, true)
+      val app = new ApplicationInfo(appArgs.numOutputRows.getOrElse(1000), sparkSession,
+        fileWriter, path, index, true)
       apps += app
       logApplicationInfo(app)
       index += 1
@@ -88,8 +89,8 @@ object QualificationMain extends Logging {
 
     logInfo(s"Output log location:  $outputDirectory/$logFileName")
 
-    sparkSession.catalog.dropTempView("sqlAggMetricsDF")
-    apps.foreach( _.dropAllTempViews())
+    // sparkSession.catalog.dropTempView("sqlAggMetricsDF")
+    // apps.foreach( _.dropAllTempViews())
     fileWriter.flush()
     fileWriter.close()
     (0, Some(df))

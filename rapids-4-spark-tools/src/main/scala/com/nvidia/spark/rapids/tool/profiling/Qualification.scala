@@ -39,6 +39,6 @@ object Qualification extends Logging {
     val fileWriter = apps.head.fileWriter
     val dfRenamed = apps.head.renameQualificationColumns(df)
     fileWriter.write("\n" + ToolUtils.showString(dfRenamed,
-      apps(0).args.numOutputRows.getOrElse(1000)))
+      apps(0).numOutputRows))
   }
 }

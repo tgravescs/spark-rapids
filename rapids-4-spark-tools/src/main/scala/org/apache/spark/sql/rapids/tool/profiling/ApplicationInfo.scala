@@ -40,7 +40,7 @@ import org.apache.spark.util._
  */
 
 class ApplicationInfo(
-    val args: ProfileArgs,
+    val numOutputRows: Int,
     val sparkSession: SparkSession,
     val fileWriter: FileWriter,
     val eventlog: Path,
@@ -510,12 +510,11 @@ class ApplicationInfo(
       writeToFile: Boolean = false,
       messageHeader: String = ""): DataFrame = {
     logDebug("Running:" + query)
-    val numRows = args.numOutputRows.getOrElse(1000)
     val df = sparkSession.sql(query)
-    logInfo("\n" + df.showString(numRows, 0, vertical))
+    logInfo("\n" + df.showString(numOutputRows, 0, vertical))
     if (writeToFile) {
       fileWriter.write(messageHeader)
-      fileWriter.write(df.showString(numRows, 0, vertical))
+      fileWriter.write(df.showString(numOutputRows, 0, vertical))
     }
     df
   }
@@ -706,7 +705,6 @@ class ApplicationInfo(
        |distinct(*)
        |from ($qualificationDurationSQL)
        |""".stripMargin
-
   }
 
   def qualificationSetDurationSQL: String = {
