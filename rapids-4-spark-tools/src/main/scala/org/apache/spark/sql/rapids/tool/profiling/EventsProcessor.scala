@@ -345,7 +345,7 @@ object EventsProcessor extends Logging {
       event.time,
       None,
       None,
-      "",
+      None,
       None,
       "",
       ProfileUtils.isGPUMode(event.properties.asScala) || app.gpuMode
