@@ -38,7 +38,7 @@ object Qualification {
   }
 
   def writeQualification(apps: ArrayBuffer[ApplicationInfo], df: DataFrame): Unit = {
-    val fileWriter = apps.head.fileWriter
+    // val fileWriter = apps.head.fileWriter
     val dfRenamed = apps.head.renameQualificationColumns(df)
     dfRenamed.repartition(1).write.csv("csvoutput")
     // fileWriter.write("\n" + ToolUtils.showString(dfRenamed,

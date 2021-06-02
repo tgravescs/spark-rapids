@@ -87,7 +87,7 @@ object QualificationMain extends Logging {
       logApplicationInfo(app)
       index += 1
     }
-    val analysis = new Analysis(apps)
+    val analysis = new Analysis(apps, None)
     val sqlAggMetricsDF = analysis.sqlMetricsAggregation()
     sqlAggMetricsDF.createOrReplaceTempView("sqlAggMetricsDF")
     val df = Qualification.qualifyApps(apps)

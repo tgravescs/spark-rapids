@@ -121,7 +121,7 @@ object ProfileMain extends Logging {
         compare.compareExecutorInfo()
         compare.compareRapidsProperties()
       } else {
-        val collect = new CollectInformation(apps)
+        val collect = new CollectInformation(apps, fileWriter)
         logInfo(s"### A. Information Collected ###")
         collect.printAppInfo()
         collect.printExecutorInfo()
@@ -132,7 +132,7 @@ object ProfileMain extends Logging {
       }
 
       logInfo(s"### B. Analysis ###")
-      val analysis = new Analysis(apps)
+      val analysis = new Analysis(apps, Some(fileWriter))
       analysis.jobAndStageMetricsAggregation()
     }
 

@@ -42,7 +42,6 @@ import org.apache.spark.util._
 class ApplicationInfo(
     val numOutputRows: Int,
     val sparkSession: SparkSession,
-    val fileWriter: FileWriter,
     val eventlog: Path,
     val index: Int,
     val forQualification: Boolean = false) extends Logging {
@@ -506,13 +505,13 @@ class ApplicationInfo(
   def runQuery(
       query: String,
       vertical: Boolean = false,
-      writeToFile: Boolean = false,
+      fileWriter: Option[FileWriter] = None,
       messageHeader: String = ""): DataFrame = {
     logDebug("Running:" + query)
     val df = sparkSession.sql(query)
-    if (writeToFile) {
-      fileWriter.write(messageHeader)
-      fileWriter.write(df.showString(numOutputRows, 0, vertical))
+    fileWriter.foreach { writer =>
+      writer.write(messageHeader)
+      writer.write(df.showString(numOutputRows, 0, vertical))
     }
     df
   }
