@@ -75,6 +75,9 @@ object ProfileUtils {
     val uri = inputPath.toUri
     val fs = FileSystem.get(uri, new Configuration())
     val allStatus = fs.listStatus(inputPath).filter(s => s.isFile)
+
+
+    val os = fs.create(new Path("output.txt"))
     ArrayBuffer(FileUtil.stat2Paths(allStatus): _*)
   }
 }

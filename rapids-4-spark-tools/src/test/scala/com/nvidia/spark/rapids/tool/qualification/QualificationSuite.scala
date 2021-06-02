@@ -18,7 +18,6 @@ package com.nvidia.spark.rapids.tool.qualification
 
 import java.io.File
 
-import com.nvidia.spark.rapids.tool.qualification._
 import org.scalatest.FunSuite
 
 import org.apache.spark.internal.Logging
