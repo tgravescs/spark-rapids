@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package com.nvidia.spark.rapids.tool.profiling
+package com.nvidia.spark.rapids.tool.qualification
 
 import java.io.File
 
-object ProfilingTestUtils {
+object QualificationTestUtils {
 
   def getTestResourceFile(file: String): File = {
     new File(getClass.getClassLoader.getResource(file).getFile)

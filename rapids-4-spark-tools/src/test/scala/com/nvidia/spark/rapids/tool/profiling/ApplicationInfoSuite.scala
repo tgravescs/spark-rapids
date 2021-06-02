@@ -27,7 +27,7 @@ import org.apache.spark.sql.rapids.tool.profiling._
 
 class ApplicationInfoSuite extends FunSuite with Logging {
 
-  val sparkSession = {
+  lazy val sparkSession = {
     SparkSession
         .builder()
         .master("local[*]")

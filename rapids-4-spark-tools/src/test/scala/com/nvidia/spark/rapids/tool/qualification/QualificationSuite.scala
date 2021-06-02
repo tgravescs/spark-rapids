@@ -18,7 +18,7 @@ package com.nvidia.spark.rapids.tool.qualification
 
 import java.io.{File, FileWriter}
 
-import com.nvidia.spark.rapids.tool.profiling._
+import com.nvidia.spark.rapids.tool.qualification._
 import org.scalatest.FunSuite
 
 import org.apache.spark.internal.Logging
@@ -27,7 +27,7 @@ import org.apache.spark.sql.rapids.tool.profiling._
 
 class QualificationSuite extends FunSuite with Logging {
 
-  private val sparkSession = {
+  lazy val sparkSession = {
     SparkSession
       .builder()
       .master("local[*]")
@@ -35,8 +35,8 @@ class QualificationSuite extends FunSuite with Logging {
       .getOrCreate()
   }
 
-  private val expRoot = ProfilingTestUtils.getTestResourceFile("QualificationExpectations")
-  private val logDir = ProfilingTestUtils.getTestResourcePath("spark-events-qualification")
+  private val expRoot = QualificationTestUtils.getTestResourceFile("QualificationExpectations")
+  private val logDir = QualificationTestUtils.getTestResourcePath("spark-events-qualification")
 
   private def runQualificationTest(eventLogs: Array[String], expectFileName: String) = {
     TrampolineUtil.withTempDir { outpath =>
