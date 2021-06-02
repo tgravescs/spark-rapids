@@ -20,7 +20,7 @@ import org.rogach.scallop.{ScallopConf, ScallopOption}
 class ProfileArgs(arguments: Seq[String]) extends ScallopConf(arguments) {
 
   banner("""
-Spark profiling tool
+RAPIDS Accelerator for Apache Spark profiling tool
 
 Example:
 
