@@ -73,7 +73,7 @@ object ProfileMain extends Logging {
       var index: Int = 1
       for (path <- allPaths.filter(p => !p.getName.contains("."))) {
         apps += new ApplicationInfo(appArgs.numOutputRows.getOrElse(1000), sparkSession,
-          fileWriter, path, index)
+          path, index)
         index += 1
       }
 
@@ -94,7 +94,7 @@ object ProfileMain extends Logging {
         // This apps only contains 1 app in each loop.
         val apps: ArrayBuffer[ApplicationInfo] = ArrayBuffer[ApplicationInfo]()
         val app = new ApplicationInfo(appArgs.numOutputRows.getOrElse(1000), sparkSession,
-          fileWriter, path, index)
+          path, index)
         apps += app
         logApplicationInfo(app)
         processApps(apps, appArgs.generateDot())
@@ -116,7 +116,7 @@ object ProfileMain extends Logging {
     def processApps(apps: ArrayBuffer[ApplicationInfo], generateDot: Boolean): Unit = {
       if (appArgs.compare()) { // Compare Applications
         logInfo(s"### A. Compare Information Collected ###")
-        val compare = new CompareApplications(apps)
+        val compare = new CompareApplications(apps, fileWriter)
         compare.compareAppInfo()
         compare.compareExecutorInfo()
         compare.compareRapidsProperties()
