@@ -20,10 +20,11 @@ import java.io.{File, FileWriter}
 
 import org.scalatest.FunSuite
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SparkSession, TrampolineUtil}
 import org.apache.spark.sql.rapids.tool.profiling._
 
-class QualificationSuite extends FunSuite {
+class QualificationSuite extends FunSuite with Logging {
 
   private val sparkSession = {
     SparkSession
@@ -54,6 +55,12 @@ class QualificationSuite extends FunSuite {
         dfQual.except(dfExpect).union(dfExpect.except(dfExpect)).count
       }.getOrElse(-1)
 
+      if (diffCount != 0) {
+        logWarning("Diff:")
+        dfExpect.show()
+        dfQualOpt.foreach(_.show())
+      }
+
       assert(diffCount == 0)
     }
   }
@@ -76,5 +83,10 @@ class QualificationSuite extends FunSuite {
   test("test truncated log file 1") {
     val logFiles = Array(s"$logDir/truncated_eventlog")
     runQualificationTest(logFiles, "truncated_1_end_expectation.csv")
+  }
+
+  test("test nds q86 test") {
+    val logFiles = Array(s"$logDir/nds_q86_test")
+    runQualificationTest(logFiles, "nds_q86_test_expectation.csv")
   }
 }
