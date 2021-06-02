@@ -17,10 +17,8 @@ package com.nvidia.spark.rapids.tool.qualification
 
 import scala.collection.mutable.ArrayBuffer
 
-import com.nvidia.spark.rapids.tool.profiling._
-
-import org.apache.spark.internal.Logging
 import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.rapids.tool.profiling._
 
 /**
@@ -29,12 +27,29 @@ import org.apache.spark.sql.rapids.tool.profiling._
 object Qualification {
 
   def qualifyApps(apps: ArrayBuffer[ApplicationInfo]): DataFrame = {
+
+    val groupedApps = apps.
+      filter(p => p.allDataFrames.contains(s"sqlDF_${p.index}")).grouped(10)
+
+    val queries = groupedApps.map { group =>
+      group.map("(" + _.qualificationDurationSumSQL + ")")
+        .mkString(" union ")
+    }
+
+    val subqueryResults = queries.map { query =>
+      apps.head.runQuery(query)
+    }
+
+    val finalDf = subqueryResults.reduce(_ union _).
+      orderBy(col("dfRankTotal").desc, col("appDuration").desc)
+
+    /*
     val query = apps
-      .filter(p => p.allDataFrames.contains(s"sqlDF_${p.index}"))
       .map("(" + _.qualificationDurationSumSQL + ")")
       .mkString(" union ")
     val df = apps.head.runQuery(query + " order by dfRankTotal desc, appDuration desc")
-    df
+    */
+    finalDf
   }
 
   def writeQualification(apps: ArrayBuffer[ApplicationInfo], df: DataFrame): Unit = {
