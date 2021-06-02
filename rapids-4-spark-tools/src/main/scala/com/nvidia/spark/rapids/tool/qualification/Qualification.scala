@@ -17,17 +17,43 @@ package com.nvidia.spark.rapids.tool.qualification
 
 import scala.collection.mutable.ArrayBuffer
 
+import com.nvidia.spark.rapids.tool.profiling.Analysis
+import com.nvidia.spark.rapids.tool.qualification.QualificationMain.{logApplicationInfo, logInfo}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.rapids.tool.profiling._
 
 /**
  * Ranks the applications for GPU acceleration.
  */
-object Qualification {
+object Qualification extends Logging {
+
+  def prepareAppsForQualification(allPaths: ArrayBuffer[Path],
+      numRows: Int, sparkSession: SparkSession): DataFrame = {
+    var index: Int = 1
+    val apps: ArrayBuffer[ApplicationInfo] = ArrayBuffer[ApplicationInfo]()
+    for (path <- allPaths.filterNot(_.getName.contains("."))) {
+      // This apps only contains 1 app in each loop.
+      val app = new ApplicationInfo(numRows, sparkSession,
+        path, index, true)
+      apps += app
+      logApplicationInfo(app)
+      index += 1
+    }
+    val analysis = new Analysis(apps, None)
+    val sqlAggMetricsDF = analysis.sqlMetricsAggregation()
+    sqlAggMetricsDF.createOrReplaceTempView("sqlAggMetricsDF")
+    val df = Qualification.qualifyApps(apps)
+    logInfo("got df for qualify apps back, doing show")
+    sparkSession.catalog.dropTempView("sqlAggMetricsDF")
+    apps.foreach( _.dropAllTempViews())
+    logInfo(s"done qualify app")
+    apps.head.renameQualificationColumns(df)
+  }
 
   def qualifyApps(apps: ArrayBuffer[ApplicationInfo]): DataFrame = {
 
@@ -46,7 +72,7 @@ object Qualification {
     }
     val cached = subqueryResults.map(_.cache()).toArray
     // materialize the cached datasets
-    cached.foreach(_.count())
+    // cached.foreach(_.count())
     val finalDf = if (cached.size > 1) {
       cached.reduce(_ union _).orderBy(col("dfRankTotal").desc, col("appDuration").desc)
     } else {
@@ -55,17 +81,17 @@ object Qualification {
     finalDf
   }
 
-  def writeQualification(apps: ArrayBuffer[ApplicationInfo],
-      df: DataFrame, outputFileLoc: String, format: String): Unit = {
+  def writeQualification(df: DataFrame,
+      outputFileLoc: String, format: String): Unit = {
     // val fileWriter = apps.head.fileWriter
-    val dfRenamed = apps.head.renameQualificationColumns(df)
+    // val dfRenamed = apps.head.renameQualificationColumns(df)
     if (format.equals("csv")) {
-      dfRenamed.repartition(1).write.mode("overwrite").csv("csvoutput")
+      df.repartition(1).write.mode("overwrite").csv("csvoutput")
     } else {
       val outputFilePath = new Path(outputFileLoc + "/tomtest")
       val fs = FileSystem.get(outputFilePath.toUri, new Configuration())
       val outFile = fs.create(outputFilePath)
-      outFile.writeUTF(ToolUtils.showString(dfRenamed, 1000))
+      outFile.writeUTF(ToolUtils.showString(df, 1000))
       outFile.flush()
       outFile.close()
     }

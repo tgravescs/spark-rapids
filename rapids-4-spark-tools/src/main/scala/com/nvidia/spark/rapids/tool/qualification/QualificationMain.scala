@@ -65,27 +65,11 @@ object QualificationMain extends Logging {
         allPaths ++= paths
       }
     }
+    val df = Qualification.prepareAppsForQualification(allPaths,
+      appArgs.numOutputRows.getOrElse(1000), sparkSession)
 
-    var index: Int = 1
-    val apps: ArrayBuffer[ApplicationInfo] = ArrayBuffer[ApplicationInfo]()
-    for (path <- allPaths.filterNot(_.getName.contains("."))) {
-      // This apps only contains 1 app in each loop.
-      val app = new ApplicationInfo(appArgs.numOutputRows.getOrElse(1000), sparkSession,
-        path, index, true)
-      apps += app
-      logApplicationInfo(app)
-      index += 1
-    }
-    val analysis = new Analysis(apps, None)
-    val sqlAggMetricsDF = analysis.sqlMetricsAggregation()
-    sqlAggMetricsDF.createOrReplaceTempView("sqlAggMetricsDF")
-    val df = Qualification.qualifyApps(apps)
-    logInfo("got df for qualify apps back, doing show")
-    sparkSession.catalog.dropTempView("sqlAggMetricsDF")
-    apps.foreach( _.dropAllTempViews())
-    logInfo(s"done qualify app")
     if (writeOutput) {
-      Qualification.writeQualification(apps, df, outputDirectory, "notcsv")
+      Qualification.writeQualification(df, outputDirectory, "notcsv")
     }
 
     logInfo(s"Output log location:  $outputDirectory/$logFileName")
