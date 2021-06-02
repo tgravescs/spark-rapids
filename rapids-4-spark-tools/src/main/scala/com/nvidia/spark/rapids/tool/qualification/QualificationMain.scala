@@ -91,6 +91,9 @@ object QualificationMain extends Logging {
     val sqlAggMetricsDF = analysis.sqlMetricsAggregation()
     sqlAggMetricsDF.createOrReplaceTempView("sqlAggMetricsDF")
     val df = Qualification.qualifyApps(apps)
+    logInfo("got df for qualify apps back, doing show")
+    sparkSession.catalog.dropTempView("sqlAggMetricsDF")
+    apps.foreach( _.dropAllTempViews())
     logInfo(s"done qualify app")
     if (writeOutput) {
       Qualification.writeQualification(apps, df)
@@ -98,8 +101,6 @@ object QualificationMain extends Logging {
 
     logInfo(s"Output log location:  $outputDirectory/$logFileName")
 
-    sparkSession.catalog.dropTempView("sqlAggMetricsDF")
-    apps.foreach( _.dropAllTempViews())
     (0, Some(df))
   }
 

@@ -28,34 +28,34 @@ object Qualification {
 
   def qualifyApps(apps: ArrayBuffer[ApplicationInfo]): DataFrame = {
 
+    // The query generated for a lot of apps is to big and Spark analyzer
+    // takes forever to handle. Break it up and do a few apps at a time and then
+    // cache and union at the end. The results of each query per app is tiny so
+    // caching should not use much memory.
     val groupedApps = apps.
-      filter(p => p.allDataFrames.contains(s"sqlDF_${p.index}")).grouped(10)
-
+      filter(p => p.allDataFrames.contains(s"sqlDF_${p.index}")).grouped(4)
     val queries = groupedApps.map { group =>
       group.map("(" + _.qualificationDurationSumSQL + ")")
         .mkString(" union ")
     }
-
     val subqueryResults = queries.map { query =>
       apps.head.runQuery(query)
     }
-
-    val finalDf = subqueryResults.reduce(_ union _).
-      orderBy(col("dfRankTotal").desc, col("appDuration").desc)
-
-    /*
-    val query = apps
-      .map("(" + _.qualificationDurationSumSQL + ")")
-      .mkString(" union ")
-    val df = apps.head.runQuery(query + " order by dfRankTotal desc, appDuration desc")
-    */
+    val cached = subqueryResults.map(_.cache()).toArray
+    // materialize the cached datasets
+    cached.foreach(_.count())
+    val finalDf = if (cached.size > 1) {
+      cached.reduce(_ union _).orderBy(col("dfRankTotal").desc, col("appDuration").desc)
+    } else {
+      cached.head.orderBy(col("dfRankTotal").desc, col("appDuration").desc)
+    }
     finalDf
   }
 
   def writeQualification(apps: ArrayBuffer[ApplicationInfo], df: DataFrame): Unit = {
     // val fileWriter = apps.head.fileWriter
     val dfRenamed = apps.head.renameQualificationColumns(df)
-    dfRenamed.repartition(1).write.csv("csvoutput")
+    dfRenamed.repartition(1).write.mode("overwrite").csv("csvoutput")
     // fileWriter.write("\n" + ToolUtils.showString(dfRenamed,
     //   apps(0).numOutputRows))
   }
