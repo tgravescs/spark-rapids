@@ -57,17 +57,6 @@ object QualificationMain extends Logging {
     val eventlogPaths = appArgs.eventlog()
     val outputDirectory = appArgs.outputDirectory().stripSuffix("/")
 
-    // Create the FileWriter and sparkSession used for ALL Applications.
-    val outputFilePath = new Path(s"$outputDirectory/tomTestOut")
-
-
-    val fs = FileSystem.get(outputFilePath.toUri, new Configuration())
-    val outFile = fs.create(outputFilePath)
-    outFile.writeUTF("TEsting file system hadopo output")
-    outFile.flush()
-    outFile.close()
-
-
     // Convert the input path string to Path(s)
     val allPaths: ArrayBuffer[Path] = ArrayBuffer[Path]()
     for (pathString <- eventlogPaths) {
@@ -96,7 +85,7 @@ object QualificationMain extends Logging {
     apps.foreach( _.dropAllTempViews())
     logInfo(s"done qualify app")
     if (writeOutput) {
-      Qualification.writeQualification(apps, df)
+      Qualification.writeQualification(apps, df, outputDirectory, "notcsv")
     }
 
     logInfo(s"Output log location:  $outputDirectory/$logFileName")

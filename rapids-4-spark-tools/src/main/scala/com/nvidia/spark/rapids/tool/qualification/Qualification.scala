@@ -17,6 +17,9 @@ package com.nvidia.spark.rapids.tool.qualification
 
 import scala.collection.mutable.ArrayBuffer
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, Path}
+
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.rapids.tool.profiling._
@@ -52,10 +55,21 @@ object Qualification {
     finalDf
   }
 
-  def writeQualification(apps: ArrayBuffer[ApplicationInfo], df: DataFrame): Unit = {
+  def writeQualification(apps: ArrayBuffer[ApplicationInfo],
+      df: DataFrame, outputFileLoc: String, format: String): Unit = {
     // val fileWriter = apps.head.fileWriter
     val dfRenamed = apps.head.renameQualificationColumns(df)
-    dfRenamed.repartition(1).write.mode("overwrite").csv("csvoutput")
+    if (format.equals("csv")) {
+      dfRenamed.repartition(1).write.mode("overwrite").csv("csvoutput")
+    } else {
+      val outputFilePath = new Path(outputFileLoc + "/tomtest")
+      val fs = FileSystem.get(outputFilePath.toUri, new Configuration())
+      val outFile = fs.create(outputFilePath)
+      outFile.writeUTF(ToolUtils.showString(dfRenamed, 1000))
+      outFile.flush()
+      outFile.close()
+    }
+
     // fileWriter.write("\n" + ToolUtils.showString(dfRenamed,
     //   apps(0).numOutputRows))
   }
