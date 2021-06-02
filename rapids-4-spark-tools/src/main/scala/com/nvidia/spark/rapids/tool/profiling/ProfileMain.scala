@@ -22,7 +22,7 @@ import org.apache.hadoop.fs.Path
 import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.rapids.tool.profiling._
 
 /**

@@ -16,14 +16,13 @@
 
 package com.nvidia.spark.rapids.tool.qualification
 
-import java.io.{File, FileWriter}
+import java.io.File
 
 import com.nvidia.spark.rapids.tool.profiling._
 import org.scalatest.FunSuite
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SparkSession, TrampolineUtil}
-import org.apache.spark.sql.rapids.tool.profiling._
 
 class QualificationSuite extends FunSuite with Logging {
 
@@ -56,6 +55,7 @@ class QualificationSuite extends FunSuite with Logging {
         dfQual.except(dfExpect).union(dfExpect.except(dfExpect)).count
       }.getOrElse(-1)
 
+      // print off for easier debugging
       if (diffCount != 0) {
         logWarning("Diff:")
         dfExpect.show()
