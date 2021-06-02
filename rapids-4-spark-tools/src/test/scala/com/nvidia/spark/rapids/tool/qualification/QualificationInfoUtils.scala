@@ -16,8 +16,6 @@
 
 package com.nvidia.spark.rapids.tool.qualification
 
-import java.io.File
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{Dataset, SparkSession, TrampolineUtil}
 import org.apache.spark.sql.functions.{col, udf}
