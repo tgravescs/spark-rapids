@@ -72,4 +72,9 @@ class QualificationSuite extends FunSuite {
     val logFiles = Array(s"$logDir/join_missing_sql_end")
     runQualificationTest(logFiles, "qual_test_missing_sql_end_expectation.csv")
   }
+
+  test("test truncated log file 1") {
+    val logFiles = Array(s"$logDir/truncated_eventlog")
+    runQualificationTest(logFiles, "truncated_1_end_expectation.csv")
+  }
 }

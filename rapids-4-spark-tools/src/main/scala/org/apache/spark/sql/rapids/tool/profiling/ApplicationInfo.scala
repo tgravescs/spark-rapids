@@ -373,8 +373,8 @@ class ApplicationInfo(
     if (stageSubmitted.nonEmpty) {
       val stageSubmittedNew: ArrayBuffer[StageCase] = ArrayBuffer[StageCase]()
       for (res <- stageSubmitted) {
-        val thisEndTime = stageCompletionTime(res.stageId)
-        val thisFailureReason = stageFailureReason(res.stageId)
+        val thisEndTime = stageCompletionTime.getOrElse(res.stageId, None)
+        val thisFailureReason = stageFailureReason.getOrElse(res.stageId, None)
 
         val durationResult =
           ProfileUtils.optionLongMinusOptionLong(thisEndTime, res.submissionTime)

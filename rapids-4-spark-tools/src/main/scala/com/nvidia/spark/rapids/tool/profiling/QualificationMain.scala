@@ -83,6 +83,7 @@ object QualificationMain extends Logging {
     sqlAggMetricsDF.createOrReplaceTempView("sqlAggMetricsDF")
     fileWriter.write(s"### Qualification ###")
     val df = Qualification.qualifyApps(apps)
+    logInfo(s"done qualify app")
     if (writeOutput) {
       Qualification.writeQualification(apps, df)
     }
