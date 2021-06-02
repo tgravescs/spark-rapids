@@ -502,8 +502,7 @@ class ApplicationInfo(
     }
   }
 
-  // Function to run a query and print the result to the file.
-  // Limit to 1000 rows if the output number of rows is not mentioned in the command line.
+  // Function to run a query and optionally print the result to the file.
   def runQuery(
       query: String,
       vertical: Boolean = false,
@@ -511,7 +510,6 @@ class ApplicationInfo(
       messageHeader: String = ""): DataFrame = {
     logDebug("Running:" + query)
     val df = sparkSession.sql(query)
-    logInfo("\n" + df.showString(numOutputRows, 0, vertical))
     if (writeToFile) {
       fileWriter.write(messageHeader)
       fileWriter.write(df.showString(numOutputRows, 0, vertical))

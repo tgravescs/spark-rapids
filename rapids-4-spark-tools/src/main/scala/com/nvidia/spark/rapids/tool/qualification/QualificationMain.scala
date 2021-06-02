@@ -21,7 +21,8 @@ import java.io.FileWriter
 import scala.collection.mutable.ArrayBuffer
 
 import com.nvidia.spark.rapids.tool.profiling._
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, Path}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, SparkSession}
@@ -57,7 +58,15 @@ object QualificationMain extends Logging {
     val outputDirectory = appArgs.outputDirectory().stripSuffix("/")
 
     // Create the FileWriter and sparkSession used for ALL Applications.
-    val fileWriter = new FileWriter(s"$outputDirectory/$logFileName")
+    val outputFilePath = new Path(s"$outputDirectory/tomTestOut")
+
+
+    val fs = FileSystem.get(outputFilePath.toUri, new Configuration())
+    val outFile = fs.create(outputFilePath)
+    outFile.writeUTF("TEsting file system hadopo output")
+    outFile.flush()
+    outFile.close()
+
 
     // Convert the input path string to Path(s)
     val allPaths: ArrayBuffer[Path] = ArrayBuffer[Path]()
@@ -73,7 +82,7 @@ object QualificationMain extends Logging {
     for (path <- allPaths.filterNot(_.getName.contains("."))) {
       // This apps only contains 1 app in each loop.
       val app = new ApplicationInfo(appArgs.numOutputRows.getOrElse(1000), sparkSession,
-        fileWriter, path, index, true)
+        path, index, true)
       apps += app
       logApplicationInfo(app)
       index += 1
@@ -81,7 +90,6 @@ object QualificationMain extends Logging {
     val analysis = new Analysis(apps)
     val sqlAggMetricsDF = analysis.sqlMetricsAggregation()
     sqlAggMetricsDF.createOrReplaceTempView("sqlAggMetricsDF")
-    fileWriter.write(s"### Qualification ###")
     val df = Qualification.qualifyApps(apps)
     logInfo(s"done qualify app")
     if (writeOutput) {
@@ -92,8 +100,6 @@ object QualificationMain extends Logging {
 
     sparkSession.catalog.dropTempView("sqlAggMetricsDF")
     apps.foreach( _.dropAllTempViews())
-    fileWriter.flush()
-    fileWriter.close()
     (0, Some(df))
   }
 

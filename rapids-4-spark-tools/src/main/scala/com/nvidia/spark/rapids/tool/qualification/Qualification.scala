@@ -13,9 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.nvidia.spark.rapids.tool.profiling
+package com.nvidia.spark.rapids.tool.qualification
 
 import scala.collection.mutable.ArrayBuffer
+
+import com.nvidia.spark.rapids.tool.profiling._
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.DataFrame
@@ -24,7 +26,7 @@ import org.apache.spark.sql.rapids.tool.profiling._
 /**
  * Ranks the applications for GPU acceleration.
  */
-object Qualification extends Logging {
+object Qualification {
 
   def qualifyApps(apps: ArrayBuffer[ApplicationInfo]): DataFrame = {
     val query = apps
@@ -38,7 +40,8 @@ object Qualification extends Logging {
   def writeQualification(apps: ArrayBuffer[ApplicationInfo], df: DataFrame): Unit = {
     val fileWriter = apps.head.fileWriter
     val dfRenamed = apps.head.renameQualificationColumns(df)
-    fileWriter.write("\n" + ToolUtils.showString(dfRenamed,
-      apps(0).numOutputRows))
+    dfRenamed.repartition(1).write.csv("csvoutput")
+    // fileWriter.write("\n" + ToolUtils.showString(dfRenamed,
+    //   apps(0).numOutputRows))
   }
 }
