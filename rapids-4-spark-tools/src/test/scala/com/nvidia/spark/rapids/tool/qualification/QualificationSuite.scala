@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-package com.nvidia.spark.rapids.tool.profiling
+package com.nvidia.spark.rapids.tool.qualification
 
 import java.io.{File, FileWriter}
 
 import org.scalatest.FunSuite
+
+import com.nvidia.spark.rapids.tool.profiling._
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SparkSession, TrampolineUtil}

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.nvidia.spark.rapids.tool.profiling
+package com.nvidia.spark.rapids.tool.qualification
 
 import java.io.File
 
@@ -145,7 +145,7 @@ object QualificationInfoUtils extends Logging {
    * $SPARK_HOME/bin/spark-submit --master local[1] --driver-memory 30g \
    * --jars ./rapids-4-spark-tools/target/rapids-4-spark-tools-21.06.0-SNAPSHOT-tests.jar,\
    *  ./rapids-4-spark-tools/target/rapids-4-spark-tools-21.06.0-SNAPSHOT.jar \
-   * --class com.nvidia.spark.rapids.tool.profiling.QualificationInfoUtils \
+   * --class com.nvidia.spark.rapids.tool.qualification.QualificationInfoUtils \
    * ./rapids-4-spark-tools/target/rapids-4-spark-tools-21.06.0-SNAPSHOT-tests.jar udffunc \
    * /tmp/testeventlogDir 100001
    */
