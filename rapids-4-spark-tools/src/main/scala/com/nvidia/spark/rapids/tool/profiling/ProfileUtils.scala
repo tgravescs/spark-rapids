@@ -78,4 +78,3 @@ object ProfileUtils {
     ArrayBuffer(FileUtil.stat2Paths(allStatus): _*)
   }
 }
-
