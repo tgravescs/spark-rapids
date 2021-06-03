@@ -357,7 +357,6 @@ object RapidsConf {
         "back into GPU memory temporarily. Unspilling may be useful for GPU buffers that are " +
         "needed frequently, for example, broadcast variables; however, it may also increase GPU " +
         "memory usage")
-      .internal()
       .booleanConf
       .createWithDefault(false)
 
@@ -377,6 +376,24 @@ object RapidsConf {
         "by UCX bounce buffers.")
     .bytesConf(ByteUnit.BYTE)
     .createWithDefault(ByteUnit.MiB.toBytes(8))
+
+  val GDS_SPILL_ALIGNED_IO =
+    conf("spark.rapids.memory.gpu.direct.storage.spill.alignedIO")
+    .doc("When GDS spill is enabled, should I/O be 4 KiB aligned. GDS is more efficient when " +
+        "reads and writes are 4 KiB aligned, but aligning has some additional memory overhead " +
+        "with the padding.")
+    .internal()
+    .booleanConf
+    .createWithDefault(true)
+
+  val GDS_SPILL_ALIGNMENT_THRESHOLD =
+    conf("spark.rapids.memory.gpu.direct.storage.spill.alignmentThreshold")
+    .doc("GPU memory buffers with size above this threshold will be aligned to 4 KiB. Setting " +
+        "this value to 0 means every allocation will be 4 KiB aligned. A low threshold may " +
+        "cause more memory consumption because of padding.")
+    .internal()
+    .bytesConf(ByteUnit.BYTE)
+    .createWithDefault(ByteUnit.KiB.toBytes(64))
 
   val POOLED_MEM = conf("spark.rapids.memory.gpu.pooling.enabled")
     .doc("Should RMM act as a pooling allocator for GPU memory, or should it just pass " +
@@ -1372,6 +1389,10 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val isGdsSpillEnabled: Boolean = get(GDS_SPILL)
 
   lazy val gdsSpillBatchWriteBufferSize: Long = get(GDS_SPILL_BATCH_WRITE_BUFFER_SIZE)
+
+  lazy val isGdsSpillAlignedIO: Boolean = get(GDS_SPILL_ALIGNED_IO)
+
+  lazy val gdsSpillAlignmentThreshold: Long = get(GDS_SPILL_ALIGNMENT_THRESHOLD)
 
   lazy val hasNans: Boolean = get(HAS_NANS)
 
