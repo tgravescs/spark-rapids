@@ -109,11 +109,11 @@ object Qualification extends Logging {
     // val dfRenamed = apps.head.renameQualificationColumns(df)
     if (format.equals("csv")) {
       df.repartition(1).write.option("header", "true").
-        mode("overwrite").csv(s"$outputDir/rapids_4_spark_qualification")
+        mode("overwrite").csv(s"$outputDir/rapids_4_spark_qualification_output")
       logInfo(s"Output log location:  $outputDir")
     } else {
       // This tool's output log file name
-      val logFileName = "rapids_4_spark_qualification.log"
+      val logFileName = "rapids_4_spark_qualification_output.log"
       val outputFilePath = new Path(s"$outputDir/$logFileName")
       val fs = FileSystem.get(outputFilePath.toUri, new Configuration())
       val outFile = fs.create(outputFilePath)
