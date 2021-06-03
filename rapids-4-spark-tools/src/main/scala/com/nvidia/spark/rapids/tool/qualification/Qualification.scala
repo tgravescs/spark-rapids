@@ -54,11 +54,7 @@ object Qualification extends Logging {
       logWarning("after count sql agg")
     }
 
-    val df = if (includeCpuPercent) {
-      constructQueryQualifyApps(apps)
-    } else {
-      constructQueryQualifyApps(apps)
-    }
+    val df = constructQueryQualifyApps(apps, includeCpuPercent)
     // sparkSession.catalog.dropTempView("sqlAggMetricsDF")
     // apps.foreach( _.dropAllTempViews())
     // apps.head.renameQualificationColumns(df)

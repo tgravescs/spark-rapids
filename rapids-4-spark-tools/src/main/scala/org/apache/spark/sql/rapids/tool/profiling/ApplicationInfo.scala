@@ -691,12 +691,12 @@ class ApplicationInfo(
 
   def qualificationDurationNoMetricsSQL: String = {
     s"""select
-       |first(appName) as appName,
-       |'$appId' as appID,
-       |ROUND((sum(sqlQualDuration) * 100) / first(app.duration), 2) as dfRankTotal,
-       |concat_ws(",", collect_list(potentialProblems)) as potentialProblems,
-       |sum(sqlQualDuration) as dfDurationFinal,
-       |first(app.duration) as appDuration,
+       |first(appName) as `App Name`,
+       |'$appId' as `App ID`,
+       |ROUND((sum(sqlQualDuration) * 100) / first(app.duration), 2) as Rank,
+       |concat_ws(",", collect_list(problematic)) as `Potential Problems`,
+       |sum(sqlQualDuration) as `SQL Dataframe Duration`,
+       |first(app.duration) as `App Duration`
        |from sqlDF_$index sq, appdf_$index app
        |""".stripMargin
   }
