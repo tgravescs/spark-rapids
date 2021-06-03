@@ -47,11 +47,14 @@ For usage see below:
 
   val outputDirectory: ScallopOption[String] =
     opt[String](required = false,
-      descr = "Output directory. Default is current directory",
+      descr = "Base output directory. Default is current directory",
       default = Some("."))
   val outputFormat: ScallopOption[String] =
     opt[String](required = false,
-      descr = "Output format, supports csv and text. Default is csv",
+      descr = "Output format, supports csv and text. Default is csv that creates a" +
+        " subdirectory rapids_4_spark_qualification in the outputDirectory. This" +
+        " option will overwrite any existing directory with the same name. text output format" +
+        " create a file named rapids_4_spark_qualification.log in the outputDirectory. ",
       default = Some("csv"))
   val eventlog: ScallopOption[List[String]] =
     trailArg[List[String]](required = true,
