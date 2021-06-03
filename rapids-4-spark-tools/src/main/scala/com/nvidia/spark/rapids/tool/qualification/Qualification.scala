@@ -46,11 +46,11 @@ object Qualification extends Logging {
     }
     val analysis = new Analysis(apps, None)
     val sqlAggMetricsDF = analysis.sqlMetricsAggregation()
-    sqlAggMetricsDF.createOrReplaceTempView("sqlAggMetricsDF")
+    sqlAggMetricsDF.cache().createOrReplaceTempView("sqlAggMetricsDF")
     val df = Qualification.qualifyApps(apps)
     logInfo("got df for qualify apps back, doing show")
     sparkSession.catalog.dropTempView("sqlAggMetricsDF")
-    apps.foreach( _.dropAllTempViews())
+    // apps.foreach( _.dropAllTempViews())
     logInfo(s"done qualify app")
     apps.head.renameQualificationColumns(df)
   }
@@ -70,7 +70,8 @@ object Qualification extends Logging {
     val subqueryResults = queries.map { query =>
       apps.head.runQuery(query)
     }
-    val cached = subqueryResults.map(_.cache()).toArray
+    val cached = subqueryResults.toArray
+    //val cached = subqueryResults.map(_.cache()).toArray
     // materialize the cached datasets
     // cached.foreach(_.count())
     val finalDf = if (cached.size > 1) {
