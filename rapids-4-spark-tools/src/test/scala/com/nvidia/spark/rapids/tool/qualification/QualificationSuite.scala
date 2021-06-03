@@ -37,31 +37,40 @@ class QualificationSuite extends FunSuite with Logging {
   private val logDir = QualificationTestUtils.getTestResourcePath("spark-events-qualification")
 
   private def runQualificationTest(eventLogs: Array[String], expectFileName: String) = {
-    TrampolineUtil.withTempDir { outpath =>
-      val resultExpectation = new File(expRoot, expectFileName)
-      val appArgs = new QualificationArgs(Array(
-        "--output-directory",
-        outpath.getAbsolutePath()) ++ eventLogs
-      )
+    Seq(true, false).foreach { hasExecCpu =>
+      TrampolineUtil.withTempDir { outpath =>
+        val resultExpectation = new File(expRoot, expectFileName)
+        val outputArgs = Array(
+          "--output-directory",
+          outpath.getAbsolutePath())
+        val allArgs = if (hasExecCpu) {
+          outputArgs ++ Array("--include-exec-cpu-percent")
+        } else {
+          outputArgs
+        }
+        val appArgs = new QualificationArgs(allArgs ++ eventLogs)
 
-      val (exit, dfQualOpt) =
-        QualificationMain.mainInternal(sparkSession, appArgs, writeOutput=false)
-      assert(exit == 0)
-      // make sure to change null value so empty strings don't show up as nulls
-      val dfExpect = sparkSession.read.option("header", "true").
-        option("nullValue", "-").csv(resultExpectation.getPath)
-      val diffCount = dfQualOpt.map { dfQual =>
-        dfQual.except(dfExpect).union(dfExpect.except(dfExpect)).count
-      }.getOrElse(-1)
+        val (exit, dfQualOpt) =
+          QualificationMain.mainInternal(sparkSession, appArgs, writeOutput=false)
+        assert(exit == 0)
+        // make sure to change null value so empty strings don't show up as nulls
+        val dfExpectOrig = sparkSession.read.option("header", "true").
+          option("nullValue", "-").csv(resultExpectation.getPath)
+        val dfExpect = if (hasExecCpu) dfExpectOrig else dfExpectOrig.drop("executorCPURatio")
+        val diffCount = dfQualOpt.map { dfQual =>
+          dfQual.except(dfExpect).union(dfExpect.except(dfExpect)).count
+        }.getOrElse(-1)
 
-      // print off for easier debugging
-      if (diffCount != 0) {
-        logWarning("Diff:")
-        dfExpect.show()
-        dfQualOpt.foreach(_.show())
+
+        // print off for easier debugging
+        if (diffCount != 0) {
+          logWarning("Diff:")
+          dfExpect.show()
+          dfQualOpt.foreach(_.show())
+        }
+
+        assert(diffCount == 0)
       }
-
-      assert(diffCount == 0)
     }
   }
 
