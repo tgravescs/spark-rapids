@@ -32,8 +32,8 @@ import org.apache.spark.sql.rapids.tool.profiling._
  */
 object Qualification extends Logging {
 
-  def prepareAppsForQualification(allPaths: ArrayBuffer[Path],
-      numRows: Int, sparkSession: SparkSession): DataFrame = {
+  def qualifyApps(allPaths: ArrayBuffer[Path],
+      numRows: Int, sparkSession: SparkSession, includeCpuPercent: Boolean): DataFrame = {
     var index: Int = 1
     val apps: ArrayBuffer[ApplicationInfo] = ArrayBuffer[ApplicationInfo]()
     for (path <- allPaths.filterNot(_.getName.contains("."))) {
@@ -45,25 +45,37 @@ object Qualification extends Logging {
       index += 1
     }
     val analysis = new Analysis(apps, None)
-    val sqlAggMetricsDF = analysis.sqlMetricsAggregation()
-    sqlAggMetricsDF.cache().createOrReplaceTempView("sqlAggMetricsDF")
-    logWarning("before count sql agg")
-    // materialize table to cache
-    sqlAggMetricsDF.count()
-    logWarning("after count sql agg")
+    if (includeCpuPercent) {
+      val sqlAggMetricsDF = analysis.sqlMetricsAggregation()
+      sqlAggMetricsDF.cache().createOrReplaceTempView("sqlAggMetricsDF")
+      logWarning("before count sql agg")
+      // materialize table to cache
+      sqlAggMetricsDF.count()
+      logWarning("after count sql agg")
+    }
 
-    val df = Qualification.qualifyApps(apps)
+    val df = if (includeCpuPercent) {
+      constructQueryQualifyApps(apps)
+    } else {
+      constructQueryQualifyApps(apps)
+    }
     // sparkSession.catalog.dropTempView("sqlAggMetricsDF")
     // apps.foreach( _.dropAllTempViews())
     // apps.head.renameQualificationColumns(df)
     df
   }
 
-  def qualifyApps(apps: ArrayBuffer[ApplicationInfo]): DataFrame = {
+  def constructQueryQualifyApps(apps: ArrayBuffer[ApplicationInfo],
+      includeCpuPercent: Boolean): DataFrame = {
     val query = apps
       .filter(p => p.allDataFrames.contains(s"sqlDF_${p.index}"))
-      .map("(" + _.qualificationDurationSumSQL + ")")
-      .mkString(" union ")
+      .map {
+        if (includeCpuPercent) {
+          "(" + _.qualificationDurationSumSQL + ")"
+        } else {
+          "(" + _.qualificationDurationNoMetricsSQL + ")"
+        }
+      }.mkString(" union ")
     val df = apps.head.runQuery(query + " order by Rank desc, `App Duration` desc")
     df
   }
@@ -96,18 +108,22 @@ object Qualification extends Logging {
   }
 
   def writeQualification(df: DataFrame,
-      outputFileLoc: String, format: String): Unit = {
+      outputDir: String, format: String): Unit = {
     // val fileWriter = apps.head.fileWriter
     // val dfRenamed = apps.head.renameQualificationColumns(df)
     if (format.equals("csv")) {
-      df.repartition(1).write.mode("overwrite").csv("csvoutput")
+      df.repartition(1).write.mode("overwrite").csv(outputDir)
+      logInfo(s"Output log location:  $outputDir")
     } else {
-      val outputFilePath = new Path(outputFileLoc + "/tomtest")
+      // This tool's output log file name
+      val logFileName = "rapids_4_spark_qualification.log"
+      val outputFilePath = new Path(s"$outputDir/$logFileName")
       val fs = FileSystem.get(outputFilePath.toUri, new Configuration())
       val outFile = fs.create(outputFilePath)
       outFile.writeUTF(ToolUtils.showString(df, 1000))
       outFile.flush()
       outFile.close()
+      logInfo(s"Output log location: $outputFilePath")
     }
 
     // fileWriter.write("\n" + ToolUtils.showString(dfRenamed,

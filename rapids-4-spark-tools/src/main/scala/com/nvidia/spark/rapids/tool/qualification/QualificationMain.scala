@@ -50,9 +50,6 @@ object QualificationMain extends Logging {
   def mainInternal(sparkSession: SparkSession, appArgs: QualificationArgs,
       writeOutput: Boolean = true): (Int, Option[DataFrame]) = {
 
-    // This tool's output log file name
-    val logFileName = "rapids_4_spark_qualification.log"
-
     // Parsing args
     val eventlogPaths = appArgs.eventlog()
     val outputDirectory = appArgs.outputDirectory().stripSuffix("/")
@@ -65,15 +62,14 @@ object QualificationMain extends Logging {
         allPaths ++= paths
       }
     }
-    val df = Qualification.prepareAppsForQualification(allPaths,
-      appArgs.numOutputRows.getOrElse(1000), sparkSession)
+    val df = Qualification.qualifyApps(allPaths,
+      appArgs.numOutputRows.getOrElse(1000), sparkSession,
+      appArgs.includeExecCpuPercent.getOrElse(false))
     logWarning("done qualify, before write")
 
     if (writeOutput) {
-      Qualification.writeQualification(df, outputDirectory, "csv")
+      Qualification.writeQualification(df, outputDirectory, appArgs.outputFormat.getOrElse("csv"))
     }
-
-    logInfo(s"Output log location:  $outputDirectory/$logFileName")
 
     (0, Some(df))
   }

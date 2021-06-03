@@ -49,6 +49,10 @@ For usage see below:
     opt[String](required = false,
       descr = "Output directory. Default is current directory",
       default = Some("."))
+  val outputFormat: ScallopOption[String] =
+    opt[String](required = false,
+      descr = "Output format, supports csv and text. Default is csv",
+      default = Some("csv"))
   val eventlog: ScallopOption[List[String]] =
     trailArg[List[String]](required = true,
       descr = "Event log filenames(space separated). " +
@@ -56,6 +60,10 @@ For usage see below:
   val numOutputRows: ScallopOption[Int] =
     opt[Int](required = false,
       descr = "Number of output rows for each Application. Default is 1000")
-
+  val includeExecCpuPercent: ScallopOption[Boolean] =
+    opt[Boolean](
+      required = false,
+      default = Some(false),
+      descr = "Include the executor CPU time percent. It will take longer with this option.")
   verify()
 }
