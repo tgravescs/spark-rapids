@@ -305,6 +305,8 @@ object EventsProcessor extends Logging {
       event.time,
       None,
       None,
+      "",
+      None,
       ""
     )
     app.sqlStart += sqlExecution

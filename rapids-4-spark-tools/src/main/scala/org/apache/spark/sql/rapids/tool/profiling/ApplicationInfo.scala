@@ -333,9 +333,18 @@ class ApplicationInfo(
           case Some(i) => UIUtils.formatDuration(i)
           case None => ""
         }
+        val sqlDuration = if (datasetSQL.exists(_.sqlID == res.sqlID)) {
+          Some(0)
+        } else {
+          durationResult
+        }
+        val potProbs = problematicSQL.filter(_.sqlID == res.sqlID).map(_.reason).mkString(",")
         val sqlExecutionNew = res.copy(endTime = thisEndTime,
           duration = durationResult,
-          durationStr = durationString)
+          durationStr = durationString,
+          sqlQualDuration = sqlDuration,
+          problematic = potProbs
+        )
         sqlStartNew += sqlExecutionNew
       }
       allDataFrames += (s"sqlDF_$index" -> sqlStartNew.toDF)
@@ -687,15 +696,12 @@ class ApplicationInfo(
        |'$appId' as appID,
        |app.appName,
        |sq.sqlID, sq.description,
-       |sq.duration,
+       |sq.sqlQualDuration as duration,
        |app.duration as appDuration,
-       |reason as potentialProblems,
+       |problematic as potentialProblems,
        |m.executorCPUTime,
        |m.executorRunTime,
-       |case when ds.sqlID IS NULL then 0 else 1 end as containsDataset
        |from sqlDF_$index sq, appdf_$index app
-       |left join problematicSQLDF_$index pb on pb.sqlID == sq.sqlID
-       |left join datasetSQLDF_$index ds ON ds.sqlID == sq.sqlID
        |left join sqlAggMetricsDF m on $index = m.appIndex and sq.sqlID = m.sqlID
        |""".stripMargin
   }
@@ -725,7 +731,7 @@ class ApplicationInfo(
        |sum(dfDuration) as dfDurationFinal,
        |first(appDuration) as appDuration,
        |round(sum(executorCPUTime)/sum(executorRunTime)*100,2) as executorCPURatio
-       |from (${qualificationSetDurationSQL.stripLineEnd})
+       |from (${qualificationDurationSQL.stripLineEnd})
        |""".stripMargin
   }
 

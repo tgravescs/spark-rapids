@@ -67,6 +67,7 @@ object QualificationMain extends Logging {
     }
     val df = Qualification.prepareAppsForQualification(allPaths,
       appArgs.numOutputRows.getOrElse(1000), sparkSession)
+    logWarning("done qualify, before write")
 
     if (writeOutput) {
       Qualification.writeQualification(df, outputDirectory, "notcsv")

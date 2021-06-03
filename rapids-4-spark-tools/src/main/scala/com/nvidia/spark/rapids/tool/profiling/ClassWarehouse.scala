@@ -55,7 +55,9 @@ case class SQLExecutionCase(
     startTime: Long,
     endTime: Option[Long],
     duration: Option[Long],
-    durationStr: String)
+    durationStr: String,
+    sqlQualDuration: Option[Long],
+    problematic: String = "")
 
 case class SQLPlanMetricsCase(
     sqlID: Long,
