@@ -47,15 +47,28 @@ object Qualification extends Logging {
     val analysis = new Analysis(apps, None)
     val sqlAggMetricsDF = analysis.sqlMetricsAggregation()
     sqlAggMetricsDF.cache().createOrReplaceTempView("sqlAggMetricsDF")
+    logWarning("before count sql agg")
+    // materialize table to cache
+    sqlAggMetricsDF.count()
+    logWarning("after count sql agg")
+
     val df = Qualification.qualifyApps(apps)
-    logInfo("got df for qualify apps back, doing show")
-    sparkSession.catalog.dropTempView("sqlAggMetricsDF")
+    // sparkSession.catalog.dropTempView("sqlAggMetricsDF")
     // apps.foreach( _.dropAllTempViews())
-    logInfo(s"done qualify app")
-    apps.head.renameQualificationColumns(df)
+    // apps.head.renameQualificationColumns(df)
+    df
   }
 
   def qualifyApps(apps: ArrayBuffer[ApplicationInfo]): DataFrame = {
+    val query = apps
+      .filter(p => p.allDataFrames.contains(s"sqlDF_${p.index}"))
+      .map("(" + _.qualificationDurationSumSQL + ")")
+      .mkString(" union ")
+    val df = apps.head.runQuery(query + " order by Rank desc, `App Duration` desc")
+    df
+  }
+
+  def qualifyApps2(apps: ArrayBuffer[ApplicationInfo]): DataFrame = {
 
     // The query generated for a lot of apps is to big and Spark analyzer
     // takes forever to handle. Break it up and do a few apps at a time and then

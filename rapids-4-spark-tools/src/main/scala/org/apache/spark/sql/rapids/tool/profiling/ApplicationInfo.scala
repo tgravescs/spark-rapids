@@ -257,9 +257,9 @@ class ApplicationInfo(
         if (isDataSetPlan(node.desc)) {
           datasetSQL += DatasetSQLCase(sqlID)
         }
-        val udf = findPotentialIssues(node.desc)
-        if (udf.nonEmpty) {
-          problematicSQL += ProblematicSQLCase(sqlID, udf, node.desc)
+        val issues = findPotentialIssues(node.desc)
+        if (issues.nonEmpty) {
+          problematicSQL += ProblematicSQLCase(sqlID, issues)
         }
       }
     }
@@ -333,9 +333,25 @@ class ApplicationInfo(
           case Some(i) => UIUtils.formatDuration(i)
           case None => ""
         }
+        val sqlQDuration = if (datasetSQL.exists(_.sqlID == res.sqlID)) {
+          Some(0L)
+        } else {
+          durationResult
+        }
+        val potProbs = problematicSQL.filter { p =>
+          p.sqlID == res.sqlID && p.reason.nonEmpty
+        }.map(_.reason).mkString(",")
+        val finalPotProbs = if (potProbs.isEmpty) {
+          null
+        } else {
+          potProbs
+        }
         val sqlExecutionNew = res.copy(endTime = thisEndTime,
           duration = durationResult,
-          durationStr = durationString)
+          durationStr = durationString,
+          sqlQualDuration = sqlQDuration,
+          problematic = finalPotProbs
+        )
         sqlStartNew += sqlExecutionNew
       }
       allDataFrames += (s"sqlDF_$index" -> sqlStartNew.toDF)
@@ -410,9 +426,7 @@ class ApplicationInfo(
       logInfo("No SQL Metrics Found. Skipping generating SQL Metrics DataFrame.")
     }
 
-
     if (!forQualification) {
-
       // For resourceProfilesDF
       if (this.resourceProfiles.nonEmpty) {
         this.allDataFrames += (s"resourceProfilesDF_$index" -> this.resourceProfiles.toDF)
@@ -473,21 +487,15 @@ class ApplicationInfo(
       } else {
         logInfo("No task&stage accums Found.Create an empty task&stage accum DataFrame.")
       }
+
+      // For planNodeAccumDF
+      allDataFrames += (s"planNodeAccumDF_$index" -> planNodeAccum.toDF)
+      if (planNodeAccum.nonEmpty) {
+        logInfo(s"Total ${planNodeAccum.size} Plan node accums for appID=$appId")
+      } else {
+        logInfo("No Plan node accums Found. Create an empty Plan node accums DataFrame.")
+      }
     }
-
-    // For planNodeAccumDF
-    allDataFrames += (s"planNodeAccumDF_$index" -> planNodeAccum.toDF)
-    if (planNodeAccum.nonEmpty) {
-      logInfo(s"Total ${planNodeAccum.size} Plan node accums for appID=$appId")
-    } else {
-      logInfo("No Plan node accums Found. Create an empty Plan node accums DataFrame.")
-    }
-
-    // For problematicSQLDF
-    allDataFrames += (s"problematicSQLDF_$index" -> problematicSQL.toDF)
-    // For Dataset SQL operations
-    allDataFrames += (s"datasetSQLDF_$index" -> datasetSQL.toDF)
-
 
     for ((name, df) <- this.allDataFrames) {
       df.createOrReplaceTempView(name)
@@ -681,51 +689,43 @@ class ApplicationInfo(
        |""".stripMargin
   }
 
+  def qualificationDurationNoMetricsSQL: String = {
+    s"""select
+       |first(appName) as appName,
+       |'$appId' as appID,
+       |ROUND((sum(sqlQualDuration) * 100) / first(app.duration), 2) as dfRankTotal,
+       |concat_ws(",", collect_list(potentialProblems)) as potentialProblems,
+       |sum(sqlQualDuration) as dfDurationFinal,
+       |first(app.duration) as appDuration,
+       |from sqlDF_$index sq, appdf_$index app
+       |""".stripMargin
+  }
+
   def qualificationDurationSQL: String = {
     s"""select
        |$index as appIndex,
        |'$appId' as appID,
        |app.appName,
        |sq.sqlID, sq.description,
-       |sq.duration,
+       |sq.sqlQualDuration as dfDuration,
        |app.duration as appDuration,
-       |reason as potentialProblems,
+       |problematic as potentialProblems,
        |m.executorCPUTime,
-       |m.executorRunTime,
-       |case when ds.sqlID IS NULL then 0 else 1 end as containsDataset
+       |m.executorRunTime
        |from sqlDF_$index sq, appdf_$index app
-       |left join problematicSQLDF_$index pb on pb.sqlID == sq.sqlID
-       |left join datasetSQLDF_$index ds ON ds.sqlID == sq.sqlID
        |left join sqlAggMetricsDF m on $index = m.appIndex and sq.sqlID = m.sqlID
        |""".stripMargin
   }
 
-  def distinctqualificationDurationSQL: String = {
-    s"""select
-       |distinct(*)
-       |from ($qualificationDurationSQL)
-       |""".stripMargin
-  }
-
-  def qualificationSetDurationSQL: String = {
-    s"""select
-       |appIndex, appID, appName, sqlID, duration,
-       |appDuration, description, potentialProblems,
-       |executorCPUTime, executorRunTime,
-       |case when containsDataset > 0 then 0 else duration end as dfDuration
-       |from (${distinctqualificationDurationSQL.stripLineEnd})
-       |""".stripMargin
-  }
-
   def qualificationDurationSumSQL: String = {
-    s"""select first(appName) as appName,
-       |first(appID) as appID,
-       |ROUND((sum(dfDuration) * 100) / first(appDuration), 2) as dfRankTotal,
-       |concat_ws(",", collect_list(potentialProblems)) as potentialProblems,
-       |sum(dfDuration) as dfDurationFinal,
-       |first(appDuration) as appDuration,
-       |round(sum(executorCPUTime)/sum(executorRunTime)*100,2) as executorCPURatio
-       |from (${qualificationSetDurationSQL.stripLineEnd})
+    s"""select first(appName) as `App Name`,
+       |first(appID) as `App ID`,
+       |ROUND((sum(dfDuration) * 100) / first(appDuration), 2) as Rank,
+       |concat_ws(",", collect_list(potentialProblems)) as `Potential Problems`,
+       |sum(dfDuration) as `SQL Dataframe Duration`,
+       |first(appDuration) as `App Duration`,
+       |round(sum(executorCPUTime)/sum(executorRunTime)*100,2) as `Executor CPU Time Percent`
+       |from (${qualificationDurationSQL.stripLineEnd})
        |""".stripMargin
   }
 
