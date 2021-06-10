@@ -66,16 +66,16 @@ object Qualification extends Logging {
       sqlAggMetricsDF.count()
     }
 
-    val df = constructQueryQualifyApps(apps, includeCpuPercent)
+    val dfOpt = constructQueryQualifyApps(apps, includeCpuPercent)
     if (dropTempViews) {
       sparkSession.catalog.dropTempView("sqlAggMetricsDF")
-      apps.foreach( _.dropAllTempViews())
+      apps.foreach(_.dropAllTempViews())
     }
-    Some(df)
+    dfOpt
   }
 
   def constructQueryQualifyApps(apps: ArrayBuffer[ApplicationInfo],
-      includeCpuPercent: Boolean): DataFrame = {
+      includeCpuPercent: Boolean): Option[DataFrame] = {
     val (qualApps, nonQualApps) = apps
       .partition { p =>
         p.allDataFrames.contains(s"sqlDF_${p.index}") &&
@@ -88,14 +88,14 @@ object Qualification extends Logging {
           case false => "(" + app.qualificationDurationNoMetricsSQL + ")"
         }
       }.mkString(" union ")
-    if (qualApps.nonEmpty) {
+    if (nonQualApps.nonEmpty) {
       logWarning("The following event logs were skipped: " +
         s"${nonQualApps.map(_.eventlog).mkString(",")}")
     }
     if (query.nonEmpty) {
-      apps.head.runQuery(query + " order by Score desc, `App Duration` desc")
+      Some(apps.head.runQuery(query + " order by Score desc, `App Duration` desc"))
     } else {
-      apps.head.sparkSession.emptyDataFrame
+      None
     }
   }
 

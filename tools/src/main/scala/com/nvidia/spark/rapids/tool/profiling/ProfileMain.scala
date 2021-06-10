@@ -163,8 +163,10 @@ object ProfileMain extends Logging {
       val analysis = new Analysis(apps, Some(textFileWriter))
       analysis.jobAndStageMetricsAggregation()
       val sqlAggMetricsDF = analysis.sqlMetricsAggregation()
-      sqlAggMetricsDF.createOrReplaceTempView("sqlAggMetricsDF")
-      analysis.sqlMetricsAggregationDurationAndCpuTime()
+      if (!sqlAggMetricsDF.isEmpty) {
+        sqlAggMetricsDF.createOrReplaceTempView("sqlAggMetricsDF")
+        analysis.sqlMetricsAggregationDurationAndCpuTime()
+      }
       analysis.shuffleSkewCheck()
 
       textFileWriter.write("\n### C. Health Check###\n")
