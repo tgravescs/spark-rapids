@@ -203,11 +203,11 @@ object QualAppInfo {
           println(s"Error parsing JSON: $path")
           None
         case il: IllegalArgumentException =>
-          println(s"Error parsing file: $path", il)
+          println(s"Error parsing file: $path")
           None
         case e: Exception =>
           // catch all exceptions and skip that file
-          println(s"Got unexpected exception processing file: $path", e)
+          println(s"Got unexpected exception processing file: $path")
           None
       }
     app
