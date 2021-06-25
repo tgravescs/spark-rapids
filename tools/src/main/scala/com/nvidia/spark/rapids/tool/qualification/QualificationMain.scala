@@ -19,14 +19,13 @@ package com.nvidia.spark.rapids.tool.qualification
 import com.nvidia.spark.rapids.tool.EventLogPathProcessor
 import org.apache.hadoop.conf.Configuration
 
-import org.apache.spark.internal.Logging
 import org.apache.spark.sql.rapids.tool.qualification.QualificationSummaryInfo
 
 /**
  * A tool to analyze Spark event logs and determine if 
  * they might be a good fit for running on the GPU.
  */
-object QualificationMain extends Logging {
+object QualificationMain {
 
   def main(args: Array[String]) {
     val (exitCode, _) = mainInternal(new QualificationArgs(args))
@@ -52,7 +51,7 @@ object QualificationMain extends Logging {
     val eventLogInfos = EventLogPathProcessor.processAllPaths(filterN.toOption,
       matchEventLogs.toOption, eventlogPaths, hadoopConf)
     if (eventLogInfos.isEmpty) {
-      logWarning("No event logs to process after checking paths, exiting!")
+      println("No event logs to process after checking paths, exiting!")
       return (0, Seq[QualificationSummaryInfo]())
     }
 

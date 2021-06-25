@@ -22,7 +22,6 @@ import com.nvidia.spark.rapids.tool.EventLogInfo
 import com.nvidia.spark.rapids.tool.profiling._
 import org.apache.hadoop.conf.Configuration
 
-import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.SparkListenerEvent
 import org.apache.spark.sql.execution.SparkPlanInfo
 import org.apache.spark.sql.execution.ui.SparkPlanGraph
@@ -32,7 +31,7 @@ class QualAppInfo(
     numOutputRows: Int,
     eventLogInfo: EventLogInfo,
     hadoopConf: Configuration)
-  extends AppBase(numOutputRows, eventLogInfo, hadoopConf) with Logging {
+  extends AppBase(numOutputRows, eventLogInfo, hadoopConf) {
 
   var appId: String = ""
   var isPluginEnabled = false
@@ -74,7 +73,7 @@ class QualAppInfo(
           if (lastSQLEndTime.isEmpty && lastJobEndTime.isEmpty) {
             None
           } else {
-            logWarning("Application End Time is unknown, estimating based on" +
+            println("Application End Time is unknown, estimating based on" +
               " job and sql end times!")
             // estimate the app end with job or sql end times
             val sqlEndTime = if (this.lastSQLEndTime.isEmpty) 0L else this.lastSQLEndTime.get
@@ -190,25 +189,25 @@ case class QualificationSummaryInfo(
     sqlDurationForProblematic: Long,
     failedSQLIds: String)
 
-object QualAppInfo extends Logging {
+object QualAppInfo {
   def createApp(
       path: EventLogInfo,
       numRows: Int,
       hadoopConf: Configuration): Option[QualAppInfo] = {
     val app = try {
         val app = new QualAppInfo(numRows, path, hadoopConf)
-        logInfo(s"==============  ${app.appId} ============== ")
+        println(s"==============  ${app.appId} ============== ")
         Some(app)
       } catch {
         case json: com.fasterxml.jackson.core.JsonParseException =>
-          logWarning(s"Error parsing JSON: $path")
+          println(s"Error parsing JSON: $path")
           None
         case il: IllegalArgumentException =>
-          logWarning(s"Error parsing file: $path", il)
+          println(s"Error parsing file: $path", il)
           None
         case e: Exception =>
           // catch all exceptions and skip that file
-          logWarning(s"Got unexpected exception processing file: $path", e)
+          println(s"Got unexpected exception processing file: $path", e)
           None
       }
     app
