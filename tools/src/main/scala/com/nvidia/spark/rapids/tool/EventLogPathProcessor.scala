@@ -26,7 +26,6 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path, PathFilter}
 
 import org.apache.spark.deploy.history.{EventLogFileReader, EventLogFileWriter}
-import org.apache.spark.internal.Logging
 import org.apache.spark.sql.rapids.tool.profiling.ApplicationInfo
 
 sealed trait EventLogInfo {
@@ -37,7 +36,7 @@ case class ApacheSparkEventLog(override val eventLog: Path) extends EventLogInfo
 case class DatabricksEventLog(override val eventLog: Path) extends EventLogInfo
 
 
-object EventLogPathProcessor extends Logging {
+object EventLogPathProcessor {
   // Apache Spark event log prefixes
   val EVENT_LOG_DIR_NAME_PREFIX = "eventlog_v2_"
   val EVENT_LOG_FILE_NAME_PREFIX = "events_"
@@ -93,7 +92,7 @@ object EventLogPathProcessor extends Logging {
       val fileName = filePath.getName()
 
       if (!eventLogNameFilter(filePath)) {
-        logWarning(s"File: $fileName it not a supported file type. " +
+        println(s"File: $fileName it not a supported file type. " +
           "Supported compression types are: " +
           s"${SPARK_SHORT_COMPRESSION_CODEC_NAMES_FOR_FILTER.mkString(", ")}. " +
           "Skipping this file.")
@@ -116,12 +115,12 @@ object EventLogPathProcessor extends Logging {
               (isEventLogDir(name) || isDatabricksEventLogDir(s, fs))))
         })
         if (invalidLogs.nonEmpty) {
-          logWarning("Skipping the following directories: " +
+          println("Skipping the following directories: " +
             s"${invalidLogs.map(_.getPath().getName()).mkString(", ")}")
         }
         val (logsSupported, unsupport) = validLogs.partition(l => eventLogNameFilter(l.getPath()))
         if (unsupport.nonEmpty) {
-          logWarning(s"Files: ${unsupport.map(_.getPath.getName).mkString(", ")} " +
+          println(s"Files: ${unsupport.map(_.getPath.getName).mkString(", ")} " +
             s"have unsupported file types. Supported compression types are: " +
             s"${SPARK_SHORT_COMPRESSION_CODEC_NAMES_FOR_FILTER.mkString(", ")}. " +
             "Skipping these files.")
@@ -136,7 +135,7 @@ object EventLogPathProcessor extends Logging {
       }
     } catch {
       case e: FileNotFoundException =>
-        logWarning(s"$pathString not found, skipping!")
+        println(s"$pathString not found, skipping!")
         Map.empty[EventLogInfo, Long]
     }
   }
@@ -159,7 +158,6 @@ object EventLogPathProcessor extends Logging {
 
     val logsWithTimestamp = eventLogsPaths.flatMap(getEventLogInfo(_, hadoopConf)).toMap
 
-    logDebug("Paths after stringToPath: " + logsWithTimestamp)
     // Filter the event logs to be processed based on the criteria. If it is not provided in the
     // command line, then return all the event logs processed above.
     val matchedLogs = matchlogs.map { strMatch =>
@@ -175,7 +173,7 @@ object EventLogPathProcessor extends Logging {
       } else if (criteria.equals("oldest")) {
         LinkedHashMap(matchedLogs.toSeq.sortWith(_._2 < _._2): _*)
       } else {
-        logError("Criteria should be either newest or oldest")
+        System.err.println("Criteria should be either newest or oldest")
         Map.empty[EventLogInfo, Long]
       }
       matched.take(numberofEventLogs)
@@ -185,12 +183,12 @@ object EventLogPathProcessor extends Logging {
   }
 
   def logApplicationInfo(app: ApplicationInfo) = {
-    logInfo(s"==============  ${app.appId} (index=${app.index})  ==============")
+    println(s"==============  ${app.appId} (index=${app.index})  ==============")
   }
 
   def getDBEventLogFileDate(eventLogFileName: String): LocalDateTime = {
     if (!isDBEventLogFile(eventLogFileName)) {
-      logError(s"$eventLogFileName Not an event log file!")
+      System.err.println(s"$eventLogFileName Not an event log file!")
     }
     val fileParts = eventLogFileName.split("--")
     if (fileParts.size < 2) {
@@ -215,7 +213,7 @@ object EventLogPathProcessor extends Logging {
  */
 class DatabricksRollingEventLogFilesFileReader(
     fs: FileSystem,
-    path: Path) extends EventLogFileReader(fs, path) with Logging {
+    path: Path) extends EventLogFileReader(fs, path) {
 
   private lazy val files: Seq[FileStatus] = {
     val ret = fs.listStatus(rootPath).toSeq

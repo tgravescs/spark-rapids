@@ -21,14 +21,13 @@ import scala.collection.mutable.ArrayBuffer
 import com.nvidia.spark.rapids.tool.EventLogInfo
 import org.apache.hadoop.conf.Configuration
 
-import org.apache.spark.internal.Logging
 import org.apache.spark.sql.rapids.tool.qualification._
 
 /**
  * Scores the applications for GPU acceleration and outputs the
  * reports.
  */
-object Qualification extends Logging {
+object Qualification {
 
   def qualifyApps(
       allPaths: Seq[EventLogInfo],
@@ -39,13 +38,13 @@ object Qualification extends Logging {
     allPaths.foreach { path =>
       val app = QualAppInfo.createApp(path, numRows, hadoopConf)
       if (!app.isDefined) {
-        logWarning("No Applications found that contain SQL!")
+        println("No Applications found that contain SQL!")
       } else {
         val qualSumInfo = app.get.aggregateStats()
         if (qualSumInfo.isDefined) {
           allAppsSum += qualSumInfo.get
         } else {
-          logWarning(s"No aggregated stats for event log at: $path")
+          println(s"No aggregated stats for event log at: $path")
         }
       }
     }

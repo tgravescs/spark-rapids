@@ -16,11 +16,10 @@
 
 package org.apache.spark.sql.rapids.tool
 
-import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler._
 import org.apache.spark.sql.execution.ui._
 
-trait EventProcessorBase extends Logging {
+trait EventProcessorBase {
 
   type T <: AppBase
 
@@ -106,7 +105,7 @@ trait EventProcessorBase extends Logging {
         }
       } catch {
         case _: ClassNotFoundException =>
-          logWarning("Error trying to parse SparkListenerResourceProfileAdded, Spark" +
+          System.err.println("Error trying to parse SparkListenerResourceProfileAdded, Spark" +
             " version likely older than 3.1.X, unable to parse it properly.")
           false
       }
@@ -144,7 +143,6 @@ trait EventProcessorBase extends Logging {
   def doSparkListenerApplicationEnd(
       app: T,
       event: SparkListenerApplicationEnd): Unit = {
-    logDebug("Processing event: " + event.getClass)
     app.appEndTime = Some(event.time)
   }
 
