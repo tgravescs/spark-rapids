@@ -16,10 +16,10 @@
 
 package org.apache.spark.sql.rapids.tool
 
-import org.apache.spark.internal.{config, Logging}
+import org.apache.spark.internal.config
 import org.apache.spark.sql.DataFrame
 
-object ToolUtils extends Logging {
+object ToolUtils {
 
   def isPluginEnabled(properties: Map[String, String]): Boolean = {
     (properties.getOrElse(config.PLUGINS.key, "").contains("com.nvidia.spark.SQLPlugin")
