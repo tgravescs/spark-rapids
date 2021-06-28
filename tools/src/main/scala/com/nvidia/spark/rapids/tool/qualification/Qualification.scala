@@ -36,7 +36,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     timeout: Option[Long]) extends Logging {
 
   val allApps = new ConcurrentLinkedQueue[QualificationSummaryInfo]()
-  val waitTimeInSec = timeout.getOrElse(36000)
+  val waitTimeInSec = timeout.getOrElse(36000L)
 
   class QualifThread(path: EventLogInfo) extends Runnable {
     def run {
@@ -66,7 +66,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     } finally {
       threadPool.shutdown()
       if (!threadPool.awaitTermination(waitTimeInSec, TimeUnit.SECONDS)) {
-        logError("Processing log files took longer then 36000 seconds," +
+        logError(s"Processing log files took longer then $waitTimeInSec seconds," +
           " stopping processing any more event logs")
         threadPool.shutdownNow()
       }
@@ -86,14 +86,14 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
       hadoopConf: Configuration): Unit = {
     val app = QualAppInfo.createApp(path, numRows, hadoopConf)
     if (!app.isDefined) {
-      logWarning("No Applications found that contain SQL!")
+      logWarning(s"No Application found that contain SQL for ${path.eventLog.toString}!")
       None
     } else {
       val qualSumInfo = app.get.aggregateStats()
       if (qualSumInfo.isDefined) {
         allApps.add(qualSumInfo.get)
       } else {
-        logWarning(s"No aggregated stats for event log at: $path")
+        logWarning(s"No aggregated stats for event log at: ${path.eventLog.toString}")
       }
     }
   }
