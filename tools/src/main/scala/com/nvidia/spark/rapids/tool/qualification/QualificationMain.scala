@@ -48,12 +48,8 @@ object QualificationMain extends Logging {
     val outputDirectory = appArgs.outputDirectory().stripSuffix("/")
     val numOutputRows = appArgs.numOutputRows.getOrElse(1000)
 
-    val nThreads = if (appArgs.numThreads.isSupplied) {
-      appArgs.numThreads.getOrElse(1)
-    } else {
-      Math.ceil(Runtime.getRuntime.availableProcessors() / 4f).toInt
-    }
-    logWarning(s"Number of threads is $nThreads")
+    val nThreads = appArgs.numThreads.getOrElse(
+      Math.ceil(Runtime.getRuntime.availableProcessors() / 4f).toInt)
 
     val hadoopConf = new Configuration()
     val eventLogInfos = EventLogPathProcessor.processAllPaths(filterN.toOption,
