@@ -63,6 +63,9 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration) 
         }
     } finally {
       threadPool.shutdown()
+      if (!threadPool.awaitTermination(36000, TimeUnit.SECONDS)) {
+        threadPool.shutdownNow()
+      }
     }
 
     val allAppsSum = allApps.asScala.toSeq

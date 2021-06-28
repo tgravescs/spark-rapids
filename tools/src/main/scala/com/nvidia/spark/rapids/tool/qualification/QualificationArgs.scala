@@ -49,6 +49,10 @@ Usage: java -cp rapids-4-spark-tools_2.12-<version>.jar:$SPARK_HOME/jars/*
   val numOutputRows: ScallopOption[Int] =
     opt[Int](required = false,
       descr = "Number of output rows. Default is 1000.")
+  val numThreads: ScallopOption[Int] =
+    opt[Int](required = false,
+      descr = "Number of thread to use for parallel processing. The default is the " +
+        "number of cores on host divided by 4.")
 
   validate(filterCriteria) {
     case crit if (crit.endsWith("-newest") || crit.endsWith("-oldest")) => Right(Unit)
