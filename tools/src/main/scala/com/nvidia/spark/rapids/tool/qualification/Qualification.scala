@@ -34,9 +34,7 @@ import org.apache.spark.sql.rapids.tool.qualification._
  */
 class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration) extends Logging {
 
-  // TODO - make concurrent
   val allApps = new ConcurrentLinkedQueue[QualificationSummaryInfo]()
-  // val allAppsSum: ArrayBuffer[QualificationSummaryInfo] = ArrayBuffer[QualificationSummaryInfo]()
 
   class QualifThread(path: EventLogInfo) extends Runnable {
     def run {
@@ -49,6 +47,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration) 
       nThreads: Int): Seq[QualificationSummaryInfo] = {
     val threadFactory = new ThreadFactoryBuilder()
       .setDaemon(true).setNameFormat("qualTool" + "-%d").build()
+    logInfo(s"Threadpool size is $nThreads")
     val threadPool = Executors.newFixedThreadPool(nThreads, threadFactory)
       .asInstanceOf[ThreadPoolExecutor]
     try {
@@ -64,7 +63,9 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration) 
     } finally {
       threadPool.shutdown()
       if (!threadPool.awaitTermination(36000, TimeUnit.SECONDS)) {
+        logError("Processing log files took longer then 36000 seconds, exiting")
         threadPool.shutdownNow()
+        return Seq()
       }
     }
 
@@ -88,7 +89,6 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration) 
       val qualSumInfo = app.get.aggregateStats()
       if (qualSumInfo.isDefined) {
         allApps.add(qualSumInfo.get)
-        // allAppsSum += qualSumInfo.get
       } else {
         logWarning(s"No aggregated stats for event log at: $path")
       }
