@@ -32,9 +32,11 @@ import org.apache.spark.sql.rapids.tool.qualification._
  * Scores the applications for GPU acceleration and outputs the
  * reports.
  */
-class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration) extends Logging {
+class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
+    timeout: Option[Long]) extends Logging {
 
   val allApps = new ConcurrentLinkedQueue[QualificationSummaryInfo]()
+  val waitTimeInSec = timeout.getOrElse(36000)
 
   class QualifThread(path: EventLogInfo) extends Runnable {
     def run {
@@ -56,16 +58,17 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration) 
       }
     } catch {
       case e: Exception =>
+        logError("Exception processing event logs", e)
         threadPool.shutdown()
         if (!threadPool.awaitTermination(5, TimeUnit.SECONDS)) {
           threadPool.shutdownNow()
         }
     } finally {
       threadPool.shutdown()
-      if (!threadPool.awaitTermination(36000, TimeUnit.SECONDS)) {
-        logError("Processing log files took longer then 36000 seconds, exiting")
+      if (!threadPool.awaitTermination(waitTimeInSec, TimeUnit.SECONDS)) {
+        logError("Processing log files took longer then 36000 seconds," +
+          " stopping processing any more event logs")
         threadPool.shutdownNow()
-        return Seq()
       }
     }
 
