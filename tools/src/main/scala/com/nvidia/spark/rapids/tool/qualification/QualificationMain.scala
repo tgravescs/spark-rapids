@@ -48,6 +48,8 @@ object QualificationMain extends Logging {
     val outputDirectory = appArgs.outputDirectory().stripSuffix("/")
     val numOutputRows = appArgs.numOutputRows.getOrElse(1000)
 
+    val nThreads = Math.ceil(Runtime.getRuntime.availableProcessors() / 4f).toInt
+
     val hadoopConf = new Configuration()
     val eventLogInfos = EventLogPathProcessor.processAllPaths(filterN.toOption,
       matchEventLogs.toOption, eventlogPaths, hadoopConf)
@@ -56,8 +58,9 @@ object QualificationMain extends Logging {
       return (0, Seq[QualificationSummaryInfo]())
     }
 
-    val res = Qualification.qualifyApps(eventLogInfos, numOutputRows,
-      outputDirectory, hadoopConf)
+    val qual = new Qualification( outputDirectory, numOutputRows, hadoopConf)
+    val res = qual.qualifyApps(eventLogInfos, nThreads)
+
     (0, res)
   }
 
