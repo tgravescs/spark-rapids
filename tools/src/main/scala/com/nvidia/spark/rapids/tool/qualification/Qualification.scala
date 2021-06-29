@@ -94,7 +94,33 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
         allApps.add(qualSumInfo.get)
       } else {
         logWarning(s"No aggregated stats for event log at: ${path.eventLog.toString}")
+=======
+object Qualification extends Logging {
+
+  def qualifyApps(
+      allPaths: Seq[EventLogInfo],
+      numRows: Int,
+      outputDir: String,
+      hadoopConf: Configuration): ArrayBuffer[QualificationSummaryInfo] = {
+    val allAppsSum: ArrayBuffer[QualificationSummaryInfo] = ArrayBuffer[QualificationSummaryInfo]()
+    allPaths.foreach { path =>
+      val app = QualAppInfo.createApp(path, numRows, hadoopConf)
+      if (!app.isDefined) {
+        logWarning("No Applications found that contain SQL!")
+      } else {
+        val qualSumInfo = app.get.aggregateStats()
+        if (qualSumInfo.isDefined) {
+          allAppsSum += qualSumInfo.get
+        } else {
+          logWarning(s"No aggregated stats for event log at: $path")
+        }
+>>>>>>> origin/branch-21.08
       }
     }
+    val sorted = allAppsSum.sortBy(sum => (-sum.score, -sum.sqlDataFrameDuration, -sum.appDuration))
+    val qWriter = new QualOutputWriter(outputDir, numRows)
+    qWriter.writeCSV(sorted)
+    qWriter.writeReport(sorted)
+    sorted
   }
 }

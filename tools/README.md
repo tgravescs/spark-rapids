@@ -111,16 +111,21 @@ Each application(event log) could have multiple SQL queries. If a SQL's plan has
 
 Note: the duration(s) reported are in milli-seconds.
 
-It can also print out any potential problems it finds in a separate column, which is not included in the score. This
+There are 2 output files from running the tool. One is a summary text file printing in order the applications most
+likely to be good candidates for the GPU to the ones least likely. It outputs the application ID, duration,
+the SQL Dataframe duration and the SQL duration spent when we found SQL queries with potential problems.
+The other file is a CSV file that contains more information and can be used for further post processing.
+
+Note, potential problems are reported in the CSV file in a separate column, which is not included in the score. This
 currently only includes some UDFs. The tool won't catch all UDFs, and some of the UDFs can be handled with additional steps. 
 Please refer to [supported_ops.md](../docs/supported_ops.md) for more details on UDF.
 
-The output also contains a `Executor CPU Time Percent` column that is not included in the score. This is an estimate
+The CSV output also contains a `Executor CPU Time Percent` column that is not included in the score. This is an estimate
 at how much time the tasks spent doing processing on the CPU vs waiting on IO. This is not always a good indicator
 because sometimes you may be doing IO that is encrypted and the CPU has to do work to decrypt it, so the environment
 you are running on needs to be taken into account.
 
-The last column `App Duration Estimated` is used to indicate if we had to estimate the application duration. If we
+`App Duration Estimated` is used to indicate if we had to estimate the application duration. If we
 had to estimate it, it means the event log was missing the application finished event so we will use the last job
 or sql execution time we find as the end time used to calculate the duration.
 
@@ -128,19 +133,20 @@ Note that SQL queries that contain failed jobs are not included.
 
 Sample output in csv:
 ```
-App Name,App ID,Score,Potential Problems,SQL Dataframe Duration,App Duration,Executor CPU Time Percent,App Duration Estimated
-Spark shell,app-20210507105707-0001,78.03,"",810923,1039276,32.03,false
-Spark shell,app-20210507103057-0000,75.87,"",316622,417307,64.07,false
+App Name,App ID,Score,Potential Problems,SQL Dataframe Duration,App Duration,Executor CPU Time Percent,App Duration Estimated,SQL Duration with Potential Problems,SQL Ids with Failures
+job1,app-20210507174503-2538,98.13,"",952802,970984,63.14,false,0,""
+job2,app-20210507180116-2539,97.88,"",903845,923419,64.88,false,0,""
+job3,app-20210319151533-1704,97.59,"",737826,756039,33.95,false,0,""
 ```
 
 Sample output in text:
 ```
-+-----------+-----------------------+-----+------------------+----------------------+------------+-------------------------+----------------------+
-|App Name   |App ID                 |Score|Potential Problems|SQL Dataframe Duration|App Duration|Executor CPU Time Percent|App Duration Estimated|
-+-----------+-----------------------+-----+------------------+----------------------+------------+-------------------------+----------------------+
-|Spark shell|app-20210507105707-0001|78.03|                  |810923                |1039276     |32.03                    |false                 |
-|Spark shell|app-20210507103057-0000|75.87|                  |316622                |417307      |64.07                    |false                 |
-+-----------+-----------------------+-----+------------------+----------------------+------------+-------------------------+----------------------+
+================================================================================================================
+|                 App ID|                App Duration|      SQL Dataframe Duration|SQL Duration For Problematic|
+================================================================================================================
+|app-20210507174503-2538|                      970984|                      952802|                           0|
+|app-20210507180116-2539|                      923419|                      903845|                           0|
+|app-20210319151533-1704|                      756039|                      737826|                           0|
 ```
 
 ### How to use this tool
@@ -148,57 +154,42 @@ This tool parses the Spark CPU event log(s) and creates an output report.
 Acceptable input event log paths are files or directories containing spark events logs
 in the local filesystem, HDFS, S3 or mixed.
 
-### Use from spark-shell
-1. Include `rapids-4-spark-tools_2.12-<version>.jar` in the '--jars' option to spark-shell or spark-submit
-2. Starting spark-shell:
 ```bash
-$SPARK_HOME/bin/spark-shell --driver-memory 5g --jars ~/rapids-4-spark-tools_2.12-<version>.jar
+Usage: java -cp rapids-4-spark-tools_2.12-<version>.jar:$SPARK_HOME/jars/*
+       com.nvidia.spark.rapids.tool.qualification.QualificationMain [options]
+       <eventlogs | eventlog directories ...>
 ```
 
-For multiple event logs:
+Example running on files in HDFS: (include $HADOOP_CONF_DIR in classpath)
 ```bash
-com.nvidia.spark.rapids.tool.qualification.QualificationMain.main(Array("/path/to/eventlog1", "/path/to/eventlog2"))
-```
-
-### Use from spark-submit
-```bash
-$SPARK_HOME/bin/spark-submit --driver-memory 5g --class com.nvidia.spark.rapids.tool.qualification.QualificationMain \
-rapids-4-spark-tools_2.12-<version>.jar \
-/path/to/eventlog1 /path/to/eventlog2 /directory/with/eventlogs
+java -cp ~/rapids-4-spark-tools_2.12-21.<version>.jar:$SPARK_HOME/jars/*:$HADOOP_CONF_DIR/ \
+ com.nvidia.spark.rapids.tool.qualification.QualificationMain  /eventlogDir
 ```
 
 ### Options (`--help` output)
 
   Note: `--help` should be before the trailing event logs.
 ```bash
-$SPARK_HOME/bin/spark-submit \
---class com.nvidia.spark.rapids.tool.qualification.QualificationMain \
-rapids-4-spark-tools_2.12-<version>.jar \
---help
+RAPIDS Accelerator for Apache Spark qualification tool
 
-For usage see below:
+Usage: java -cp rapids-4-spark-tools_2.12-<version>.jar:$SPARK_HOME/jars/*
+       com.nvidia.spark.rapids.tool.qualification.QualificationMain [options]
+       <eventlogs | eventlog directories ...>
 
-  -f, --filter-criteria  <arg>     Filter newest or oldest N event logs for processing.
-                                   Supported formats are:
-                                   To process 10 recent event logs: --filter-criteria "10-newest"
-                                   To process 10 oldest event logs: --filter-criteria "10-oldest"
-  -m, --match-event-logs  <arg>    Filter event logs filenames which contains the input string.
-       
-      --no-exec-cpu-percent        Do not include the executor CPU time percent.
-  -n, --num-output-rows  <arg>     Number of output rows for each Application.
-                                   Default is 1000.
-  -o, --output-directory  <arg>    Base output directory. Default is current
-                                   directory for the default filesystem. The
-                                   final output will go into a subdirectory
-                                   called rapids_4_spark_qualification_output.
-                                   It will overwrite any existing directory with
-                                   the same name.
-      --output-format  <arg>       Output format, supports csv and text. Default
-                                   is csv. text output format creates a file
-                                   named rapids_4_spark_qualification.log while
-                                   csv will create a file using the standard
-                                   Spark naming convention.
-  -h, --help                       Show help message
+  -f, --filter-criteria  <arg>    Filter newest or oldest N eventlogs for
+                                  processing.eg: 100-newest (for processing
+                                  newest 100 event logs). eg: 100-oldest (for
+                                  processing oldest 100 event logs)
+  -m, --match-event-logs  <arg>   Filter event logs whose filenames contain the
+                                  input string
+  -n, --num-output-rows  <arg>    Number of output rows. Default is 1000.
+  -o, --output-directory  <arg>   Base output directory. Default is current
+                                  directory for the default filesystem. The
+                                  final output will go into a subdirectory
+                                  called rapids_4_spark_qualification_output. It
+                                  will overwrite any existing directory with the
+                                  same name.
+  -h, --help                      Show help message
 
  trailing arguments:
   eventlog (required)   Event log filenames(space separated) or directories
@@ -207,19 +198,14 @@ For usage see below:
 ```
 
 ### Output
-By default this outputs a csv file under sub-directory `./rapids_4_spark_qualification_output/` that contains 
+By default this outputs a 2 files under sub-directory `./rapids_4_spark_qualification_output/` that contains 
 the processed applications. The output will go into your default filesystem, it supports local filesystem
-or HDFS. The csv output can be used later to read back into Spark and do further processing or combined with other reports
-as needed.
+or HDFS. 
 
 The output location can be changed using the `--output-directory` option. Default is current directory.
 
-The output format can be changed using the `--output-format` option. Default is csv. The other option is text.
-  
-Note: We suggest you also save the output of the `spark-submit` or `spark-shell` to a log file for troubleshooting.
-  
-Run `--help` for more information.
-
+It will output a text file with the name `rapids_4_spark_qualification_output.log` that is a summary report and
+it will output a CSV file named `rapids_4_spark_qualification_output.csv` that has more data in it.
 
 ## Profiling Tool
 
@@ -246,29 +232,74 @@ We can input multiple Spark event logs and this tool can compare environments, e
 ### A. Compare Information Collected ###
 Compare Application Information:
 
-+--------+-----------------------+-------------+-------------+--------+-----------+------------+-------+
-|appIndex|appId                  |startTime    |endTime      |duration|durationStr|sparkVersion|gpuMode|
-+--------+-----------------------+-------------+-------------+--------+-----------+------------+-------+
-|1       |app-20210329165943-0103|1617037182848|1617037490515|307667  |5.1 min    |3.0.1       |false  |
-|2       |app-20210329170243-0018|1617037362324|1617038578035|1215711 |20 min     |3.0.1       |true   |
-+--------+-----------------------+-------------+-------------+--------+-----------+------------+-------+
++--------+-----------+-----------------------+-------------+-------------+--------+-----------+------------+-------------+
+|appIndex|appName    |appId                  |startTime    |endTime      |duration|durationStr|sparkVersion|pluginEnabled|
++--------+-----------+-----------------------+-------------+-------------+--------+-----------+------------+-------------+
+|1       |Spark shell|app-20210329165943-0103|1617037182848|1617037490515|307667  |5.1 min    |3.0.1       |false        |
+|2       |Spark shell|app-20210329170243-0018|1617037362324|1617038578035|1215711 |20 min     |3.0.1       |true         |
++--------+-----------+-----------------------+-------------+-------------+--------+-----------+------------+-------------+
 ```
 
 - Compare Executor information:
 ```
 Compare Executor Information:
-+--------+----------+----------+-----------+------------+-------------+--------+--------+--------+------------+--------+--------+
-|appIndex|executorID|totalCores|maxMem     |maxOnHeapMem|maxOffHeapMem|exec_cpu|exec_mem|exec_gpu|exec_offheap|task_cpu|task_gpu|
-+--------+----------+----------+-----------+------------+-------------+--------+--------+--------+------------+--------+--------+
-|1       |0         |4         |13984648396|13984648396 |0            |null    |null    |null    |null        |null    |null    |
-|1       |1         |4         |13984648396|13984648396 |0            |null    |null    |null    |null        |null    |null    |
++--------+-----------------+------------+-------------+-----------+------------+-------------+--------------+------------------+---------------+-------+-------+
+|appIndex|resourceProfileId|numExecutors|executorCores|maxMem     |maxOnHeapMem|maxOffHeapMem|executorMemory|numGpusPerExecutor|executorOffHeap|taskCpu|taskGpu|
++--------+-----------------+------------+-------------+-----------+------------+-------------+--------------+------------------+---------------+-------+-------+
+|1       |0                |1           |4            |11264537395|11264537395 |0            |20480         |1                 |0              |1      |0.0    |
+|1       |1                |2           |2            |3247335014 |3247335014  |0            |6144          |2                 |0              |2      |2.0    |
++--------+-----------------+------------+-------------+-----------+------------+-------------+-------------+--------------+------------------+---------------+-------+-------+
 ```
+
+- Matching SQL IDs Across Applications:
+```
+Matching SQL IDs Across Applications:
++-----------------------+-----------------------+
+|app-20210329165943-0103|app-20210329170243-0018|
++-----------------------+-----------------------+
+|0                      |0                      |
+|1                      |1                      |
+|2                      |2                      |
+|3                      |3                      |
+|4                      |4                      |
++-----------------------+-----------------------+
+```
+
+There is one column per application. There is a row per SQL ID. The SQL IDs are matched
+primarily on the structure of the SQL query run, and then on the order in which they were
+run. Be aware that this is truly the structure of the query. Two queries that do similar
+things, but on different data are likely to match as the same.  An effort is made to
+also match between CPU plans and GPU plans so in most cases the same query run on the
+CPU and on the GPU will match.
+
+- Matching Stage IDs Across Applications:
+```
+Matching Stage IDs Across Applications:
++-----------------------+-----------------------+
+|app-20210329165943-0103|app-20210329170243-0018|
++-----------------------+-----------------------+
+|31                     |31                     |
+|32                     |32                     |
+|33                     |33                     |
+|39                     |38                     |
+|40                     |40                     |
+|41                     |41                     |
++-----------------------+-----------------------+
+```
+
+There is one column per application. There is a row per stage ID. If a SQL query matches
+between applications, see Matching SQL IDs Across Applications, then an attempt is made
+to match stages within that application to each other.  This has the same issues with
+stages when generating a dot graph.  This can be especially helpful when trying to compare
+large queries and Spark happened to assign the stage IDs slightly differently, or in some
+cases there are a different number of stages because of slight differences in the plan. This
+is a best effort, and it is not guaranteed to match up all stages in a plan.
 
 - Compare Rapids related Spark properties side-by-side:
 ```
 Compare Rapids Properties which are set explicitly:
 +-------------------------------------------+----------+----------+
-|key                                        |value_app1|value_app2|
+|propertyName                               |appIndex_1|appIndex_2|
 +-------------------------------------------+----------+----------+
 |spark.rapids.memory.pinnedPool.size        |null      |2g        |
 |spark.rapids.sql.castFloatToDecimal.enabled|null      |true      |
@@ -329,7 +360,22 @@ as a graph in pdf format using below command:
 ```bash
 dot -Tpdf ./app-20210507103057-0000-query-0/0.dot > app-20210507103057-0000.pdf
 ```
-The pdf file has the SQL plan graph with metrics.
+
+Or to svg using
+```bash
+dot -Tsvg ./app-20210507103057-0000-query-0/0.dot > app-20210507103057-0000.svg
+```
+The pdf or svg file has the SQL plan graph with metrics. The svg file will act a little
+more like the Spark UI and include extra information for nodes when hovering over it with
+a mouse.
+
+As a part of this an effort is made to associate parts of the graph with the Spark stage it is a
+part of. This is not 100% accurate. Some parts of the plan like `TakeOrderedAndProject` may
+be a part of multiple stages and only one of the stages will be selected. `Exchanges` are purposely
+left out of the sections associated with a stage because they cover at least 2 stages and possibly
+more. In other cases we may not be able to determine what stage something was a part of. In those
+cases we mark it as `UNKNOWN STAGE`. This is because we rely on metrics to link a node to a stage.
+If a stage hs no metrics, like if the query crashed early, we cannot establish that link.
 
 - Generate timeline for application (--generate-timeline option):
 
@@ -402,7 +448,7 @@ SQL Duration and Executor CPU Time Percent
 ```
 Shuffle Skew Check: (When task's Shuffle Read Size > 3 * Avg Stage-level size)
 +--------+-------+--------------+------+-------+---------------+--------------+-----------------+----------------+----------------+----------+----------------------------------------------------------------------------------------------------+
-|appIndex|stageId|stageAttemptId|taskId|attempt|taskDurationSec|avgDurationSec|taskShuffleReadMB|avgShuffleReadMB|taskPeakMemoryMB|successful|endReason_first100char                                                                              |
+|appIndex|stageId|stageAttemptId|taskId|attempt|taskDurationSec|avgDurationSec|taskShuffleReadMB|avgShuffleReadMB|taskPeakMemoryMB|successful|reason                                                                                              |
 +--------+-------+--------------+------+-------+---------------+--------------+-----------------+----------------+----------------+----------+----------------------------------------------------------------------------------------------------+
 |1       |2      |0             |2222  |0      |111.11         |7.7           |2222.22          |111.11          |0.01            |false     |ExceptionFailure(ai.rapids.cudf.CudfException,cuDF failure at: /dddd/xxxxxxx/ccccc/bbbbbbbbb/aaaaaaa|
 |1       |2      |0             |2224  |1      |222.22         |8.8           |3333.33          |111.11          |0.01            |false     |ExceptionFailure(ai.rapids.cudf.CudfException,cuDF failure at: /dddd/xxxxxxx/ccccc/bbbbbbbbb/aaaaaaa|
@@ -416,46 +462,47 @@ Below are examples.
 - Print failed tasks:
 ```
 Failed tasks:
-+-------+--------------+------+-------+----------------------------------------------------------------------------------------------------+
-|stageId|stageAttemptId|taskId|attempt|endReason_first100char                                                                              |
-+-------+--------------+------+-------+----------------------------------------------------------------------------------------------------+
-|4      |0             |2842  |0      |ExceptionFailure(ai.rapids.cudf.CudfException,cuDF failure at: /home/jenkins/agent/workspace/jenkins|
-|4      |0             |2858  |0      |TaskKilled(another attempt succeeded,List(AccumulableInfo(453,None,Some(22000),None,false,true,None)|
-|4      |0             |2884  |0      |TaskKilled(another attempt succeeded,List(AccumulableInfo(453,None,Some(21148),None,false,true,None)|
-|4      |0             |2908  |0      |TaskKilled(another attempt succeeded,List(AccumulableInfo(453,None,Some(20420),None,false,true,None)|
-|4      |0             |3410  |1      |ExceptionFailure(ai.rapids.cudf.CudfException,cuDF failure at: /home/jenkins/agent/workspace/jenkins|
-+-------+--------------+------+-------+----------------------------------------------------------------------------------------------------+
++--------+-------+--------------+------+-------+----------------------------------------------------------------------------------------------------+
+|appIndex|stageId|stageAttemptId|taskId|attempt|failureReason                                                                              |
++--------+-------+--------------+------+-------+----------------------------------------------------------------------------------------------------+
+|3       |4      |0             |2842  |0      |ExceptionFailure(ai.rapids.cudf.CudfException,cuDF failure at: /home/jenkins/agent/workspace/jenkins|
+|3       |4      |0             |2858  |0      |TaskKilled(another attempt succeeded,List(AccumulableInfo(453,None,Some(22000),None,false,true,None)|
+|3       |4      |0             |2884  |0      |TaskKilled(another attempt succeeded,List(AccumulableInfo(453,None,Some(21148),None,false,true,None)|
+|3       |4      |0             |2908  |0      |TaskKilled(another attempt succeeded,List(AccumulableInfo(453,None,Some(20420),None,false,true,None)|
+|3       |4      |0             |3410  |1      |ExceptionFailure(ai.rapids.cudf.CudfException,cuDF failure at: /home/jenkins/agent/workspace/jenkins|
+|4       |1      |0             |1948  |1      |TaskKilled(another attempt succeeded,List(AccumulableInfo(290,None,Some(1107),None,false,true,None),|
++--------+-------+--------------+------+-------+----------------------------------------------------------------------------------------------------+
 ```
 
 - Print failed stages:
 ```
 Failed stages:
-+-------+---------+-------------------------------------+--------+---------------------------------------------------+
-|stageId|attemptId|name                                 |numTasks|failureReason_first100char                         |
-+-------+---------+-------------------------------------+--------+---------------------------------------------------+
-|4      |0        |attachTree at Spark300Shims.scala:624|1000    |Job 0 cancelled as part of cancellation of all jobs|
-+-------+---------+-------------------------------------+--------+---------------------------------------------------+
++--------+-------+---------+-------------------------------------+--------+---------------------------------------------------+
+|appIndex|stageId|attemptId|name                                 |numTasks|failureReason                                      |
++--------+-------+---------+-------------------------------------+--------+---------------------------------------------------+
+|3       |4      |0        |attachTree at Spark300Shims.scala:624|1000    |Job 0 cancelled as part of cancellation of all jobs|
++--------+-------+---------+-------------------------------------+--------+---------------------------------------------------+
 ```
 
 - Print failed jobs:
 ```
 Failed jobs:
-+-----+---------+------------------------------------------------------------------------+
-|jobID|jobResult|failedReason_first100char                                               |
-+-----+---------+------------------------------------------------------------------------+
-|0    |JobFailed|java.lang.Exception: Job 0 cancelled as part of cancellation of all jobs|
-+-----+---------+------------------------------------------------------------------------+
++--------+-----+---------+------------------------------------------------------------------------+
+|appIndex|jobID|jobResult|failureReason                                                           |
++--------+-----+---------+------------------------------------------------------------------------+
+|3       |0    |JobFailed|java.lang.Exception: Job 0 cancelled as part of cancellation of all j...|
++--------+-----+---------+------------------------------------------------------------------------+
 ```
 
 - SQL Plan HealthCheck:
 
   Prints possibly unsupported query plan nodes such as `$Lambda` key word means dataset API.
 ```
-+-----+------+--------+---------------------------------------------------------------------------------------------------+
-|sqlID|nodeID|nodeName|nodeDesc_first100char                                                                              |
-+-----+------+--------+---------------------------------------------------------------------------------------------------+
-|1    |8     |Filter  |Filter $line21.$read$$iw$$iw$$iw$$iw$$iw$$iw$$iw$$iw$$Lambda$4578/0x00000008019f1840@4b63e04c.apply|
-+-----+------+--------+---------------------------------------------------------------------------------------------------+
++--------+-----+------+--------+---------------------------------------------------------------------------------------------------+
+|appIndex|sqlID|nodeID|nodeName|nodeDescription                                                                                    |
++--------+-----+------+--------+---------------------------------------------------------------------------------------------------+
+|3       |1    |8     |Filter  |Filter $line21.$read$$iw$$iw$$iw$$iw$$iw$$iw$$iw$$iw$$Lambda$4578/0x00000008019f1840@4b63e04c.apply|
++--------+-----+------+--------+---------------------------------------------------------------------------------------------------+
 ```
 
 ### How to use this tool
@@ -529,6 +576,11 @@ default filesystem, it supports local filesystem or HDFS. There are separate fil
 under the same sub-directory when using the options to generate query visualizations or printing the SQL plans.
 
 The output location can be changed using the `--output-directory` option. Default is current directory.
+
+There is a 100 characters limit for each output column. If the result of the column exceeds this limit, it is suffixed with ... for that column.
+
+ResourceProfile ids are parsed for the event logs that are from Spark 3.1 or later. ResourceProfileId column is added in the output table for such event logs. 
+A ResourceProfile allows the user to specify executor and task requirements for an RDD that will get applied during a stage. This allows the user to change the resource requirements between stages.
   
 Note: We suggest you also save the output of the `spark-submit` or `spark-shell` to a log file for troubleshooting.
 
