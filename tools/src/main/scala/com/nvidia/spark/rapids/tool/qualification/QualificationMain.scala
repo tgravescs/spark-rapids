@@ -60,8 +60,8 @@ object QualificationMain extends Logging {
       return (0, Seq[QualificationSummaryInfo]())
     }
 
-    val qual = new Qualification(outputDirectory, numOutputRows, hadoopConf, timeout)
-    val res = qual.qualifyApps(eventLogInfos, nThreads)
+    val qual = new Qualification(outputDirectory, numOutputRows, hadoopConf, timeout, nThreads)
+    val res = qual.qualifyApps(eventLogInfos)
     (0, res)
   }
 }

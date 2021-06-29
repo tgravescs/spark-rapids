@@ -19,7 +19,6 @@ package com.nvidia.spark.rapids.tool.qualification
 import java.util.concurrent.{ConcurrentLinkedQueue, Executors, ThreadPoolExecutor, TimeUnit}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.nvidia.spark.rapids.tool.EventLogInfo
@@ -33,28 +32,25 @@ import org.apache.spark.sql.rapids.tool.qualification._
  * reports.
  */
 class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
-    timeout: Option[Long]) extends Logging {
+    timeout: Option[Long], nThreads: Int) extends Logging {
 
-  val allApps = new ConcurrentLinkedQueue[QualificationSummaryInfo]()
-  val waitTimeInSec = timeout.getOrElse(36000L)
+  private val allApps = new ConcurrentLinkedQueue[QualificationSummaryInfo]()
+  private val waitTimeInSec = timeout.getOrElse(36000L)
 
-  class QualifThread(path: EventLogInfo) extends Runnable {
-    def run {
-      qualifyApp(path, numRows, hadoopConf)
-    }
+  private val threadFactory = new ThreadFactoryBuilder()
+    .setDaemon(true).setNameFormat("qualTool" + "-%d").build()
+  logInfo(s"Threadpool size is $nThreads")
+  private val threadPool = Executors.newFixedThreadPool(nThreads, threadFactory)
+    .asInstanceOf[ThreadPoolExecutor]
+
+  class QualifyThread(path: EventLogInfo) extends Runnable {
+    def run: Unit = qualifyApp(path, numRows, hadoopConf)
   }
 
-  def qualifyApps(
-      allPaths: Seq[EventLogInfo],
-      nThreads: Int): Seq[QualificationSummaryInfo] = {
-    val threadFactory = new ThreadFactoryBuilder()
-      .setDaemon(true).setNameFormat("qualTool" + "-%d").build()
-    logInfo(s"Threadpool size is $nThreads")
-    val threadPool = Executors.newFixedThreadPool(nThreads, threadFactory)
-      .asInstanceOf[ThreadPoolExecutor]
+  def qualifyApps(allPaths: Seq[EventLogInfo]): Seq[QualificationSummaryInfo] = {
     try {
       allPaths.foreach { path =>
-        threadPool.submit(new QualifThread(path))
+        threadPool.submit(new QualifyThread(path))
       }
     } catch {
       case e: Exception =>
@@ -63,13 +59,13 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
         if (!threadPool.awaitTermination(5, TimeUnit.SECONDS)) {
           threadPool.shutdownNow()
         }
-    } finally {
-      threadPool.shutdown()
-      if (!threadPool.awaitTermination(waitTimeInSec, TimeUnit.SECONDS)) {
-        logError(s"Processing log files took longer then $waitTimeInSec seconds," +
-          " stopping processing any more event logs")
-        threadPool.shutdownNow()
-      }
+    }
+    // wait for the threads to finish processing the files
+    threadPool.shutdown()
+    if (!threadPool.awaitTermination(waitTimeInSec, TimeUnit.SECONDS)) {
+      logError(s"Processing log files took longer then $waitTimeInSec seconds," +
+        " stopping processing any more event logs")
+      threadPool.shutdownNow()
     }
 
     val allAppsSum = allApps.asScala.toSeq
