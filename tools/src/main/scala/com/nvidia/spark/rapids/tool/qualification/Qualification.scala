@@ -21,6 +21,7 @@ import scala.collection.mutable.ArrayBuffer
 import com.nvidia.spark.rapids.tool.EventLogInfo
 import org.apache.hadoop.conf.Configuration
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.rapids.tool.qualification._
 
 /**
@@ -38,13 +39,13 @@ object Qualification {
     allPaths.foreach { path =>
       val app = QualAppInfo.createApp(path, numRows, hadoopConf)
       if (!app.isDefined) {
-        println("No Applications found that contain SQL!")
+        logWarning("No Applications found that contain SQL!")
       } else {
         val qualSumInfo = app.get.aggregateStats()
         if (qualSumInfo.isDefined) {
           allAppsSum += qualSumInfo.get
         } else {
-          println(s"No aggregated stats for event log at: $path")
+          logWarning(s"No aggregated stats for event log at: $path")
         }
       }
     }

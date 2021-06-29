@@ -27,13 +27,14 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.json4s.jackson.JsonMethods.parse
 
 import org.apache.spark.deploy.history.{EventLogFileReader, EventLogFileWriter}
+import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.SparkListenerEvent
 import org.apache.spark.util.{JsonProtocol, Utils}
 
 abstract class AppBase(
     val numOutputRows: Int,
     val eventLogInfo: EventLogInfo,
-    val hadoopConf: Configuration) {
+    val hadoopConf: Configuration) extends Logging {
 
   var sparkVersion: String = ""
   var appEndTime: Option[Long] = None
@@ -61,7 +62,7 @@ abstract class AppBase(
   protected def processEvents(): Unit = {
     val eventlog = eventLogInfo.eventLog
 
-    println("Parsing Event Log: " + eventlog.toString)
+    logInfo("Parsing Event Log: " + eventlog.toString)
 
     // at this point all paths should be valid event logs or event log dirs
     val fs = eventlog.getFileSystem(hadoopConf)
@@ -86,15 +87,15 @@ abstract class AppBase(
             }
             catch {
               case e: ClassNotFoundException =>
-                println(s"ClassNotFoundException: ${e.getMessage}")
+                logWarning(s"ClassNotFoundException: ${e.getMessage}")
             }
           }
         }
       }
     } else {
-      System.err.println(s"Error getting reader for ${eventlog.getName}")
+      logError(s"Error getting reader for ${eventlog.getName}")
     }
-    println("Total number of events parsed: " + totalNumEvents)
+    logInfo("Total number of events parsed: " + totalNumEvents)
   }
 
   protected def isDataSetPlan(desc: String): Boolean = {

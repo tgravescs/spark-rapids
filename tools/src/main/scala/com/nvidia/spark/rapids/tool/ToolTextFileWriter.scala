@@ -41,7 +41,7 @@ class ToolTextFileWriter(finalOutputDir: String, logFileName: String) {
 
   def close(): Unit = {
     outFile.foreach { file =>
-      println(s"Output location: $textOutputPath")
+      logInfo(s"Output location: $textOutputPath")
       file.flush()
       file.close()
       outFile = None
