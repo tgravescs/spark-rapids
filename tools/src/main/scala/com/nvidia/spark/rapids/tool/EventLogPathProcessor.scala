@@ -25,6 +25,7 @@ import scala.collection.mutable.LinkedHashMap
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path, PathFilter}
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.deploy.history.{EventLogFileReader, EventLogFileWriter}
 import org.apache.spark.sql.rapids.tool.profiling.ApplicationInfo
 
@@ -36,7 +37,7 @@ case class ApacheSparkEventLog(override val eventLog: Path) extends EventLogInfo
 case class DatabricksEventLog(override val eventLog: Path) extends EventLogInfo
 
 
-object EventLogPathProcessor {
+object EventLogPathProcessor extends Logging {
   // Apache Spark event log prefixes
   val EVENT_LOG_DIR_NAME_PREFIX = "eventlog_v2_"
   val EVENT_LOG_FILE_NAME_PREFIX = "events_"

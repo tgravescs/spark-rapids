@@ -18,13 +18,14 @@ package com.nvidia.spark.rapids.tool
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, FSDataOutputStream, Path}
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.rapids.tool.ToolUtils
 
 /**
  * Class for writing local files, allows writing to distributed file systems.
  */
-class ToolTextFileWriter(finalOutputDir: String, logFileName: String) {
+class ToolTextFileWriter(finalOutputDir: String, logFileName: String) extends Logging {
 
   private val textOutputPath = new Path(s"$finalOutputDir/$logFileName")
   private val fs = FileSystem.get(textOutputPath.toUri, new Configuration())

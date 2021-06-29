@@ -28,7 +28,7 @@ import org.apache.spark.sql.rapids.tool.qualification._
  * Scores the applications for GPU acceleration and outputs the
  * reports.
  */
-object Qualification {
+object Qualification extends Logging {
 
   def qualifyApps(
       allPaths: Seq[EventLogInfo],
