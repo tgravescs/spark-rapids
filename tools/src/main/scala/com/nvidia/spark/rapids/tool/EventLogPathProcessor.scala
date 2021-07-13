@@ -224,7 +224,7 @@ object EventLogPathProcessor extends Logging {
     if (filterArgs.keys.exists(_=="applicationName") &&
         filterArgs("applicationName").toOption != None) {
       println("Application name exists")
-        val finalevents = filteredLogs.map { x =>
+      val finalevents = filteredLogs.map { x =>
         val temp = new AppFilter(numOutputRows, x._1, hadoopConf)
         temp.processEvents()
         (temp.appInfo, x)
@@ -234,10 +234,12 @@ object EventLogPathProcessor extends Logging {
       val applicationN = filterArgs("applicationName")
 
       // THIS SEEMS TO BE INCORRECT
-      val test:scala.collection.Map[EventLogInfo, Long] = finalevents.map { x =>
-          x._1.get.appName match {
-            case a if a.equals(applicationN) => x._2
-            //case _ =>
+      val test = finalevents.map { case(optQualInfo, y) =>
+        optQualInfo.get.appName match {
+            case a if a.equals(applicationN) =>
+              logWarning(s"matched on ${optQualInfo.get.appName} and $applicationN")
+              y
+            case _ => logWarning(s"didnt' match on ${optQualInfo.get.appName}")
           }
       }
       println("FINAL ANSWER IS: ")
