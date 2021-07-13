@@ -236,7 +236,7 @@ object EventLogPathProcessor extends Logging {
       // THIS SEEMS TO BE INCORRECT
       val test = finalevents.map { case(optQualInfo, y) =>
         optQualInfo.get.appName match {
-            case a if a.equals(applicationN) =>
+            case a if a.equals(applicationN.getOrElse("")) =>
               logWarning(s"matched on ${optQualInfo.get.appName} and $applicationN")
               y
             case _ => logWarning(s"didnt' match on ${optQualInfo.get.appName}")
