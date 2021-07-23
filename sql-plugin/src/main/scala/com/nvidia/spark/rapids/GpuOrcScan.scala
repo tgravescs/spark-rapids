@@ -614,13 +614,14 @@ class GpuOrcPartitionReader(
         dumpDataToFile(dataBuffer, dataSize, Array(partFile), Option(debugDumpPrefix), Some("orc"))
         val fieldNames = ctx.updatedReadSchema.getFieldNames.asScala.toArray
         val includedColumns = ctx.requestedMapping.map(_.map(fieldNames(_))).getOrElse(fieldNames)
-        logWarning("read to table included columns is: " + includedColumns)
+        logWarning("read to table included columns is: " + includedColumns.mkString(","))
         val parseOpts = ORCOptions.builder()
           .withTimeUnit(DType.TIMESTAMP_MICROSECONDS)
           .withNumPyTypes(false)
           .includeColumn(includedColumns:_*)
           .build()
 
+        logWarning("include col names: " + parseOpts.getIncludedColumnNames())
         // about to start using the GPU
         GpuSemaphore.acquireIfNecessary(TaskContext.get())
 
