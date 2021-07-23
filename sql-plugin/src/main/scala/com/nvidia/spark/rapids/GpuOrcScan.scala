@@ -949,7 +949,9 @@ private case class GpuOrcFileFilterHandler(
 
 
       val evolution = new SchemaEvolution(orcReader.getSchema, readerOpts.getSchema, readerOpts)
-      logWarning("new schema evolution: " + evolution)
+      logWarning("new schema evolution: " + evolution.getFileIncluded)
+      logWarning("new schema evolution: " + evolution.getFileSchema)
+
       val (sargApp, sargColumns) = getSearchApplier(evolution,
         orcFileReaderOpts.getUseUTCTimestamp)
       val splitStripes = orcReader.getStripes.asScala.filter(s =>
