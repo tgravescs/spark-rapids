@@ -802,7 +802,6 @@ private case class GpuOrcFileFilterHandler(
     val orcFieldNames = reader.getSchema.getFieldNames.asScala
     logWarning("orcfield names are: "  + orcFieldNames)
     logWarning("orcfield names indexed are: "  + orcFieldNames.zipWithIndex)
-
     if (orcFieldNames.isEmpty) {
       // SPARK-8501: Some old empty ORC files always have an empty schema stored in their footer.
       None
@@ -836,7 +835,7 @@ private case class GpuOrcFileFilterHandler(
           }, true))
         } else {
           // Do case-insensitive resolution only if in case-insensitive mode
-          val caseInsensitiveOrcFieldMap = orcFieldNames.groupBy(_.toLowerCase(Locale.ROOT))
+          val caseInsensitiveOrcFieldMap = orcFieldNames.zipWithIndex.groupBy(_._1.toLowerCase(Locale.ROOT))
           logWarning("caseInsensitiveOrcFieldMap: " + caseInsensitiveOrcFieldMap)
           Some((requiredSchema.fieldNames.zipWithIndex.map { case (requiredFieldName, idx) =>
             caseInsensitiveOrcFieldMap
@@ -850,7 +849,9 @@ private case class GpuOrcFileFilterHandler(
                     + s"$matchedOrcFieldsString in case-insensitive mode")
                 } else {
                   logWarning("matched on " + matchedOrcFields + " index: " + idx)
-                  idx
+                  // need to get index in original schema not index in requested
+                  // idx
+                  matchedOrcFields.head._2
                 }
               }.getOrElse(-1)
           }, true))
