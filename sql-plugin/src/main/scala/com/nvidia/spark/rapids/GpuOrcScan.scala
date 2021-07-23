@@ -1027,6 +1027,7 @@ private case class GpuOrcFileFilterHandler(
         writerVersion: OrcFile.WriterVersion): Seq[OrcOutputStripe] = {
       val fileIncluded = calcOrcFileIncluded(evolution)
       val columnMapping = columnRemap(fileIncluded)
+      logWarning("column mapping: " + columnMapping.mkString(","))
       val result = new ArrayBuffer[OrcOutputStripe](stripes.length)
       stripes.foreach { stripe =>
         val stripeFooter = dataReader.readStripeFooter(stripe)
