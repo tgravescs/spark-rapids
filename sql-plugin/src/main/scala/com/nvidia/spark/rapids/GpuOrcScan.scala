@@ -345,6 +345,11 @@ trait OrcCommonFunctions extends OrcCodecWritingHelper with Logging {
       logWarning("build read schema: " + readerSchema)
       readerSchema
     } else {
+      val orcSchema = ctx.fileSchema
+      val orcSchemaNames = orcSchema.getFieldNames
+      logWarning("file context is: " + ctx.fileSchema)
+      logWarning("file schema names: " +  orcSchemaNames)
+
       logWarning("build reader schema get reader schema: " + ctx.evolution.getReaderSchema)
       ctx.evolution.getReaderSchema
     }
