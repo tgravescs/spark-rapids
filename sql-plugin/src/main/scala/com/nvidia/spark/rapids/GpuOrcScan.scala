@@ -746,6 +746,9 @@ private case class GpuOrcFileFilterHandler(
         null
       } else {
         val (requestedColIds, canPruneCols) = resultedColPruneInfo.get
+        logWarning("resultscol prune ids: " + requestedColIds.mkString(","))
+        logWarning("resultscol prune cols: " + canPruneCols)
+
         // TODO - weren't doing anything with this
         val foo = orcResultSchemaString(canPruneCols, dataSchema, readDataSchema, partitionSchema, conf)
         logWarning("orc results schema string is: " + foo)
