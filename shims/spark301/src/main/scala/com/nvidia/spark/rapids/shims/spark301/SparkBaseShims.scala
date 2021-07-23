@@ -25,6 +25,7 @@ import org.apache.arrow.vector.ValueVector
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.schema.MessageType
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.SparkEnv
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
@@ -67,7 +68,7 @@ import org.apache.spark.unsafe.types.CalendarInterval
  * that version should be folded into here. Any shim methods that are implemented only in the
  * updated base version can then be removed from the shim interface.
  */
-abstract class SparkBaseShims extends SparkShims {
+abstract class SparkBaseShims extends SparkShims with Logging {
 
   override def parquetRebaseReadKey: String =
     SQLConf.LEGACY_PARQUET_REBASE_MODE_IN_READ.key
@@ -375,7 +376,11 @@ abstract class SparkBaseShims extends SparkShims {
         override def tagSelfForGpu(): Unit =
           GpuOrcScanBase.tagSupport(this)
 
-        override def convertToGpu(): Scan =
+        override def convertToGpu(): Scan = {
+          logWarning("data schema: " + a.dataSchema)
+          logWarning("read data schema: " + a.readDataSchema)
+          logWarning("read part data schema: " + a.readPartitionSchema)
+
           GpuOrcScan(a.sparkSession,
             a.hadoopConf,
             a.fileIndex,
@@ -387,6 +392,7 @@ abstract class SparkBaseShims extends SparkShims {
             a.partitionFilters,
             a.dataFilters,
             conf)
+        }
       })
   ).map(r => (r.getClassFor.asSubclass(classOf[Scan]), r)).toMap
 

@@ -247,6 +247,8 @@ case class GpuOrcPartitionReaderFactory(
     val conf = broadcastedConf.value.value
     OrcConf.IS_SCHEMA_EVOLUTION_CASE_SENSITIVE.setBoolean(conf, isCaseSensitive)
 
+    logWarning("read data schema is: " + dataSchema)
+
     logWarning("read data schema is: " + readDataSchema)
     logWarning("partition data schema is: " + partitionSchema)
 
