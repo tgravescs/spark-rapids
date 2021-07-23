@@ -942,7 +942,9 @@ private case class GpuOrcFileFilterHandler(
       }
       val updatedReadSchema = checkSchemaCompatibility(orcReader.getSchema, readerOpts.getSchema,
         readerOpts.getIsSchemaEvolutionCaseAware)
+      logWarning("updated read schema: " + updatedReadSchema)
       val evolution = new SchemaEvolution(orcReader.getSchema, readerOpts.getSchema, readerOpts)
+      logWarning("new schema evolution: " + evolution)
       val (sargApp, sargColumns) = getSearchApplier(evolution,
         orcFileReaderOpts.getUseUTCTimestamp)
       val splitStripes = orcReader.getStripes.asScala.filter(s =>
@@ -1027,6 +1029,7 @@ private case class GpuOrcFileFilterHandler(
         writerVersion: OrcFile.WriterVersion): Seq[OrcOutputStripe] = {
       val fileIncluded = calcOrcFileIncluded(evolution)
       val columnMapping = columnRemap(fileIncluded)
+      logWarning("file included is: " + fileIncluded.mkString(","))
       logWarning("column mapping: " + columnMapping.mkString(","))
       val result = new ArrayBuffer[OrcOutputStripe](stripes.length)
       stripes.foreach { stripe =>
