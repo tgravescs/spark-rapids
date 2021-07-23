@@ -18,6 +18,7 @@ package com.nvidia.spark.rapids
 
 import org.apache.hadoop.conf.Configuration
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.FileSourceScanExec
@@ -30,7 +31,7 @@ import org.apache.spark.util.SerializableConfiguration
 /**
  * A FileFormat that allows reading ORC files with the GPU.
  */
-class GpuReadOrcFileFormat extends OrcFileFormat with GpuReadFileFormatWithMetrics {
+class GpuReadOrcFileFormat extends OrcFileFormat with GpuReadFileFormatWithMetrics with Logging  {
   override def buildReaderWithPartitionValuesAndMetrics(
       sparkSession: SparkSession,
       dataSchema: StructType,
@@ -43,6 +44,10 @@ class GpuReadOrcFileFormat extends OrcFileFormat with GpuReadFileFormatWithMetri
     val sqlConf = sparkSession.sessionState.conf
     val broadcastedHadoopConf =
       sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
+    logWarning("2 data schema file format: " + dataSchema)
+    logWarning("2 required schema file format: " + requiredSchema)
+    logWarning("2 partitionSchema schema file format: " + partitionSchema)
+
     val factory = GpuOrcPartitionReaderFactory(
       sqlConf,
       broadcastedHadoopConf,
