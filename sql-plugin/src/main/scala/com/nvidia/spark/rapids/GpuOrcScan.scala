@@ -354,7 +354,7 @@ trait OrcCommonFunctions extends OrcCodecWritingHelper with Logging {
       logWarning("file schema names: " +  orcSchemaNames)
       logWarning("build reader schema get reader schema: " + ctx.evolution.getReaderSchema)
       logWarning("build reader schema get reader schema: " + ctx.evolution.getFileSchema)
-      logWarning("build reader schema get reader schema: " + ctx.evolution.getFileIncluded)
+      logWarning("build reader schema get reader schema: " + ctx.evolution.getFileIncluded.mkString(","))
 
       // need to keep original schema order of stripes
 
@@ -544,7 +544,6 @@ trait OrcPartitionReaderBase extends OrcCommonFunctions with Logging with Arm wi
         copyStripeData(ctx, outChannel, stripe.inputDataRanges)
         val stripeFooterStartOffset = rawOut.getPos
         stripe.footer.writeTo(protoWriter)
-        logWarning("strip footer is: " + stripe.footer.)
         protoWriter.flush()
         codecStream.flush()
         stripe.infoBuilder.setFooterLength(rawOut.getPos - stripeFooterStartOffset)
