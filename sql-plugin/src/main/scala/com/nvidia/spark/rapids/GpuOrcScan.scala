@@ -690,7 +690,7 @@ object OrcMultiFileThreadPoolFactory extends Logging {
   }
 }
 
-private object OrcTools extends Arm {
+private object OrcTools extends Arm with Logging {
 
   /** Build an ORC data reader using OrcPartitionReaderContext */
   def buildDataReader(ctx: OrcPartitionReaderContext): DataReader = {
@@ -718,6 +718,7 @@ private object OrcTools extends Arm {
       }
       val maxDiskRangeChunkLimit = OrcConf.ORC_MAX_DISK_RANGE_CHUNK_LIMIT.getInt(conf)
       val file = filePath.getFileSystem(conf).open(filePath)
+      logWarning("file schema for reader is: " + fileSchema)
       //noinspection ScalaDeprecation
       RecordReaderUtils.createDefaultDataReader(DataReaderProperties.builder()
         .withBufferSize(compressionSize)
