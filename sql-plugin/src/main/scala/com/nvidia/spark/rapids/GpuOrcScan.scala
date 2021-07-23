@@ -1032,6 +1032,7 @@ private case class GpuOrcFileFilterHandler(
       stripes.foreach { stripe =>
         val stripeFooter = dataReader.readStripeFooter(stripe)
         val needStripe = if (sargApp != null) {
+          logWarning("sargsApp in")
           // An ORC schema is a single struct type describing the schema fields
           val orcFileSchema = evolution.getFileType(0)
           val orcIndex = dataReader.readRowIndex(stripe, orcFileSchema, stripeFooter,
