@@ -345,6 +345,7 @@ trait OrcCommonFunctions extends OrcCodecWritingHelper with Logging {
       logWarning("build read schema: " + readerSchema)
       readerSchema
     } else {
+      logWarning("build reader schema get reader schema: " + ctx.evolution.getReaderSchema)
       ctx.evolution.getReaderSchema
     }
   }
@@ -613,6 +614,7 @@ class GpuOrcPartitionReader(
         dumpDataToFile(dataBuffer, dataSize, Array(partFile), Option(debugDumpPrefix), Some("orc"))
         val fieldNames = ctx.updatedReadSchema.getFieldNames.asScala.toArray
         val includedColumns = ctx.requestedMapping.map(_.map(fieldNames(_))).getOrElse(fieldNames)
+        logWarning("read to table included columns is: " + includedColumns)
         val parseOpts = ORCOptions.builder()
           .withTimeUnit(DType.TIMESTAMP_MICROSECONDS)
           .withNumPyTypes(false)
@@ -630,6 +632,8 @@ class GpuOrcPartitionReader(
         logDebug(s"GPU batch size: $batchSizeBytes bytes")
         maxDeviceMemory = max(batchSizeBytes, maxDeviceMemory)
         val numColumns = table.getNumberOfColumns
+        val foo = table.getColumn(0).getType()
+        logWarning(" column 0 type is : " + foo)
         if (readDataSchema.length != numColumns) {
           table.close()
           throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
