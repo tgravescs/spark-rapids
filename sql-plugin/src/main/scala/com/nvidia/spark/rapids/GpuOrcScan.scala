@@ -621,7 +621,8 @@ class GpuOrcPartitionReader(
           .includeColumn(includedColumns:_*)
           .build()
 
-        logWarning("include col names: " + parseOpts.getIncludedColumnNames())
+
+        logWarning("include col names: " + parseOpts)
         // about to start using the GPU
         GpuSemaphore.acquireIfNecessary(TaskContext.get())
 
@@ -855,8 +856,8 @@ private case class GpuOrcFileFilterHandler(
                 } else {
                   logWarning("matched on " + matchedOrcFields + " index: " + idx)
                   // need to get index in original schema not index in requested
-                  // idx
-                  matchedOrcFields.head._2
+                  idx
+                  // matchedOrcFields.head._2
                 }
               }.getOrElse(-1)
           }, true))
