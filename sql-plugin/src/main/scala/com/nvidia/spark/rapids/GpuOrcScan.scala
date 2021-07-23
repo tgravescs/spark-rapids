@@ -762,8 +762,12 @@ private case class GpuOrcFileFilterHandler(
           "[BUG] requested column IDs do not match required schema")
         // Only need to filter ORC's schema evolution if it cannot prune directly
         val requestedMapping = if (canPruneCols) {
+          logWarning("2 requested mapping is None")
+
           None
         } else {
+          logWarning("2 requested mapping is: " + requestedColIds.mkString(","))
+
           Some(requestedColIds)
         }
         val fullSchema = StructType(dataSchema ++ partitionSchema)
@@ -912,6 +916,11 @@ private case class GpuOrcFileFilterHandler(
       OrcProto.Stream.Kind.ROW_INDEX)
 
     def getOrcPartitionReaderContext: OrcPartitionReaderContext = {
+      if (requestedMapping.isDefined) {
+        logWarning("requested mapping is: " + requestedMapping.get.mkString(","))
+      } else {
+        logWarning("requested mapping is on")
+      }
       val updatedReadSchema = checkSchemaCompatibility(orcReader.getSchema, readerOpts.getSchema,
         readerOpts.getIsSchemaEvolutionCaseAware)
       val evolution = new SchemaEvolution(orcReader.getSchema, readerOpts.getSchema, readerOpts)
@@ -1119,7 +1128,7 @@ private case class GpuOrcFileFilterHandler(
         }
         newReadSchema.addField(fileFieldName, fileType)
       }
-
+      logWarning("check schema compat: " + newReadSchema)
       newReadSchema
     }
 
