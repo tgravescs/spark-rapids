@@ -355,7 +355,7 @@ trait OrcCommonFunctions extends OrcCodecWritingHelper with Logging {
       logWarning("build reader schema get reader schema: " + ctx.evolution.getReaderSchema)
       logWarning("build reader schema get reader schema: " + ctx.evolution.getFileSchema)
       logWarning("build reader schema get reader schema: " + ctx.evolution.getFileIncluded.mkString(","))
-
+      
       // need to keep original schema order of stripes
 
       val readerSchema = TypeDescription.createStruct()
@@ -795,6 +795,7 @@ private case class GpuOrcFileFilterHandler(
           Some(requestedColIds)
         }
         val fullSchema = StructType(dataSchema ++ partitionSchema)
+        logWarning(" full schema is: "  + fullSchema)
         val readerOpts = buildOrcReaderOpts(conf, orcReader, partFile, fullSchema)
 
         withResource(OrcTools.buildDataReader(orcReader.getCompressionSize,
@@ -818,6 +819,7 @@ private case class GpuOrcFileFilterHandler(
     OrcFilters.createFilter(fullSchema, pushedFilters).foreach { f =>
       readerOpts.searchArgument(f, fullSchema.fieldNames)
     }
+
     readerOpts
   }
 
@@ -977,7 +979,7 @@ private case class GpuOrcFileFilterHandler(
      * @param fileIncluded indicator per column in the ORC file whether it should be included
      * @return column mapping array
      */
-    private def columnRemap(fileIncluded: Array[Boolean]): Array[Int] = {
+    def columnRemap(fileIncluded: Array[Boolean]): Array[Int] = {
       var nextOutputColumnId = 0
       val result = new Array[Int](fileIncluded.length)
       fileIncluded.indices.foreach { i =>
@@ -998,7 +1000,7 @@ private case class GpuOrcFileFilterHandler(
      * @param evolution ORC schema evolution instance
      * @return per-column inclusion flags
      */
-    private def calcOrcFileIncluded(evolution: SchemaEvolution): Array[Boolean] = {
+    def calcOrcFileIncluded(evolution: SchemaEvolution): Array[Boolean] = {
       if (requestedMapping.isDefined) {
         // ORC schema has no column names, so need to filter based on index
         val orcSchema = orcReader.getSchema
