@@ -1087,6 +1087,7 @@ private case class GpuOrcFileFilterHandler(
         val streamEndOffset = inputFileOffset + stream.getLength
 
         if (stream.hasKind && stream.hasColumn) {
+          logWarning("build output stream stream column: " + stream.getColumn)
           val outputColumn = columnMapping(stream.getColumn)
           val wantKind = !ORC_STREAM_KINDS_IGNORED.contains(stream.getKind)
           if (outputColumn >= 0 && wantKind) {
