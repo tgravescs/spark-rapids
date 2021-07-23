@@ -254,6 +254,7 @@ case class GpuOrcPartitionReaderFactory(
 
     val ctx = filterHandler.filterStripes(partFile, dataSchema, readDataSchema,
       partitionSchema)
+    logWarning("context shcme evolution: " + ctx.evolution.getReaderSchema)
     if (ctx == null) {
       new EmptyPartitionReader[ColumnarBatch]
     } else {
@@ -352,6 +353,9 @@ trait OrcCommonFunctions extends OrcCodecWritingHelper with Logging {
       logWarning("file context is: " + ctx.fileSchema)
       logWarning("file schema names: " +  orcSchemaNames)
       logWarning("build reader schema get reader schema: " + ctx.evolution.getReaderSchema)
+      logWarning("build reader schema get reader schema: " + ctx.evolution.getFileSchema)
+      logWarning("build reader schema get reader schema: " + ctx.evolution.getFileIncluded)
+
       // need to keep original schema order of stripes
 
       val readerSchema = TypeDescription.createStruct()
@@ -540,6 +544,7 @@ trait OrcPartitionReaderBase extends OrcCommonFunctions with Logging with Arm wi
         copyStripeData(ctx, outChannel, stripe.inputDataRanges)
         val stripeFooterStartOffset = rawOut.getPos
         stripe.footer.writeTo(protoWriter)
+        logWarning("strip footer is: " + stripe.footer.)
         protoWriter.flush()
         codecStream.flush()
         stripe.infoBuilder.setFooterLength(rawOut.getPos - stripeFooterStartOffset)
