@@ -1089,6 +1089,8 @@ private case class GpuOrcFileFilterHandler(
         if (stream.hasKind && stream.hasColumn) {
           logWarning("build output stream stream column: " + stream.getColumn)
           val outputColumn = columnMapping(stream.getColumn)
+          logWarning("build output  stream column: " + outputColumn)
+
           val wantKind = !ORC_STREAM_KINDS_IGNORED.contains(stream.getKind)
           if (outputColumn >= 0 && wantKind) {
             // remap the column ID when copying the stream descriptor
