@@ -943,6 +943,11 @@ private case class GpuOrcFileFilterHandler(
       val updatedReadSchema = checkSchemaCompatibility(orcReader.getSchema, readerOpts.getSchema,
         readerOpts.getIsSchemaEvolutionCaseAware)
       logWarning("updated read schema: " + updatedReadSchema)
+      logWarning("orc reader  read schema: " + orcReader.getSchema)
+      logWarning("readeropts read schema: " + readerOpts.getSchema)
+      logWarning("readeropts: " + readerOpts)
+
+
       val evolution = new SchemaEvolution(orcReader.getSchema, readerOpts.getSchema, readerOpts)
       logWarning("new schema evolution: " + evolution)
       val (sargApp, sargColumns) = getSearchApplier(evolution,
