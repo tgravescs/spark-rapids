@@ -230,7 +230,7 @@ case class GpuOrcPartitionReaderFactory(
     partitionSchema: StructType,
     pushedFilters: Array[Filter],
     @transient rapidsConf: RapidsConf,
-    metrics : Map[String, GpuMetric]) extends FilePartitionReaderFactory with Arm {
+    metrics : Map[String, GpuMetric]) extends FilePartitionReaderFactory with Arm with Logging {
   private val isCaseSensitive = sqlConf.caseSensitiveAnalysis
   private val debugDumpPrefix = rapidsConf.orcDebugDumpPrefix
   private val maxReadBatchSizeRows: Integer = rapidsConf.maxReadBatchSizeRows
@@ -246,6 +246,9 @@ case class GpuOrcPartitionReaderFactory(
   override def buildColumnarReader(partFile: PartitionedFile): PartitionReader[ColumnarBatch] = {
     val conf = broadcastedConf.value.value
     OrcConf.IS_SCHEMA_EVOLUTION_CASE_SENSITIVE.setBoolean(conf, isCaseSensitive)
+
+    logWarning("read data schema is: " + readDataSchema)
+    logWarning("partition data schema is: " + partitionSchema)
 
     val ctx = filterHandler.filterStripes(partFile, dataSchema, readDataSchema,
       partitionSchema)
@@ -303,7 +306,7 @@ case class OrcPartitionReaderContext(
     requestedMapping: Option[Array[Int]])
 
 /** Collections of some common functions for ORC */
-trait OrcCommonFunctions extends OrcCodecWritingHelper {
+trait OrcCommonFunctions extends OrcCodecWritingHelper with Logging {
 
   /** Copy the stripe to the channel */
   protected def copyStripeData(
@@ -337,6 +340,7 @@ trait OrcCommonFunctions extends OrcCodecWritingHelper {
         val fieldType = orcSchemaChildren.get(orcColIdx)
         readerSchema.addField(fieldName, fieldType.clone())
       }
+      logWarning("build read schema: " + readerSchema)
       readerSchema
     } else {
       ctx.evolution.getReaderSchema
