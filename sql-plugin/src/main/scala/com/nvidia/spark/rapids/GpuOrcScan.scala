@@ -801,6 +801,8 @@ private case class GpuOrcFileFilterHandler(
       reader: Reader): Option[(Array[Int], Boolean)] = {
     val orcFieldNames = reader.getSchema.getFieldNames.asScala
     logWarning("orcfield names are: "  + orcFieldNames)
+    logWarning("orcfield names indexed are: "  + orcFieldNames.zipWithIndex)
+
     if (orcFieldNames.isEmpty) {
       // SPARK-8501: Some old empty ORC files always have an empty schema stored in their footer.
       None
@@ -835,6 +837,7 @@ private case class GpuOrcFileFilterHandler(
         } else {
           // Do case-insensitive resolution only if in case-insensitive mode
           val caseInsensitiveOrcFieldMap = orcFieldNames.groupBy(_.toLowerCase(Locale.ROOT))
+          logWarning("caseInsensitiveOrcFieldMap: " + caseInsensitiveOrcFieldMap)
           Some((requiredSchema.fieldNames.zipWithIndex.map { case (requiredFieldName, idx) =>
             caseInsensitiveOrcFieldMap
               .get(requiredFieldName.toLowerCase(Locale.ROOT))
@@ -846,6 +849,7 @@ private case class GpuOrcFileFilterHandler(
                   throw new RuntimeException(s"""Found duplicate field(s) "$requiredFieldName": """
                     + s"$matchedOrcFieldsString in case-insensitive mode")
                 } else {
+                  logWarning("matched on " + matchedOrcFields + " index: " + idx)
                   idx
                 }
               }.getOrElse(-1)
