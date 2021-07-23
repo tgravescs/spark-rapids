@@ -648,7 +648,7 @@ class GpuOrcPartitionReader(
 
 // Singleton threadpool that is used across all the tasks.
 // Please note that the TaskContext is not set in these threads and should not be used.
-object OrcMultiFileThreadPoolFactory {
+object OrcMultiFileThreadPoolFactory extends Logging {
   private var threadPool: Option[ThreadPoolExecutor] = None
 
   private def initThreadPool(
@@ -718,7 +718,7 @@ private object OrcTools extends Arm {
 private case class GpuOrcFileFilterHandler(
     @transient sqlConf: SQLConf,
     broadcastedConf: Broadcast[SerializableConfiguration],
-    pushedFilters: Array[Filter]) extends Arm {
+    pushedFilters: Array[Filter]) extends Arm with Logging {
 
   private val isCaseSensitive = sqlConf.caseSensitiveAnalysis
 
@@ -739,13 +739,16 @@ private case class GpuOrcFileFilterHandler(
     withResource(OrcFile.createReader(filePath, orcFileReaderOpts)) { orcReader =>
       val resultedColPruneInfo = requestedColumnIds(isCaseSensitive, dataSchema,
         readDataSchema, orcReader)
+      logWarning("resultscol prune info: " + resultedColPruneInfo)
       if (resultedColPruneInfo.isEmpty) {
         // Be careful when the OrcPartitionReaderContext is null, we should change
         // reader to EmptyPartitionReader for throwing exception
         null
       } else {
         val (requestedColIds, canPruneCols) = resultedColPruneInfo.get
-        orcResultSchemaString(canPruneCols, dataSchema, readDataSchema, partitionSchema, conf)
+        // TODO - weren't doing anything with this
+        val foo = orcResultSchemaString(canPruneCols, dataSchema, readDataSchema, partitionSchema, conf)
+        logWarning("orc results schema string is: " + foo)
         assert(requestedColIds.length == readDataSchema.length,
           "[BUG] requested column IDs do not match required schema")
         // Only need to filter ORC's schema evolution if it cannot prune directly
@@ -794,6 +797,7 @@ private case class GpuOrcFileFilterHandler(
       requiredSchema: StructType,
       reader: Reader): Option[(Array[Int], Boolean)] = {
     val orcFieldNames = reader.getSchema.getFieldNames.asScala
+    logWarning("orcfield names are: "  + orcFieldNames)
     if (orcFieldNames.isEmpty) {
       // SPARK-8501: Some old empty ORC files always have an empty schema stored in their footer.
       None
