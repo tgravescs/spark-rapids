@@ -203,6 +203,11 @@ abstract class SparkBaseShims extends SparkShims with Logging {
           override def convertToGpu(): GpuExec = {
             val sparkSession = wrapped.relation.sparkSession
             val options = wrapped.relation.options
+            logWarning("convert to gpu: " + wrapped)
+            logWarning("convert to gpu: " + wrapped.relation.dataSchema)
+            logWarning("convert to gpu: " + wrapped.relation.partitionSchema)
+            logWarning("convert to gpu: " + wrapped.relation.schema)
+
 
             val location = replaceWithAlluxioPathIfNeeded(
               conf,
