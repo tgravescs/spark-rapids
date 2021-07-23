@@ -194,6 +194,11 @@ abstract class SparkBaseShims extends SparkShims with Logging {
         ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.STRUCT + TypeSig.MAP +
             TypeSig.ARRAY + TypeSig.DECIMAL).nested(), TypeSig.all),
         (fsse, conf, p, r) => new SparkPlanMeta[FileSourceScanExec](fsse, conf, p, r) {
+          logWarning("fsse: " + fsse.schema)
+          logWarning("fsse: " + fsse.requiredSchema)
+          logWarning("fsse: " + fsse.relation.dataSchema)
+
+
 
           // partition filters and data filters are not run on the GPU
           override val childExprs: Seq[ExprMeta[_]] = Seq.empty
