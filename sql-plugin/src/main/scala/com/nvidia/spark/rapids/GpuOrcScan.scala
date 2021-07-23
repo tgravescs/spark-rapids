@@ -949,7 +949,7 @@ private case class GpuOrcFileFilterHandler(
 
 
       val evolution = new SchemaEvolution(orcReader.getSchema, readerOpts.getSchema, readerOpts)
-      logWarning("new schema evolution: " + evolution.getFileIncluded)
+      logWarning("new schema evolution: " + evolution.getFileIncluded.mkString(","))
       logWarning("new schema evolution: " + evolution.getFileSchema)
 
       val (sargApp, sargColumns) = getSearchApplier(evolution,
