@@ -347,11 +347,25 @@ trait OrcCommonFunctions extends OrcCodecWritingHelper with Logging {
     } else {
       val orcSchema = ctx.fileSchema
       val orcSchemaNames = orcSchema.getFieldNames
+      val orcSchemaChildren = orcSchema.getChildren
+
       logWarning("file context is: " + ctx.fileSchema)
       logWarning("file schema names: " +  orcSchemaNames)
-
       logWarning("build reader schema get reader schema: " + ctx.evolution.getReaderSchema)
-      ctx.evolution.getReaderSchema
+      // need to keep original schema order of stripes
+
+      val readerSchema = TypeDescription.createStruct()
+      Seq(0,1).foreach { orcColIdx =>
+        val fieldName = orcSchemaNames.get(orcColIdx)
+        val fieldType = orcSchemaChildren.get(orcColIdx)
+        readerSchema.addField(fieldName, fieldType.clone())
+      }
+
+
+      // ctx.evolution.getReaderSchema
+      logWarning("NOW build reader schema get reader schema: " + readerSchema)
+
+      readerSchema
     }
   }
 
