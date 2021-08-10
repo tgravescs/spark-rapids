@@ -28,8 +28,8 @@ abstract class GpuBroadcastJoinMeta[INPUT <: SparkPlan](plan: INPUT,
 
   def canBuildSideBeReplaced(buildSide: SparkPlanMeta[_]): Boolean = {
     buildSide.wrapped match {
-      case BroadcastQueryStageExec(_, _: GpuBroadcastExchangeExecBase) => true
-      case BroadcastQueryStageExec(_, reused: ReusedExchangeExec) =>
+      case BroadcastQueryStageExec(_, _: GpuBroadcastExchangeExecBase, _: SparkPlan) => true
+      case BroadcastQueryStageExec(_, reused: ReusedExchangeExec, _: SparkPlan) =>
         reused.child.isInstanceOf[GpuBroadcastExchangeExecBase]
       case reused: ReusedExchangeExec => reused.child.isInstanceOf[GpuBroadcastExchangeExecBase]
       case _: GpuBroadcastExchangeExecBase => true
@@ -39,8 +39,8 @@ abstract class GpuBroadcastJoinMeta[INPUT <: SparkPlan](plan: INPUT,
 
   def verifyBuildSideWasReplaced(buildSide: SparkPlan): Unit = {
     val buildSideOnGpu = buildSide match {
-      case BroadcastQueryStageExec(_, _: GpuBroadcastExchangeExecBase) => true
-      case BroadcastQueryStageExec(_, reused: ReusedExchangeExec) =>
+      case BroadcastQueryStageExec(_, _: GpuBroadcastExchangeExecBase, _: SparkPlan) => true
+      case BroadcastQueryStageExec(_, reused: ReusedExchangeExec, _: SparkPlan) =>
         reused.child.isInstanceOf[GpuBroadcastExchangeExecBase]
       case reused: ReusedExchangeExec => reused.child.isInstanceOf[GpuBroadcastExchangeExecBase]
       case _: GpuBroadcastExchangeExecBase => true
