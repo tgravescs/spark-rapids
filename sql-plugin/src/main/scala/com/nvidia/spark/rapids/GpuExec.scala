@@ -23,6 +23,7 @@ import com.nvidia.spark.rapids.StorageTier.{DEVICE, DISK, GDS, HOST, StorageTier
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, ExprId}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
+import org.apache.spark.sql.catalyst.plans.logical.Statistics
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.vectorized.ColumnarBatch
@@ -193,6 +194,8 @@ object GpuExec {
 
 trait GpuExec extends SparkPlan with Arm {
   import GpuMetric._
+
+  override def computeStats(): Statistics = Statistics(sizeInBytes = conf.defaultSizeInBytes)
   /**
    * If true is returned batches after this will be coalesced.  This should
    * really be used in cases where it is known that the size of a batch may
