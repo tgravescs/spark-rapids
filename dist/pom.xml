@@ -219,6 +219,7 @@
           <createDependencyReducedPom>true</createDependencyReducedPom>
           <relocations>
             <!-- Shade ORC and Hive and their dependencies -->
+            <!--
             <relocation>
               <pattern>org.apache.orc.</pattern>
               <shadedPattern>${rapids.shade.package}.orc.</shadedPattern>
@@ -248,6 +249,7 @@
               <pattern>org.apache.commons.lang.</pattern>
               <shadedPattern>${rapids.shade.package}.org.apache.commons.lang.</shadedPattern>
             </relocation>
+-->
 
             <!-- Shade Guava, Flatbuffers, and Protobuf -->
             <relocation>
@@ -266,10 +268,13 @@
               <filters>
                 <filter>
                   <artifact>com.nvidia:rapids-4-spark_2.12</artifact>
+                  <!--
                   <includes>
                     <include>META-INF/**</include>
                   </includes>
+-->
                   <excludes>
+                    <exclude>META-INF/**</exclude>
                     <exclude>META-INF/services/**</exclude>
                   </excludes>
                 </filter>
