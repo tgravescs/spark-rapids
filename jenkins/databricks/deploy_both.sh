@@ -16,11 +16,11 @@
 #
 
 set -e
-rm -rf deploy
-mkdir -p deploy
-cd deploy
-tar -zxf ../spark-rapids-built.tgz
-cd spark-rapids
+#rm -rf deploy
+#mkdir -p deploy
+#cd deploy
+#tar -zxf ../spark-rapids-built.tgz
+#cd spark-rapids
 echo "Maven mirror is $MVN_URM_MIRROR"
 SERVER_ID='snapshots'
 SERVER_URL="$URM_URL-local"
