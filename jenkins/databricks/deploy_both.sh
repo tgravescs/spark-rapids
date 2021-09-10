@@ -33,7 +33,11 @@ DB_SHIM_DIRECTORY=${SPARK_VERSION_STR}db
 DBJARFPATH=./rapids-4-spark-aggregator_$SCALA_VERSION-$SPARK_PLUGIN_JAR_VERSION-${SPARK_VERSION_STR}db.jar
 #rapids-4-spark-aggregator_2.12-21.10.0-SNAPSHOT-spark301db.jar  rapids-4-spark-aggregator_2.12-21.10.0-SNAPSHOT-spark311db.jar
 echo "Databricks jar is: $DBJARFPATH"
-mvn -B deploy:deploy-file $MVN_URM_MIRROR -Durl=$SERVER_URL -DrepositoryId=$SERVER_ID \
+echo mvn -B deploy:deploy-file $MVN_URM_MIRROR -Durl=$SERVER_URL -DrepositoryId=$SERVER_ID \
     -Dfile=./rapids-4-spark-aggregator_2.12-21.10.0-SNAPSHOT-spark301db.jar -DpomFile=./dependency-reduced-pom.xml
 mvn -B deploy:deploy-file $MVN_URM_MIRROR -Durl=$SERVER_URL -DrepositoryId=$SERVER_ID \
+    -Dfile=./rapids-4-spark-aggregator_2.12-21.10.0-SNAPSHOT-spark301db.jar -DpomFile=./dependency-reduced-pom.xml -Dclassifier=spark301db
+echo mvn -B deploy:deploy-file $MVN_URM_MIRROR -Durl=$SERVER_URL -DrepositoryId=$SERVER_ID \
     -Dfile=./rapids-4-spark-aggregator_2.12-21.10.0-SNAPSHOT-spark311db.jar -DpomFile=./dependency-reduced-pom.xml
+mvn -B deploy:deploy-file $MVN_URM_MIRROR -Durl=$SERVER_URL -DrepositoryId=$SERVER_ID \
+    -Dfile=./rapids-4-spark-aggregator_2.12-21.10.0-SNAPSHOT-spark311db.jar -DpomFile=./dependency-reduced-pom.xml -Dclassifier=spark311db
