@@ -29,12 +29,6 @@ MVN_GET_CMD="mvn org.apache.maven.plugins:maven-dependency-plugin:2.8:get -B \
 
 rm -rf $ARTF_ROOT && mkdir -p $ARTF_ROOT
 
-# NOTE this needs to match the version below that is set to run nightly
-SPARK_VER=3.0.1
-export SPARK_HOME="$ARTF_ROOT/spark-$SPARK_VER-bin-hadoop3.2"
-export PATH="$SPARK_HOME/bin:$SPARK_HOME/sbin:$PATH"
-tar zxf $SPARK_HOME.tgz -C $ARTF_ROOT && \
-        rm -f $SPARK_HOME.tgz
 
 # Install all the versions we support
 mvn -U -B -Dbuildver=302 clean install $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER
@@ -46,6 +40,16 @@ mvn -U -B -Dbuildver=313 clean install $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR
 mvn -U -B -Dbuildver=311cdh clean install $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER
 # note that Spark 3.2.0 tests fail right now so just skip them
 mvn -U -B -Dbuildver=320 clean install $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER -DskipTests
+
+# wait to setup SPARK_HOME until here so the other versions above don't run integration tests, we only want one build to
+# run integration tests
+# NOTE this needs to match the version below that is set to run nightly
+SPARK_VER=3.0.1
+export SPARK_HOME="$ARTF_ROOT/spark-$SPARK_VER-bin-hadoop3.2"
+export PATH="$SPARK_HOME/bin:$SPARK_HOME/sbin:$PATH"
+tar zxf $SPARK_HOME.tgz -C $ARTF_ROOT && \
+        rm -f $SPARK_HOME.tgz
+
 mvn -U -B -Dbuildver=301 -PsnapshotsWithDatabricks clean deploy $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER \
     -Dpytest.TEST_TAGS='' -Dpytest.TEST_TYPE="nightly"
 
