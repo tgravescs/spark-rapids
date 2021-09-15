@@ -19,6 +19,8 @@ package com.nvidia.spark.rapids.shims.spark311db
 import java.net.URI
 import java.nio.ByteBuffer
 
+import com.esotericsoftware.kryo.Kryo
+import com.esotericsoftware.kryo.serializers.{JavaSerializer => KryoJavaSerializer}
 import com.databricks.sql.execution.window.RunningWindowFunctionExec
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.shims.spark311db._
@@ -55,7 +57,8 @@ import org.apache.spark.sql.execution.python._
 import org.apache.spark.sql.execution.window.WindowExecBase
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.rapids._
-import org.apache.spark.sql.rapids.execution.{GpuBroadcastExchangeExecBase, GpuBroadcastNestedLoopJoinExecBase, GpuShuffleExchangeExecBase, JoinTypeChecks}
+import org.apache.spark.sql.rapids.execution.{GpuBroadcastExchangeExecBase, GpuBroadcastNestedLoopJoinExecBase, GpuShuffleExchangeExecBase, JoinTypeChecks, SerializeConcatHostBuf
+fersDeserializeBatch, SerializeBatchDeserializeHostBuffer}
 import org.apache.spark.sql.rapids.execution.python.{GpuAggregateInPandasExecMeta, GpuArrowEvalPythonExec, GpuMapInPandasExecMeta, GpuPythonUDF}
 import org.apache.spark.sql.rapids.execution.python.shims.spark311db._
 import org.apache.spark.sql.rapids.shims.spark311db._
@@ -835,4 +838,11 @@ abstract class SparkBaseShims extends Spark30XShims {
 
   override def broadcastModeTransform(mode: BroadcastMode, rows: Array[InternalRow]): Any =
     mode.transform(rows, TaskContext.get.taskMemoryManager())
+
+  override def registerKryoClasses(kryo: Kryo): Unit = {
+    kryo.register(classOf[SerializeConcatHostBuffersDeserializeBatch],
+      new KryoJavaSerializer())
+    kryo.register(classOf[SerializeBatchDeserializeHostBuffer],
+      new KryoJavaSerializer())
+  }
 }

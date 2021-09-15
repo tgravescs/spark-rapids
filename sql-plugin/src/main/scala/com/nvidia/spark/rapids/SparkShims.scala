@@ -19,6 +19,8 @@ package com.nvidia.spark.rapids
 import java.net.URI
 import java.nio.ByteBuffer
 
+import com.esotericsoftware.kryo.Kryo
+
 import org.apache.arrow.memory.ReferenceManager
 import org.apache.arrow.vector.ValueVector
 import org.apache.hadoop.fs.{FileStatus, Path}
@@ -266,6 +268,8 @@ trait SparkShims {
   def skipAssertIsOnTheGpu(plan: SparkPlan): Boolean
 
   def leafNodeDefaultParallelism(ss: SparkSession): Int
+
+  def registerKryoClasses(kryo: Kryo): Unit
 }
 
 abstract class SparkCommonShims extends SparkShims {
