@@ -29,6 +29,8 @@ MVN_GET_CMD="mvn org.apache.maven.plugins:maven-dependency-plugin:2.8:get -B \
 
 rm -rf $ARTF_ROOT && mkdir -p $ARTF_ROOT
 
+# NOTE this needs to match the version below that is set to run nightly
+SPARK_VER=3.0.1
 export SPARK_HOME="$ARTF_ROOT/spark-$SPARK_VER-bin-hadoop3.2"
 export PATH="$SPARK_HOME/bin:$SPARK_HOME/sbin:$PATH"
 tar zxf $SPARK_HOME.tgz -C $ARTF_ROOT && \
