@@ -1003,6 +1003,7 @@
                         <!-- Apache Rat excludes target folder for projects that are included by
                         default, but there are some projects that are conditionally included.  -->
                         <exclude>**/target/**/*</exclude>
+                        <exclude>testspark/**</exclude>
                     </excludes>
                 </configuration>
             </plugin>

@@ -22,7 +22,7 @@ set -ex
 ## export 'M2DIR' so that shims can get the correct cudf/spark dependency info
 export M2DIR="$WORKSPACE/.m2"
 
-ARTF_ROOT="$WORKSPACE/jars"
+ARTF_ROOT="$WORKSPACE/testspark"
 MVN_GET_CMD="mvn org.apache.maven.plugins:maven-dependency-plugin:2.8:get -B \
         -Dmaven.repo.local=$WORKSPACE/.m2 \
             $MVN_URM_MIRROR -Ddest=$ARTF_ROOT"
