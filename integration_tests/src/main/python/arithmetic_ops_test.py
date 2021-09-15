@@ -522,7 +522,7 @@ def _test_div_by_zero(ansi_mode, expr):
     if ansi_mode == 'ansi':
         assert_gpu_and_cpu_error(df_fun=lambda spark: div_by_zero_func(spark).collect(),
                                  conf=ansi_conf,
-                                 error_message='java.lang.ArithmeticException: divide by zero')
+                                 error_message='ArithmeticException: divide by zero')
     else:
         assert_gpu_and_cpu_are_equal_collect(div_by_zero_func, ansi_conf)
 
