@@ -618,7 +618,7 @@
         <pytest.TEST_TAGS>not qarun</pytest.TEST_TAGS>
         <pytest.TEST_PARALLEL/>
         <pytest.TEST_TYPE>developer</pytest.TEST_TYPE>
-        <rat.consoleOutput>false</rat.consoleOutput>
+        <rat.consoleOutput>true</rat.consoleOutput>
         <!--
          If you update a dependency version so it is no longer a SNAPSHOT
          please update the snapshot-shims profile as well so it is accurate -->
