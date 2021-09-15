@@ -21,6 +21,19 @@ set -ex
 
 ## export 'M2DIR' so that shims can get the correct cudf/spark dependency info
 export M2DIR="$WORKSPACE/.m2"
+
+ARTF_ROOT="$WORKSPACE/jars"
+MVN_GET_CMD="mvn org.apache.maven.plugins:maven-dependency-plugin:2.8:get -B \
+        -Dmaven.repo.local=$WORKSPACE/.m2 \
+            $MVN_URM_MIRROR -Ddest=$ARTF_ROOT"
+
+rm -rf $ARTF_ROOT && mkdir -p $ARTF_ROOT
+
+export SPARK_HOME="$ARTF_ROOT/spark-$SPARK_VER-bin-hadoop3.2"
+export PATH="$SPARK_HOME/bin:$SPARK_HOME/sbin:$PATH"
+tar zxf $SPARK_HOME.tgz -C $ARTF_ROOT && \
+        rm -f $SPARK_HOME.tgz
+
 # Install all the versions we support
 mvn -U -B -Dbuildver=302 clean install $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER
 mvn -U -B -Dbuildver=303 clean install $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER
