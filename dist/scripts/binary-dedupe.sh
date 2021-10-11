@@ -47,9 +47,6 @@ find . -path './parallel-world/spark*' -type f -name '*class' | \
   sort -k3 -k2,2 -u | uniq -f 2 -c | grep '^\s\+1 .*' | \
   awk '{$1=""; $3=""; print $0 }' | tr -s ' ' | sed 's/\ /\//g' > "$SPARK3XX_COMMON_TXT"
 
-echo "$SPARK3XX_COMMON_TXT contains:"
-cat $SPARK3XX_COMMON_TXT
-
 echo "Deleting duplicates of spark3xx-common classes"
 xargs --arg-file="$SPARK3XX_COMMON_TXT" -P 6 -n 1 -I% bash -c "
     shim=\$(echo '%' | cut -d'/' -f 2)
@@ -57,6 +54,7 @@ xargs --arg-file="$SPARK3XX_COMMON_TXT" -P 6 -n 1 -I% bash -c "
     class_dir=\$(dirname \$class_file)
     dest_dir=$SPARK3XX_COMMON_DIR/\$class_dir
     mkdir -p \$dest_dir && \
+      echo \$class_file && \
       cp ./parallel-world/\$shim\/\$class_file \$dest_dir/ && \
       find ./parallel-world -path './parallel-world/spark3*/'\$class_file -exec rm {} + || exit 255
   "
