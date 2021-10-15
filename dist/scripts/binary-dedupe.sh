@@ -63,7 +63,7 @@ export -f remove_duplicates
 
 echo "Deleting duplicates of spark3xx-common classes"
 # https://stackoverflow.com/questions/11003418/calling-shell-functions-with-xargs
-xargs --arg-file="$SPARK3XX_COMMON_TXT" -P 6 -n 1 -I% bash -c 'remove_duplicates "$@"' _ %
+cat $SPARK3XX_COMMON_TXT | xargs -P 6 -n 1 -I% bash -c 'remove_duplicates "$@"' _ %
 
 mv "$SPARK3XX_COMMON_DIR" parallel-world/
 
@@ -110,5 +110,5 @@ done
 
 # Remove unshimmed classes from parallel worlds
 echo Removing duplicates of unshimmed classes
-xargs --arg-file="$UNSHIMMED_LIST_TXT" -P 6 -n 100 -I% \
+cat $UNSHIMMED_LIST_TXT | xargs -P 6 -n 100 -I% \
   find . -path './parallel-world/spark*/%' | xargs rm || exit 255
