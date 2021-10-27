@@ -292,6 +292,9 @@ trait SparkShims {
   * This is because the `legacyStatisticalAggregate` config was introduced in Spark 3.1.0.
   */
   def getLegacyStatisticalAggregate(): Boolean
+
+  // Create a SortExec and if it can be replaced with GPU version do so
+  def addSortExec(requiredOrdering: Seq[SortOrder], child: SparkPlan, conf: RapidsConf): SparkPlan
 }
 
 abstract class SparkCommonShims extends SparkShims {

@@ -142,6 +142,16 @@ rename any subdirectories in the shim like:
 update the package names in all the files you copied
 Update class names for Spark312Shims 
 
+if adding a non apache version you may need to add a Version class similar to ClouderaShimVersion
+sql-plugin/src/main/scala/com/nvidia/spark/rapids/VersionUtils.scala
+sql-plugin/src/main/scala/com/nvidia/spark/rapids/SparkShims.scala
+
+Also grep for ClouderaShimVersion and see if the new one you are adding needs to be added in similar places
+
+use that in ./src/main/scala/com/nvidia/spark/rapids/shims/spark312syn/SparkShimServiceProvider.scala
+
+update dist/pom.xml to have the new version included in the profiles that apply... ie snapshot or not, if its
+customer specific and won't be combined you can skip this step
 
 
 
