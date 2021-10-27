@@ -121,6 +121,30 @@ The version-specific directory names have one of the following forms / use cases
 - `src/main/302to312-cdh` contains code that applies to Cloudera CDH shims between 3.0.2 *inclusive*,
    3.1.2 *inclusive*
 
+### Adding a new shim layer
+Update top level pom.xml to create a new profile for the new shim layer by copying the closest existing 
+version of release3XX profile. Give it a unique name. for Apache versions it should just be the Apache version
+like 320 for Apache Spark 3.2.0.  For customer specific releases pick a abreviation that is close, like 311db is
+for Databricks based on Spark 3.1.1. Look at the source directories included in that profile to make sure it
+makes sense for your new version. For instance if you were adding a new major version like 3.3.0 you wouldn't want
+to include 320 for instance.  If you need files from there you would move those to some common directory like 320+-all,
+see the naming information in above section. If its a minor version then keeping them the same makes sense until
+you know there are differences.
+Also add the spark312.version definition
+
+update shims/pom.xml to also create a similar profile.
+Create a shims/spark3XXX directory that matches the version you are adding. Again copying an existing version if
+probably easiest way to start and then update the versions in it. 
+Once you copied it, update the pom file for the version and description.
+rename any subdirectories in the shim like:
+./src/main/scala/com/nvidia/spark/rapids/shims/spark312 ./src/main/scala/com/nvidia/spark/rapids/shims/spark312syn
+
+update the package names in all the files you copied
+Update class names for Spark312Shims 
+
+
+
+
 
 ### Setting up an Integrated Development Environment
 

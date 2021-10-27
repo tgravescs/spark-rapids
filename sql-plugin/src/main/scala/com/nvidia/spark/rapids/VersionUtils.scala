@@ -36,6 +36,10 @@ object VersionUtils {
     ShimLoader.getSparkShims.getSparkShimVersion.isInstanceOf[ClouderaShimVersion]
   }
 
+  lazy val isSynapse: Boolean = {
+    ShimLoader.getSparkShims.getSparkShimVersion.isInstanceOf[SynapseShimVersion]
+  }
+
   lazy val isEMR: Boolean = {
     ShimLoader.getSparkShims.getSparkShimVersion.isInstanceOf[EMRShimVersion]
   }
@@ -46,6 +50,7 @@ object VersionUtils {
       case SparkShimVersion(a, b, c) => (a, b, c)
       case DatabricksShimVersion(a, b, c) => (a, b, c)
       case ClouderaShimVersion(a, b, c, _) => (a, b, c)
+      case SynapseShimVersion(a, b, c, _) => (a, b, c)
       case EMRShimVersion(a, b, c) => (a, b, c)
     }
     val fullVersion = ((major.toLong * 1000) + minor) * 1000 + bugfix

@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package com.nvidia.spark.rapids.shims.spark312
+package com.nvidia.spark.rapids.shims.spark312syn
 
-import com.nvidia.spark.rapids.{SparkShims, SparkShimVersion}
+import com.nvidia.spark.rapids.{SparkShims, SparkShimVersion, SynapseShimVersion}
 
 object SparkShimServiceProvider {
-  // TODO - temporarily break so doesn't match 312syn
-  val VERSION = SparkShimVersion(3, 1, 20)
+  // TODO update to use SynapseShimVersion with real version they use
+  val VERSION = SparkShimVersion(3, 1, 2)
   val VERSIONNAMES = Seq(s"$VERSION")
 }
 
@@ -31,6 +31,6 @@ class SparkShimServiceProvider extends com.nvidia.spark.rapids.SparkShimServiceP
   }
 
   def buildShim: SparkShims = {
-    new Spark312Shims()
+    new Spark312SYNShims()
   }
 }
