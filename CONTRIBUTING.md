@@ -122,7 +122,7 @@ The version-specific directory names have one of the following forms / use cases
    3.1.2 *inclusive*
 
 ### Adding a new shim layer
-Update top level pom.xml to create a new profile for the new shim layer by copying the closest existing 
+Update top level pom.xml to create a new profile for the new shim layer by copying the closest existing
 version of release3XX profile. Give it a unique name. for Apache versions it should just be the Apache version
 like 320 for Apache Spark 3.2.0.  For customer specific releases pick a abreviation that is close, like 311db is
 for Databricks based on Spark 3.1.1. Look at the source directories included in that profile to make sure it
@@ -134,13 +134,13 @@ Also add the spark312.version definition
 
 update shims/pom.xml to also create a similar profile.
 Create a shims/spark3XXX directory that matches the version you are adding. Again copying an existing version if
-probably easiest way to start and then update the versions in it. 
+probably easiest way to start and then update the versions in it.
 Once you copied it, update the pom file for the version and description.
 rename any subdirectories in the shim like:
 ./src/main/scala/com/nvidia/spark/rapids/shims/spark312 ./src/main/scala/com/nvidia/spark/rapids/shims/spark312syn
 
 update the package names in all the files you copied
-Update class names for Spark312Shims 
+Update class names for Spark312Shims
 
 if adding a non apache version you may need to add a Version class similar to ClouderaShimVersion
 sql-plugin/src/main/scala/com/nvidia/spark/rapids/VersionUtils.scala
@@ -152,8 +152,6 @@ use that in ./src/main/scala/com/nvidia/spark/rapids/shims/spark312syn/SparkShim
 
 update dist/pom.xml to have the new version included in the profiles that apply... ie snapshot or not, if its
 customer specific and won't be combined you can skip this step
-
-
 
 
 ### Setting up an Integrated Development Environment
