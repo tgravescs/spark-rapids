@@ -46,19 +46,4 @@ class Spark312SYNShims extends SparkBaseShims {
     new ParquetFilters(schema, pushDownDate, pushDownTimestamp, pushDownDecimal, pushDownStartWith,
       pushDownInFilterThreshold, caseSensitive)
   }
-
-  override def addSortExec(requiredOrdering: Seq[SortOrder], child: SparkPlan,
-      conf: RapidsConf): SparkPlan = {
-    // TODO - Update to whatever your SortExec does......
-    val sort = SortExec(requiredOrdering, global = false, child = child)
-    // just specifically check Sort to see if we can change Sort to GPUSort
-    val sortMeta = new GpuSortMeta(sort, conf, None, new SortDataFromReplacementRule)
-    sortMeta.initReasons()
-    sortMeta.tagPlanForGpu()
-    if (sortMeta.canThisBeReplaced) {
-      sortMeta.convertToGpu()
-    } else {
-      sort
-    }
-  }
 }

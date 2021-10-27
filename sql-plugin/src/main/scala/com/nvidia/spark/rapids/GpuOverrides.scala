@@ -3687,13 +3687,6 @@ object GpuOverrides extends Logging {
     operator.withNewChildren(children)
   }
 
-  private final class SortDataFromReplacementRule extends DataFromReplacementRule {
-    override val operationName: String = "Exec"
-    override def confKey = "spark.rapids.sql.exec.SortExec"
-
-    override def getChecks: Option[TypeChecks[_]] = None
-  }
-
   // Only run the explain and don't actually convert or run on GPU.
   def explainPotentialGpuPlan(df: DataFrame, explain: String): String = {
     val plan = df.queryExecution.executedPlan
@@ -3787,6 +3780,13 @@ case class GpuQueryStagePrepOverrides() extends Rule[SparkPlan] with Logging {
     // return the original plan which is now modified as a side-effect of invoking GpuOverrides
     plan
   }(sparkPlan)
+}
+
+final class SortDataFromReplacementRule extends DataFromReplacementRule {
+  override val operationName: String = "Exec"
+  override def confKey = "spark.rapids.sql.exec.SortExec"
+
+  override def getChecks: Option[TypeChecks[_]] = None
 }
 
 case class GpuOverrides() extends Rule[SparkPlan] with Logging {

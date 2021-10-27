@@ -29,4 +29,5 @@ trait Spark31XShims extends Spark30XShims {
     SQLConf.LEGACY_PARQUET_INT96_REBASE_MODE_IN_READ.key
   override def int96ParquetRebaseWriteKey: String =
     SQLConf.LEGACY_PARQUET_INT96_REBASE_MODE_IN_WRITE.key
+
 }

@@ -278,7 +278,7 @@
                                         <source>${project.basedir}/src/main/311+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/311until320-all/scala</source>
                                         <source>${project.basedir}/src/main/311until320-apache/scala</source>
-                                        <source>${project.basedir}/src/main/311until320-nondb/scala</source>
+                                        <source>${project.basedir}/src/main/311until320-nondb-nonsyn/scala</source>
                                     </sources>
                                 </configuration>
                             </execution>
@@ -430,7 +430,7 @@
                                         <source>${project.basedir}/src/main/311+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/311until320-all/scala</source>
                                         <source>${project.basedir}/src/main/311until320-apache/scala</source>
-                                        <source>${project.basedir}/src/main/311until320-nondb/scala</source>
+                                        <source>${project.basedir}/src/main/311until320-nondb-nonsyn/scala</source>
                                     </sources>
                                 </configuration>
                             </execution>
@@ -475,7 +475,7 @@
                                         <source>${project.basedir}/src/main/311+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/311until320-all/scala</source>
                                         <source>${project.basedir}/src/main/311until320-apache/scala</source>
-                                        <source>${project.basedir}/src/main/311until320-nondb/scala</source>
+                                        <source>${project.basedir}/src/main/312syn/scala</source>
                                     </sources>
                                 </configuration>
                             </execution>
@@ -520,7 +520,7 @@
                                         <source>${project.basedir}/src/main/311+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/311until320-all/scala</source>
                                         <source>${project.basedir}/src/main/311until320-apache/scala</source>
-                                        <source>${project.basedir}/src/main/311until320-nondb/scala</source>
+                                        <source>${project.basedir}/src/main/311until320-nondb-nonsyn/scala</source>
                                     </sources>
                                 </configuration>
                             </execution>
@@ -605,7 +605,7 @@
                                         <source>${project.basedir}/src/main/311+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/311cdh/scala</source>
                                         <source>${project.basedir}/src/main/311until320-all/scala</source>
-                                        <source>${project.basedir}/src/main/311until320-nondb/scala</source>
+                                        <source>${project.basedir}/src/main/311until320-nondb-nonsyn/scala</source>
                                     </sources>
                                 </configuration>
                             </execution>
