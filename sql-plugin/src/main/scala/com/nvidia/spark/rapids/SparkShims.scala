@@ -64,6 +64,11 @@ case object GpuBuildLeft extends GpuBuildSide
 
 sealed abstract class ShimVersion
 
+case class SynapseShimVersion(major: Int, minor: Int, patch: Int, synVersion: String)
+  extends ShimVersion {
+  override def toString(): String = s"$major.$minor.$patch.$synVersion"
+}
+
 case class SparkShimVersion(major: Int, minor: Int, patch: Int) extends ShimVersion {
   override def toString(): String = s"$major.$minor.$patch"
 }
@@ -282,6 +287,9 @@ trait SparkShims {
   def registerKryoClasses(kryo: Kryo): Unit
 
   def getCentralMomentDivideByZeroEvalResult(): Expression
+
+  // Create a SortExec and if it can be replaced with GPU version do so
+  def addSortExec(requiredOrdering: Seq[SortOrder], child: SparkPlan, conf: RapidsConf): SparkPlan
 }
 
 abstract class SparkCommonShims extends SparkShims {

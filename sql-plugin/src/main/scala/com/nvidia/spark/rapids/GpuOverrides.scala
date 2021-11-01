@@ -3735,13 +3735,6 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
     }
   }
 
-  private final class SortDataFromReplacementRule extends DataFromReplacementRule {
-    override val operationName: String = "Exec"
-    override def confKey = "spark.rapids.sql.exec.SortExec"
-
-    override def getChecks: Option[TypeChecks[_]] = None
-  }
-
   // copied from Spark EnsureRequirements but only does the ordering checks and
   // check to convert any SortExec added to GpuSortExec
   private def ensureOrdering(operator: SparkPlan, conf: RapidsConf): SparkPlan = {
@@ -3755,16 +3748,7 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
       if (GpuOverrides.orderingSatisfies(child.outputOrdering, requiredOrdering, conf)) {
         child
       } else {
-        val sort = SortExec(requiredOrdering, global = false, child = child)
-        // just specifically check Sort to see if we can change Sort to GPUSort
-        val sortMeta = new GpuSortMeta(sort, conf, None, new SortDataFromReplacementRule)
-        sortMeta.initReasons()
-        sortMeta.tagPlanForGpu()
-        if (sortMeta.canThisBeReplaced) {
-          sortMeta.convertToGpu()
-        } else {
-          sort
-        }
+        ShimLoader.getSparkShims.addSortExec(requiredOrdering, child, conf)
       }
     }
     operator.withNewChildren(children)
@@ -3777,3 +3761,11 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
     }
   }
 }
+
+final class SortDataFromReplacementRule extends DataFromReplacementRule {
+  override val operationName: String = "Exec"
+  override def confKey = "spark.rapids.sql.exec.SortExec"
+
+  override def getChecks: Option[TypeChecks[_]] = None
+}
+

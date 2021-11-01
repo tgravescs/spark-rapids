@@ -873,4 +873,18 @@ abstract class SparkBaseShims extends Spark30XShims {
     val nullOnDivideByZero: Boolean = !SQLConf.get.legacyStatisticalAggregate
     GpuLiteral(if (nullOnDivideByZero) null else Double.NaN, DoubleType)
   }
+
+  override def addSortExec(requiredOrdering: Seq[SortOrder], child: SparkPlan,
+      conf: RapidsConf): SparkPlan = {
+    val sort = SortExec(requiredOrdering, global = false, child = child)
+    // just specifically check Sort to see if we can change Sort to GPUSort
+    val sortMeta = new GpuSortMeta(sort, conf, None, new SortDataFromReplacementRule)
+    sortMeta.initReasons()
+    sortMeta.tagPlanForGpu()
+    if (sortMeta.canThisBeReplaced) {
+      sortMeta.convertToGpu()
+    } else {
+      sort
+    }
+  }
 }

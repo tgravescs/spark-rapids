@@ -19,7 +19,9 @@ package com.nvidia.spark.rapids.shims.spark312
 import com.nvidia.spark.rapids.{SparkShims, SparkShimVersion}
 
 object SparkShimServiceProvider {
-  val VERSION = SparkShimVersion(3, 1, 2)
+  // val VERSION = SparkShimVersion(3, 1, 2)
+  // TODO - temporarily break so doesn't match 312syn
+  val VERSION = SparkShimVersion(3, 1, 20)
   val VERSIONNAMES = Seq(s"$VERSION")
 }
 
