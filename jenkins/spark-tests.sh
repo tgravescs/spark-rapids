@@ -236,5 +236,8 @@ if [[ "$TEST_MODE" == "ALL" || "$TEST_MODE" == "CUDF_UDF_ONLY" ]]; then
 fi
 
 popd
+# if we haven't exited then it was successful and remove the applicaiton specific
+# directories since they use a lot of disk space
+rm -rf $SPARK_HOME/work/app*
 stop-slave.sh
 stop-master.sh
