@@ -767,10 +767,12 @@ class GpuRLikeMeta(
       }
     }
 
+    /*
     override def convertToGpu(lhs: Expression, rhs: Expression): GpuExpression = {
       GpuRLike(lhs, rhs, pattern.getOrElse(
         throw new IllegalStateException("Expression has not been tagged with cuDF regex pattern")))
     }
+    */
 }
 
 case class GpuRLike(left: Expression, right: Expression, pattern: String)
@@ -892,10 +894,12 @@ class SubstringIndexMeta(
     }
   }
 
+  /*
   override def convertToGpu(
       column: Expression,
       delim: Expression,
       count: Expression): GpuExpression = GpuSubstringIndex(column, this.regexp, delim, count)
+  */
 }
 
 object GpuSubstringIndex {
@@ -1131,11 +1135,13 @@ class GpuStringSplitMeta(
       willNotWorkOnGpu("only literal limit is supported")
     }
   }
+  /*
   override def convertToGpu(
       str: Expression,
       regexp: Expression,
       limit: Expression): GpuExpression =
     GpuStringSplit(str, regexp, limit)
+    */
 }
 
 case class GpuStringSplit(str: Expression, regex: Expression, limit: Expression)

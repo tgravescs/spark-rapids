@@ -44,6 +44,7 @@ class GpuProjectExecMeta(
     p: Option[RapidsMeta[_, _, _]],
     r: DataFromReplacementRule) extends SparkPlanMeta[ProjectExec](proj, conf, p, r)
     with Logging {
+      /*
   override def convertToGpu(): GpuExec = {
     // Force list to avoid recursive Java serialization of lazy list Seq implementation
     val gpuExprs = childExprs.map(_.convertToGpu().asInstanceOf[NamedExpression]).toList
@@ -63,6 +64,7 @@ class GpuProjectExecMeta(
     }
     GpuProjectExec(gpuExprs, gpuChild)
   }
+  */
 }
 
 object GpuProjectExec extends Arm {
@@ -372,6 +374,7 @@ class GpuSampleExecMeta(
     p: Option[RapidsMeta[_, _, _]],
     r: DataFromReplacementRule) extends SparkPlanMeta[SampleExec](sample, conf, p, r)
     with Logging {
+      /*
   override def convertToGpu(): GpuExec = {
     val gpuChild = childPlans.head.convertIfNeeded()
     if (conf.isFastSampleEnabled) {
@@ -385,6 +388,7 @@ class GpuSampleExecMeta(
         sample.seed, gpuChild)
     }
   }
+  */
 }
 
 case class GpuSampleExec(

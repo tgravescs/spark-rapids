@@ -139,9 +139,11 @@ final class CastExprMeta[INPUT <: CastBase](
     s"${entry.doc}. To enable this operation on the GPU, set ${entry.key} to true."
   }
 
+  /*
   override def convertToGpu(child: Expression): GpuExpression =
     GpuCast(child, toType, ansiEnabled, cast.timeZoneId, legacyCastToString,
       stringToAnsiDate)
+  */
 }
 
 object GpuCast extends Arm {

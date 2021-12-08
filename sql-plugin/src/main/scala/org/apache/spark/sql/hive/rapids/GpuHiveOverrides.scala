@@ -64,6 +64,7 @@ object GpuHiveOverrides {
                 s"and CPU-based UDFs are not enabled by `${RapidsConf.ENABLE_CPU_BASED_UDF.key}`")
             }
           }
+          /*
 
           override def convertToGpu(): GpuExpression = {
             opRapidsFunc.map { _ =>
@@ -84,6 +85,7 @@ object GpuHiveOverrides {
                 childExprs.map(_.convertToGpu()))
             }
           }
+          */
         }),
       GpuOverrides.expr[HiveGenericUDF](
         "Hive Generic UDF, the UDF can choose to implement a RAPIDS accelerated interface to" +
@@ -106,6 +108,7 @@ object GpuHiveOverrides {
             }
           }
 
+          /*
           override def convertToGpu(): GpuExpression = {
             opRapidsFunc.map { _ =>
               // We use the original HiveGenericUDF `deterministic` method as a proxy
@@ -126,6 +129,7 @@ object GpuHiveOverrides {
                 childExprs.map(_.convertToGpu()))
             }
           }
+          */
         })
     ).map(r => (r.getClassFor.asSubclass(classOf[Expression]), r)).toMap
   }

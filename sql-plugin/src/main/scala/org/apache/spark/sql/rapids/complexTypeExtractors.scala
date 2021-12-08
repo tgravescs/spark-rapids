@@ -83,11 +83,13 @@ class GpuGetArrayItemMeta(
       }
     }
   }
+  /*
   override def convertToGpu(
       arr: Expression,
       ordinal: Expression): GpuExpression =
     // this will be called under 3.0.x version, so set failOnError to false to match CPU behavior
     GpuGetArrayItem(arr, ordinal, failOnError = false)
+    */
 }
 
 /**

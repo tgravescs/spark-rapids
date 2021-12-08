@@ -49,11 +49,13 @@ class GpuExpandExecMeta(
   /**
    * Convert what this wraps to a GPU enabled version.
    */
+  /*
   override def convertToGpu(): GpuExec = {
     val projections = gpuProjections.map(_.map(_.convertToGpu()))
     GpuExpandExec(projections, expand.output,
       childPlans.head.convertIfNeeded())
   }
+  */
 }
 
 /**

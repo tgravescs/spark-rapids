@@ -950,6 +950,7 @@ abstract class GpuBaseAggregateMeta[INPUT <: SparkPlan](
     }
   }
 
+  /*
   override def convertToGpu(): GpuExec = {
     GpuHashAggregateExec(
       aggRequiredChildDistributionExpressions,
@@ -960,6 +961,7 @@ abstract class GpuBaseAggregateMeta[INPUT <: SparkPlan](
       childPlans.head.convertIfNeeded(),
       conf.gpuTargetBatchSizeBytes)
   }
+  */
 }
 
 /**
@@ -1012,6 +1014,7 @@ abstract class GpuTypedImperativeSupportedAggregateExecMeta[INPUT <: BaseAggrega
     GpuTypedImperativeSupportedAggregateExecMeta.handleAggregationBuffer(this)
   }
 
+  /*
   override def convertToGpu(): GpuExec = {
     if (mayNeedAggBufferConversion) {
       // transforms the data types of aggregate attributes with typeMeta
@@ -1044,6 +1047,7 @@ abstract class GpuTypedImperativeSupportedAggregateExecMeta[INPUT <: BaseAggrega
       super.convertToGpu()
     }
   }
+  */
 
   /**
    * The method replaces data types of aggregation buffers created by TypedImperativeAggregate

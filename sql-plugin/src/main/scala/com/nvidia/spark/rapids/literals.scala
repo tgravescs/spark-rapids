@@ -687,7 +687,7 @@ class LiteralExprMeta(
   def withNewLiteral(newLiteral: Literal): LiteralExprMeta =
     new LiteralExprMeta(newLiteral, conf, p, r)
 
-  override def convertToGpu(): GpuExpression = GpuLiteral(lit.value, lit.dataType)
+  // override def convertToGpu(): GpuExpression = GpuLiteral(lit.value, lit.dataType)
 
   // There are so many of these that we don't need to print them out, unless it
   // will not work on the GPU

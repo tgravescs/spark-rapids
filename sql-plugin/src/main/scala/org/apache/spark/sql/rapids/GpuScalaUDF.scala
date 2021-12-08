@@ -537,6 +537,7 @@ abstract class ScalaUDFMetaBase(
     }
   }
 
+  /*
   override def convertToGpu(): GpuExpression = {
     // It can come here only when at least one option as below is true.
     //   1. UDF implements a RAPIDS accelerated interface.
@@ -555,7 +556,7 @@ abstract class ScalaUDFMetaBase(
       rowBasedScalaUDF
     }
   }
-
+*/
   protected def rowBasedScalaUDF: GpuRowBasedScalaUDFBase
 }
 

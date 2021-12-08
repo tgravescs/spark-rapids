@@ -49,6 +49,7 @@ class GpuGenerateExecSparkPlanMeta(
     }
   }
 
+  /*
   override def convertToGpu(): GpuExec = {
     GpuGenerateExec(
       childExprs.head.convertToGpu().asInstanceOf[GpuGenerator],
@@ -57,6 +58,7 @@ class GpuGenerateExecSparkPlanMeta(
       gen.generatorOutput,
       childPlans.head.convertIfNeeded())
   }
+  */
 }
 
 abstract class GeneratorExprMeta[INPUT <: Generator](

@@ -41,9 +41,11 @@ object TimeStamp {
         override def shouldFallbackOnAnsiTimestamp: Boolean =
           ShimLoader.getSparkShims.shouldFallbackOnAnsiTimestamp
 
+        /*
         override def convertToGpu(lhs: Expression, rhs: Expression): GpuExpression = {
           GpuGetTimestamp(lhs, rhs, sparkFormat, strfFormat)
         }
+        */
       })
   ).map(r => (r.getClassFor.asSubclass(classOf[Expression]), r)).toMap
 }

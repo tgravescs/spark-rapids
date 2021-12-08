@@ -57,6 +57,7 @@ class GpuAggregateInPandasExecMeta(
 
   override val childExprs: Seq[BaseExprMeta[_]] = groupingNamedExprs ++ udfs ++ resultNamedExprs
 
+  /*
   override def convertToGpu(): GpuExec =
     GpuAggregateInPandasExec(
       groupingNamedExprs.map(_.convertToGpu()).asInstanceOf[Seq[NamedExpression]],
@@ -64,6 +65,7 @@ class GpuAggregateInPandasExecMeta(
       resultNamedExprs.map(_.convertToGpu()).asInstanceOf[Seq[NamedExpression]],
       childPlans.head.convertIfNeeded()
     )(aggPandas.groupingExpressions)
+  */
 }
 
 /**

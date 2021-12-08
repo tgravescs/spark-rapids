@@ -255,9 +255,11 @@ class GpuBroadcastMeta(
     }
   }
 
+  /*
   override def convertToGpu(): GpuExec = {
     GpuBroadcastExchangeExec(exchange.mode, childPlans.head.convertIfNeeded())
   }
+  */
 }
 
 abstract class GpuBroadcastExchangeExecBase(

@@ -51,12 +51,14 @@ class GpuMapInPandasExecMeta(
 
   override val childExprs: Seq[BaseExprMeta[_]] = resultAttrs :+ udf
 
+  /*
   override def convertToGpu(): GpuExec =
     GpuMapInPandasExec(
       udf.convertToGpu(),
       resultAttrs.map(_.convertToGpu()).asInstanceOf[Seq[Attribute]],
       childPlans.head.convertIfNeeded()
     )
+  */
 }
 
 /*

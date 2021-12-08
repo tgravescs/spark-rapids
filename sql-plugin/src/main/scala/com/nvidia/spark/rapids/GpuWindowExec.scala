@@ -101,6 +101,7 @@ abstract class GpuBaseWindowExecMeta[WindowExecType <: SparkPlan] (windowExec: W
             "(Detail: WindowExpression not wrapped in `NamedExpression`.)"))
   }
 
+  /*
   override def convertToGpu(): GpuExec = {
     val resultColumnsOnly = getResultColumnsOnly
     val gpuWindowExpressions = if (resultColumnsOnly) {
@@ -177,6 +178,7 @@ abstract class GpuBaseWindowExecMeta[WindowExecType <: SparkPlan] (windowExec: W
       windowExpr
     }
   }
+  */
 }
 
 /**

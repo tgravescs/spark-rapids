@@ -57,6 +57,7 @@ class GpuSortMeta(
   override val availableRuntimeDataTransition: Boolean =
     childPlans.head.availableRuntimeDataTransition
 
+    /*
   override def convertToGpu(): GpuExec = {
     GpuSortExec(childExprs.map(_.convertToGpu()).asInstanceOf[Seq[SortOrder]],
       sort.global,
@@ -64,6 +65,7 @@ class GpuSortMeta(
       if (conf.stableSort) FullSortSingleBatch else OutOfCoreSort
     )(sort.sortOrder)
   }
+  */
 }
 
 case class GpuSortExec(

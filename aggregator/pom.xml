@@ -193,6 +193,10 @@
                 <artifactId>build-helper-maven-plugin</artifactId>
                 <executions>
                     <execution>
+                        <id>add-profile-src-2+</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
                         <id>add-profile-src-30+</id>
                         <phase>none</phase>
                     </execution>

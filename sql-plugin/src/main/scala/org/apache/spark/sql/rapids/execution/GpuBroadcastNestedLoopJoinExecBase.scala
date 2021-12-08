@@ -80,6 +80,7 @@ class GpuBroadcastNestedLoopJoinMeta(
         "the BroadcastNestedLoopJoin this feeds is not on the GPU")
     }
   }
+  /*
 
   override def convertToGpu(): GpuExec = {
     val Seq(left, right) = childPlans.map(_.convertIfNeeded())
@@ -125,6 +126,7 @@ class GpuBroadcastNestedLoopJoinMeta(
       }.getOrElse(joinExec)
     }
   }
+  */
 }
 
 /**

@@ -139,12 +139,14 @@ class GpuCollectLimitMeta(
   override val childParts: scala.Seq[PartMeta[_]] =
     Seq(GpuOverrides.wrapPart(collectLimit.outputPartitioning, conf, Some(this)))
 
+    /*
   override def convertToGpu(): GpuExec =
     GpuGlobalLimitExec(collectLimit.limit,
       ShimLoader.getSparkShims.getGpuShuffleExchangeExec(
         GpuSinglePartitioning,
         GpuLocalLimitExec(collectLimit.limit, childPlans.head.convertIfNeeded()),
         SinglePartition))
+  */
 
 }
 
