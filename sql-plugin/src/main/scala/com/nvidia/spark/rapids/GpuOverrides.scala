@@ -505,11 +505,11 @@ object GpuOverrides extends Logging {
     } else {
       val wrapped = wrapExpr(expr, conf, None)
       wrapped.tagForGpu()
-      if (wrapped.canExprTreeBeReplaced) {
-        wrapped.convertToGpu()
-      } else {
+     //  if (wrapped.canExprTreeBeReplaced) {
+        // wrapped.convertToGpu()
+      // } else {
         expr
-      }
+      // }
     }
   }
 
@@ -519,11 +519,11 @@ object GpuOverrides extends Logging {
       case _ =>
         val wrapped = wrapPart(part, conf, None)
         wrapped.tagForGpu()
-        if (wrapped.canThisBeReplaced) {
+        // if (wrapped.canThisBeReplaced) {
           // wrapped.convertToGpu()
-        } else {
+        // } else {
           part
-        }
+        // }
     }
   }
 
@@ -539,12 +539,12 @@ object GpuOverrides extends Logging {
           case sqse: ShuffleQueryStageExec =>
             GpuTransitionOverrides.getNonQueryStagePlan(sqse) match {
               case gpuShuffle: GpuShuffleExchangeExecBase =>
-                val converted = convertPartToGpuIfPossible(cpuShuffle.outputPartitioning, conf)
-                if (converted == gpuShuffle.outputPartitioning) {
-                  sqse
-                } else {
+                // val converted = convertPartToGpuIfPossible(cpuShuffle.outputPartitioning, conf)
+                // if (converted == gpuShuffle.outputPartitioning) {
+                 //  sqse
+                // } else {
                   cpuShuffle
-                }
+                // }
               case _ => cpuShuffle
             }
           case _ => cpuShuffle
@@ -3083,8 +3083,8 @@ object GpuOverrides extends Logging {
             willNotWorkOnGpu("Only specifying separator column not supported on GPU")
           }
         }
-        override final def convertToGpu(): GpuExpression =
-          GpuConcatWs(childExprs.map(_.convertToGpu()))
+       //  override final def convertToGpu(): GpuExpression =
+         //  GpuConcatWs(childExprs.map(_.convertToGpu()))
       }),
     expr[Murmur3Hash] (
       "Murmur3 hash operator",
@@ -3095,8 +3095,8 @@ object GpuOverrides extends Logging {
       (a, conf, p, r) => new ExprMeta[Murmur3Hash](a, conf, p, r) {
         override val childExprs: Seq[BaseExprMeta[_]] = a.children
           .map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-        def convertToGpu(): GpuExpression =
-          GpuMurmur3Hash(childExprs.map(_.convertToGpu()), a.seed)
+        // def convertToGpu(): GpuExpression =
+         //  GpuMurmur3Hash(childExprs.map(_.convertToGpu()), a.seed)
       }),
     expr[Contains](
       "Contains",
@@ -3155,7 +3155,7 @@ object GpuOverrides extends Logging {
         TypeSig.LONG, TypeSig.LONG),
       (a, conf, p, r) => new UnaryExprMeta[MakeDecimal](a, conf, p, r) {
         // override def convertToGpu(child: Expression): GpuExpression =
-          GpuMakeDecimal(child, a.precision, a.scale, a.nullOnOverflow)
+          // GpuMakeDecimal(child, a.precision, a.scale, a.nullOnOverflow)
       }),
     expr[Explode](
       "Given an input array produces a sequence of rows for each value in the array",
@@ -3200,7 +3200,7 @@ object GpuOverrides extends Logging {
           TypeSig.all))),
       (c, conf, p, r) => new TypedImperativeAggExprMeta[CollectList](c, conf, p, r) {
         // override def convertToGpu(childExprs: Seq[Expression]): GpuExpression =
-          GpuCollectList(childExprs.head, c.mutableAggBufferOffset, c.inputAggBufferOffset)
+         //  GpuCollectList(childExprs.head, c.mutableAggBufferOffset, c.inputAggBufferOffset)
 
         override def aggBufferAttribute: AttributeReference = {
           val aggBuffer = c.aggBufferAttributes.head
