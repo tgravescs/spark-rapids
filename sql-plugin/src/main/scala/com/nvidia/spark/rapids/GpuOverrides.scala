@@ -3053,8 +3053,6 @@ object GpuOverrides extends Logging {
           GpuEndsWith(lhs, rhs)
         */
       }),
-
-
     expr[Concat](
       "List/String concatenate",
       ExprChecks.projectOnly((TypeSig.STRING + TypeSig.ARRAY).nested(
