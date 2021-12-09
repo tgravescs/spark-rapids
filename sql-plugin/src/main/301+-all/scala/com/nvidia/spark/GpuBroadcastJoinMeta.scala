@@ -16,7 +16,7 @@
 package com.nvidia.spark.rapids
 
 import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.execution.adaptive.BroadcastQueryStageExec
+// import org.apache.spark.sql.execution.adaptive.BroadcastQueryStageExec
 import org.apache.spark.sql.execution.exchange.ReusedExchangeExec
 import org.apache.spark.sql.rapids.execution.GpuBroadcastExchangeExec
 
@@ -28,10 +28,6 @@ abstract class GpuBroadcastJoinMeta[INPUT <: SparkPlan](plan: INPUT,
 
   def canBuildSideBeReplaced(buildSide: SparkPlanMeta[_]): Boolean = {
     buildSide.wrapped match {
-      case bqse: BroadcastQueryStageExec => bqse.plan.isInstanceOf[GpuBroadcastExchangeExec] ||
-          bqse.plan.isInstanceOf[ReusedExchangeExec] &&
-          bqse.plan.asInstanceOf[ReusedExchangeExec]
-              .child.isInstanceOf[GpuBroadcastExchangeExec]
       case reused: ReusedExchangeExec => reused.child.isInstanceOf[GpuBroadcastExchangeExec]
       case _: GpuBroadcastExchangeExec => true
       case _ => buildSide.canThisBeReplaced
@@ -40,10 +36,6 @@ abstract class GpuBroadcastJoinMeta[INPUT <: SparkPlan](plan: INPUT,
 
   def verifyBuildSideWasReplaced(buildSide: SparkPlan): Unit = {
     val buildSideOnGpu = buildSide match {
-      case bqse: BroadcastQueryStageExec => bqse.plan.isInstanceOf[GpuBroadcastExchangeExec] ||
-          bqse.plan.isInstanceOf[ReusedExchangeExec] &&
-              bqse.plan.asInstanceOf[ReusedExchangeExec]
-                  .child.isInstanceOf[GpuBroadcastExchangeExec]
       case reused: ReusedExchangeExec => reused.child.isInstanceOf[GpuBroadcastExchangeExec]
       case _: GpuBroadcastExchangeExec => true
       case _ => false

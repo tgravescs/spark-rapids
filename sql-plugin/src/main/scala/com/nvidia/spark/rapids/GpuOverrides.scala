@@ -34,7 +34,7 @@ import org.apache.spark.sql.catalyst.expressions.rapids.TimeStamp
 import org.apache.spark.sql.catalyst.optimizer.NormalizeNaNAndZero
 import org.apache.spark.sql.catalyst.plans.physical._
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.catalyst.trees.TreeNodeTag
+// import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.catalyst.util.ArrayData
 import org.apache.spark.sql.connector.read.Scan
 import org.apache.spark.sql.execution._
@@ -543,6 +543,7 @@ object GpuOverrides extends Logging {
    * output types between the two plan nodes do not match. In such a case the ReusedExchangeExec
    * will be updated to match the GPU shuffle output types.
    */
+  /*
   def fixupReusedExchangeExecs(plan: SparkPlan): SparkPlan = {
     def outputTypesMatch(a: Seq[Attribute], b: Seq[Attribute]): Boolean =
       a.corresponds(b)((x, y) => x.dataType == y.dataType)
@@ -561,6 +562,7 @@ object GpuOverrides extends Logging {
         }
     }
   }
+  */
 
   @scala.annotation.tailrec
   def extractLit(exp: Expression): Option[Literal] = exp match {
@@ -710,7 +712,8 @@ object GpuOverrides extends Logging {
    * @param meta agg expression meta
    */
   def checkAndTagAnsiAgg(checkType: Option[DataType], meta: AggExprMeta[_]): Unit = {
-    val failOnError = SQLConf.get.ansiEnabled
+    // val failOnError = SQLConf.get.ansiEnabled
+    val failOnError = false
     if (failOnError) {
       if (checkType.isDefined) {
         val typeToCheck = checkType.get
@@ -907,6 +910,7 @@ object GpuOverrides extends Logging {
               }
               expr.asInstanceOf[LiteralExprMeta].withNewLiteral(Literal(value, newType))
             // We avoid unapply for Cast because it changes between versions of Spark
+            /*
             case PromotePrecision(c: CastBase) if c.dataType.isInstanceOf[DecimalType] =>
               val to = c.dataType.asInstanceOf[DecimalType]
               val fromType = DecimalUtil.optionallyAsDecimalType(c.child.dataType)
@@ -937,6 +941,7 @@ object GpuOverrides extends Logging {
                 case _ =>
                   expr
               }
+                  */
             case _ => expr
           }
         private[this] lazy val binExpr = childExprs.head
@@ -1175,6 +1180,7 @@ object GpuOverrides extends Logging {
       ExprChecks.unaryProject(TypeSig.INT, TypeSig.INT, TypeSig.DATE, TypeSig.DATE),
       (a, conf, p, r) => new UnaryExprMeta[DayOfYear](a, conf, p, r) {
       }),
+    /*
     expr[Acos](
       "Inverse cosine",
       ExprChecks.mathUnaryWithAst,
@@ -1203,6 +1209,7 @@ object GpuOverrides extends Logging {
           }
         }
       }),
+    */
     expr[Sqrt](
       "Square root",
       ExprChecks.mathUnaryWithAst,
@@ -1400,6 +1407,7 @@ object GpuOverrides extends Logging {
           TypeSig.orderable))),
       (a, conf, p, r) => new ExprMeta[Greatest](a, conf, p, r) {
       }),
+    /*
     expr[Atan](
       "Inverse tangent",
       ExprChecks.mathUnaryWithAst,
@@ -1415,6 +1423,7 @@ object GpuOverrides extends Logging {
       ExprChecks.mathUnaryWithAst,
       (a, conf, p, r) => new UnaryAstExprMeta[Cos](a, conf, p, r) {
       }),
+    */
     expr[Exp](
       "Euler's number e raised to a power",
       ExprChecks.mathUnaryWithAst,
@@ -1490,6 +1499,7 @@ object GpuOverrides extends Logging {
       ExprChecks.mathUnaryWithAst,
       (a, conf, p, r) => new UnaryAstExprMeta[Tan](a, conf, p, r) {
       }),
+    /*
     expr[NormalizeNaNAndZero](
       "Normalize NaN and zero",
       ExprChecks.unaryProjectInputMatchesOutput(
@@ -1504,6 +1514,7 @@ object GpuOverrides extends Logging {
         TypeSig.DOUBLE + TypeSig.FLOAT),
       (a, conf, p, r) => new UnaryExprMeta[KnownFloatingPointNormalized](a, conf, p, r) {
       }),
+    */
     expr[KnownNotNull](
       "Tag an expression as known to not be null",
       ExprChecks.unaryProjectInputMatchesOutput(
@@ -1537,6 +1548,7 @@ object GpuOverrides extends Logging {
           checkTimeZoneId(timeAdd.timeZoneId)
         }
     }),
+  /*
     expr[DateAddInterval](
       "Adds interval to date",
       ExprChecks.binaryProject(TypeSig.DATE, TypeSig.DATE,
@@ -1556,6 +1568,7 @@ object GpuOverrides extends Logging {
             checkTimeZoneId(dateAddInterval.timeZoneId)
           }
         }),
+      */
     expr[DateFormatClass](
       "Converts timestamp to a value of string in the format specified by the date format",
       ExprChecks.binaryProject(TypeSig.STRING, TypeSig.STRING,
@@ -1861,6 +1874,7 @@ object GpuOverrides extends Logging {
             TypeSig.DOUBLE + TypeSig.DECIMAL_128_FULL)),
       (a, conf, p, r) => new BinaryExprMeta[Divide](a, conf, p, r) {
       }),
+    /*
     expr[IntegralDivide](
       "Division with a integer result",
       ExprChecks.binaryProject(
@@ -1869,6 +1883,7 @@ object GpuOverrides extends Logging {
         ("rhs", TypeSig.LONG + TypeSig.DECIMAL_128_FULL, TypeSig.LONG + TypeSig.DECIMAL_128_FULL)),
       (a, conf, p, r) => new BinaryExprMeta[IntegralDivide](a, conf, p, r) {
       }),
+    */
     expr[Remainder](
       "Remainder or modulo",
       ExprChecks.binaryProject(
@@ -2323,6 +2338,7 @@ object GpuOverrides extends Logging {
         TypeSig.MAP.nested(TypeSig.all)),
       (in, conf, p, r) => new UnaryExprMeta[MapValues](in, conf, p, r) {
       }),
+    /*
     expr[MapEntries](
       "Returns an unordered array of all entries in the given map",
       ExprChecks.unaryProject(
@@ -2335,6 +2351,7 @@ object GpuOverrides extends Logging {
         TypeSig.MAP.nested(TypeSig.all)),
       (in, conf, p, r) => new UnaryExprMeta[MapEntries](in, conf, p, r) {
       }),
+    */
     expr[ArrayMin](
       "Returns the minimum value in the array",
       ExprChecks.unaryProject(
@@ -2479,6 +2496,7 @@ object GpuOverrides extends Logging {
             TypeSig.all))),
       (in, conf, p, r) => new ExprMeta[ArrayTransform](in, conf, p, r) {
       }),
+    /*
     expr[TransformKeys](
       "Transform keys in a map using a transform function",
       ExprChecks.projectOnly(TypeSig.MAP.nested(TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL +
@@ -2503,6 +2521,7 @@ object GpuOverrides extends Logging {
           }
         }
       }),
+    */
     expr[TransformValues](
       "Transform values in a map using a transform function",
       ExprChecks.projectOnly(TypeSig.MAP.nested(TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL +
@@ -3190,36 +3209,7 @@ object GpuOverrides extends Logging {
       ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.STRUCT + TypeSig.MAP +
         TypeSig.ARRAY + TypeSig.DECIMAL_64).nested(), TypeSig.all),
       (sample, conf, p, r) => new GpuSampleExecMeta(sample, conf, p, r)
-    ),
-    ShimLoader.getSparkShims.aqeShuffleReaderExec,
-    exec[FlatMapCoGroupsInPandasExec](
-      "The backend for CoGrouped Aggregation Pandas UDF, it runs on CPU itself now but supports" +
-        " scheduling GPU resources for the Python process when enabled",
-      ExecChecks.hiddenHack(),
-      (flatCoPy, conf, p, r) => new GpuFlatMapCoGroupsInPandasExecMeta(flatCoPy, conf, p, r))
-        .disabledByDefault("Performance is not ideal now"),
-    neverReplaceExec[AlterNamespaceSetPropertiesExec]("Namespace metadata operation"),
-    neverReplaceExec[CreateNamespaceExec]("Namespace metadata operation"),
-    neverReplaceExec[DescribeNamespaceExec]("Namespace metadata operation"),
-    neverReplaceExec[DropNamespaceExec]("Namespace metadata operation"),
-    neverReplaceExec[SetCatalogAndNamespaceExec]("Namespace metadata operation"),
-    ShimLoader.getSparkShims.neverReplaceShowCurrentNamespaceCommand,
-    neverReplaceExec[ShowNamespacesExec]("Namespace metadata operation"),
-    neverReplaceExec[ExecutedCommandExec]("Table metadata operation"),
-    neverReplaceExec[AlterTableExec]("Table metadata operation"),
-    neverReplaceExec[CreateTableExec]("Table metadata operation"),
-    neverReplaceExec[DeleteFromTableExec]("Table metadata operation"),
-    neverReplaceExec[DescribeTableExec]("Table metadata operation"),
-    neverReplaceExec[DropTableExec]("Table metadata operation"),
-    neverReplaceExec[AtomicReplaceTableExec]("Table metadata operation"),
-    neverReplaceExec[RefreshTableExec]("Table metadata operation"),
-    neverReplaceExec[RenameTableExec]("Table metadata operation"),
-    neverReplaceExec[ReplaceTableExec]("Table metadata operation"),
-    neverReplaceExec[ShowTablePropertiesExec]("Table metadata operation"),
-    neverReplaceExec[ShowTablesExec]("Table metadata operation"),
-    neverReplaceExec[AdaptiveSparkPlanExec]("Wrapper for adaptive query plan"),
-    neverReplaceExec[BroadcastQueryStageExec]("Broadcast query stage"),
-    neverReplaceExec[ShuffleQueryStageExec]("Shuffle query stage")
+    )
   ).collect { case r if r != null => (r.getClassFor.asSubclass(classOf[SparkPlan]), r) }.toMap
 
   lazy val execs: Map[Class[_ <: SparkPlan], ExecRule[_ <: SparkPlan]] =
@@ -3234,10 +3224,10 @@ object GpuOverrides extends Logging {
     }
   }
 
-  val preRowToColProjection = TreeNodeTag[Seq[NamedExpression]]("rapids.gpu.preRowToColProcessing")
+  // val preRowToColProjection = TreeNodeTag[Seq[NamedExpression]]("rapids.gpu.preRowToColProcessing")
 
-  val postColToRowProjection = TreeNodeTag[Seq[NamedExpression]](
-    "rapids.gpu.postColToRowProcessing")
+  // val postColToRowProjection = TreeNodeTag[Seq[NamedExpression]](
+   //  "rapids.gpu.postColToRowProcessing")
 
   def wrapAndTagPlan(plan: SparkPlan, conf: RapidsConf): SparkPlanMeta[SparkPlan] = {
     val wrap = GpuOverrides.wrapPlan(plan, conf, None)

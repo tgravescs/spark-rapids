@@ -23,8 +23,8 @@ import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 
 import org.apache.spark.{SPARK_BRANCH, SPARK_BUILD_DATE, SPARK_BUILD_USER, SPARK_REPO_URL, SPARK_REVISION, SPARK_VERSION, SparkConf, SparkEnv}
-import org.apache.spark.api.plugin.{DriverPlugin, ExecutorPlugin}
-import org.apache.spark.api.resource.ResourceDiscoveryPlugin
+// import org.apache.spark.api.plugin.{DriverPlugin, ExecutorPlugin}
+// import org.apache.spark.api.resource.ResourceDiscoveryPlugin
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
@@ -390,6 +390,7 @@ object ShimLoader extends Logging {
         .newInstance(conf, java.lang.Boolean.valueOf(isDriver))
   }
 
+  /*
   def newDriverPlugin(): DriverPlugin = {
     newInstanceOf("com.nvidia.spark.rapids.RapidsDriverPlugin")
   }
@@ -397,6 +398,7 @@ object ShimLoader extends Logging {
   def newExecutorPlugin(): ExecutorPlugin = {
     newInstanceOf("com.nvidia.spark.rapids.RapidsExecutorPlugin")
   }
+  */
 
   def newColumnarOverrideRules(): ColumnarRule = {
     newInstanceOf("com.nvidia.spark.rapids.ColumnarOverrideRules")
@@ -410,9 +412,11 @@ object ShimLoader extends Logging {
     newInstanceOf("com.nvidia.spark.udf.LogicalPlanRules")
   }
 
+  /*
   def newInternalExclusiveModeGpuDiscoveryPlugin(): ResourceDiscoveryPlugin = {
     newInstanceOf("com.nvidia.spark.rapids.InternalExclusiveModeGpuDiscoveryPlugin")
   }
+  */
 
   def loadColumnarRDD(): Class[_] = {
     loadClass("org.apache.spark.sql.rapids.execution.InternalColumnarRddConverter")

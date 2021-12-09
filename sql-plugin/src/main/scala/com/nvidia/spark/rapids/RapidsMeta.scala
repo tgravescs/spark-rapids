@@ -20,7 +20,7 @@ import java.time.ZoneId
 
 import scala.collection.mutable
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, BinaryExpression, ComplexTypeMergingExpression, Expression, QuaternaryExpression, String2TrimExpression, TernaryExpression, UnaryExpression, WindowExpression, WindowFunction}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, BinaryExpression, ComplexTypeMergingExpression, Expression, String2TrimExpression, TernaryExpression, UnaryExpression, WindowExpression, WindowFunction}
 import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, AggregateFunction, ImperativeAggregate, TypedImperativeAggregate}
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
@@ -1240,6 +1240,7 @@ abstract class TernaryExprMeta[INPUT <: TernaryExpression](
 /**
  * Base class for metadata around `QuaternaryExpression`.
  */
+  /*
 abstract class QuaternaryExprMeta[INPUT <: QuaternaryExpression](
     expr: INPUT,
     conf: RapidsConf,
@@ -1249,6 +1250,7 @@ abstract class QuaternaryExprMeta[INPUT <: QuaternaryExpression](
 
 
 }
+  */
 
 abstract class String2TrimExpressionMeta[INPUT <: String2TrimExpression](
     expr: INPUT,

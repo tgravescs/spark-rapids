@@ -17,7 +17,7 @@
 package com.nvidia.spark.rapids
 
 import ai.rapids.cudf.NvtxColor
-import com.nvidia.spark.RebaseHelper.withResource
+// import com.nvidia.spark.RebaseHelper.withResource
 import com.nvidia.spark.rapids.StorageTier.{DEVICE, DISK, GDS, HOST, StorageTier}
 
 import org.apache.spark.internal.Logging
@@ -173,23 +173,25 @@ class CollectTimeIterator(
     it: Iterator[ColumnarBatch],
     collectTime: GpuMetric) extends Iterator[ColumnarBatch] {
   override def hasNext: Boolean = {
-    withResource(new NvtxWithMetrics(nvtxName, NvtxColor.BLUE, collectTime)) { _ =>
+    // withResource(new NvtxWithMetrics(nvtxName, NvtxColor.BLUE, collectTime)) { _ =>
       it.hasNext
-    }
+   //  }
   }
 
   override def next(): ColumnarBatch = {
-    withResource(new NvtxWithMetrics(nvtxName, NvtxColor.BLUE, collectTime)) { _ =>
+    // withResource(new NvtxWithMetrics(nvtxName, NvtxColor.BLUE, collectTime)) { _ =>
       it.next
-    }
+    // }
   }
 }
 
 object GpuExec {
+  /*
   def outputBatching(sp: SparkPlan): CoalesceGoal = sp match {
     case gpu: GpuExec => gpu.outputBatching
     case _ => null
   }
+  */
 }
 
 trait GpuExec extends SparkPlan with Arm {
@@ -295,6 +297,7 @@ trait GpuExec extends SparkPlan with Arm {
     val canonicalizedChildren = children.map(_.canonicalized)
     var id = -1
     mapExpressions {
+      /*
       case a: Alias =>
         id += 1
         // As the root of the expression, Alias will always take an arbitrary exprId, we need to
@@ -314,7 +317,8 @@ trait GpuExec extends SparkPlan with Arm {
         // normalize the exprId too.
         id += 1
         ar.withExprId(ExprId(id)).canonicalized
-      case other => QueryPlan.normalizeExpressions(other, allAttributes)
+        */
+      case other => QueryPlan.normalizeExprId(other, allAttributes)
     }.withNewChildren(canonicalizedChildren)
   }
 }
