@@ -72,6 +72,43 @@ import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
  * @tparam BASE the generic base class for this type of stage, i.e. SparkPlan, Expression, etc.
  * @tparam WRAP_TYPE base class that should be returned by doWrap.
  */
+abstract class ReplacementConvertRule[INPUT <: BASE, BASE, OUTPUT <: BASE,
+  CONVERT_TYPE <: RapidsConvert[INPUT, BASE, OUTPUT, _]](
+    protected var doConvert: (DataFromReplacementRule) => CONVERT_TYPE,
+    protected var desc: String,
+    protected val checks: Option[TypeChecks[_]],
+    final val tag: ClassTag[INPUT]) {
+
+  /**
+   * Provide a function that will wrap a spark type in a [[RapidsMeta]] instance that is used for
+   * conversion to a GPU version.
+   * @param func the function
+   * @return this for chaining.
+   */
+  final def convert(func: (DataFromReplacementRule) => CONVERT_TYPE): this.type = {
+    doConvert = func
+    this
+  }
+
+  final def convert(
+      r: DataFromReplacementRule): CONVERT_TYPE = {
+    doConvert(r)
+  }
+
+  def getClassFor: Class[_] = tag.runtimeClass
+}
+
+
+
+/**
+ * Base class for all ReplacementRules
+ * @param doWrap wraps a part of the plan in a [[RapidsMeta]] for further processing.
+ * @param desc a description of what this part of the plan does.
+ * @param tag metadata used to determine what INPUT is at runtime.
+ * @tparam INPUT the exact type of the class we are wrapping.
+ * @tparam BASE the generic base class for this type of stage, i.e. SparkPlan, Expression, etc.
+ * @tparam WRAP_TYPE base class that should be returned by doWrap.
+ */
 abstract class ReplacementRule[INPUT <: BASE, BASE, WRAP_TYPE <: RapidsMeta[INPUT, BASE, _]](
     protected var doWrap: (
         INPUT,
@@ -233,16 +270,23 @@ class ScanRule[INPUT <: Scan](
         Option[RapidsMeta[_, _, _]],
         DataFromReplacementRule) => ScanMeta[INPUT],
     desc: String,
-    tag: ClassTag[INPUT],
-    doConvert: Option[ScanConvert[INPUT]] = None)
+    tag: ClassTag[INPUT])
   extends ReplacementRule[INPUT, Scan, ScanMeta[INPUT]](
     doWrap, desc, None, tag) {
 
   override val confKeyPart: String = "input"
   override val operationName: String = "Input"
+}
 
+class ScanConvertRule[INPUT <: Scan](
+    doConvert: (DataFromReplacementRule) => ScanConvert[INPUT],
+    desc: String,
+    tag: ClassTag[INPUT])
+  extends ReplacementConvertRule[INPUT, Scan, Scan, ScanConvert[INPUT]](
+    doConvert, desc, None, tag) {
 
 }
+
 
 /**
  * Holds everything that is needed to replace a `Partitioning` with a GPU enabled version.
@@ -765,15 +809,11 @@ object GpuOverrides extends Logging {
     new ScanRule[INPUT](doWrap, desc, tag)
   }
 
-  def scan[INPUT <: Scan](
+  def scanConvert[INPUT <: Scan](
       desc: String,
-      doWrap: (INPUT, RapidsConf, Option[RapidsMeta[_, _, _]], DataFromReplacementRule)
-          => ScanMeta[INPUT],
-      doConvert: (INPUT, DataFromReplacementRule) => ScanConvert[INPUT])
-      (implicit tag: ClassTag[INPUT]): ScanRule[INPUT] = {
-    assert(desc != null)
-    assert(doWrap != null)
-    new ScanRule[INPUT](doWrap, desc, tag)
+      doConvert: (DataFromReplacementRule) => ScanConvert[INPUT])
+    (implicit tag: ClassTag[INPUT]): ScanConvertRule[INPUT] = {
+    new ScanConvertRule[INPUT](doConvert, desc, tag)
   }
 
   def part[INPUT <: Partitioning](
@@ -3315,6 +3355,12 @@ object GpuOverrides extends Logging {
     commonExpressions ++ TimeStamp.getExprs ++ GpuHiveOverrides.exprs ++
         ShimLoader.getSparkShims.getExprs
 
+  def wrapScanConvert[INPUT <: Scan](meta: ScanMeta[INPUT]): ScanConvert[INPUT] =
+    scansConvert.get(meta.wrapped.getClass)
+      .map(r => r.convert(meta, r).asInstanceOf[ScanConvert[INPUT]])
+      .getOrElse(new RuleNotFoundScanConvert(scan))
+
+
   def wrapScan[INPUT <: Scan](
       scan: INPUT,
       conf: RapidsConf,
@@ -3344,6 +3390,27 @@ object GpuOverrides extends Logging {
 
   val scans: Map[Class[_ <: Scan], ScanRule[_ <: Scan]] =
     commonScans ++ ShimLoader.getSparkShims.getScans
+
+  val commonConvertScans: Map[Class[_ <: Scan], ScanConvertRule[_ <: Scan]] = Seq(
+    GpuOverrides.scanConvert[CSVScan](
+      "CSV parsing",
+      (r) => new ScanConvert[CSVScan](r) {
+        override def convertToGpu(meta: ScanMeta[CSVScan]): Scan =
+          GpuCSVScan(meta.wrapped.sparkSession,
+            meta.wrapped.fileIndex,
+            meta.wrapped.dataSchema,
+            meta.wrapped.readDataSchema,
+            meta.wrapped.readPartitionSchema,
+            meta.wrapped.options,
+            meta.wrapped.partitionFilters,
+            meta.wrapped.dataFilters,
+            meta.conf.maxReadBatchSizeRows,
+            meta.conf.maxReadBatchSizeBytes)
+      })).map(r => (r.getClassFor.asSubclass(classOf[Scan]), r)).toMap
+
+
+  val scansConvert: Map[Class[_ <: Scan], ScanConvertRule[_ <: Scan]] =
+    commonConvertScans
 
   def wrapPart[INPUT <: Partitioning](
       part: INPUT,

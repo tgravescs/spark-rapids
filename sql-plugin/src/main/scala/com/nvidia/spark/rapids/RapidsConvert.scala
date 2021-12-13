@@ -16,44 +16,16 @@
 
 package com.nvidia.spark.rapids
 
-import java.time.ZoneId
-
-import scala.collection.mutable
-
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, BinaryExpression, ComplexTypeMergingExpression, Expression, QuaternaryExpression, String2TrimExpression, TernaryExpression, UnaryExpression, WindowExpression, WindowFunction}
-import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, AggregateFunction, ImperativeAggregate, TypedImperativeAggregate}
-import org.apache.spark.sql.catalyst.plans.physical.Partitioning
-import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.connector.read.Scan
-import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.execution.aggregate.BaseAggregateExec
-import org.apache.spark.sql.execution.command.DataWritingCommand
-import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
-import org.apache.spark.sql.rapids.{CpuToGpuAggregateBufferConverter, GpuToCpuAggregateBufferConverter}
-import org.apache.spark.sql.types.DataType
 
-/**
- * Holds metadata about a stage in the physical plan that is separate from the plan itself.
- * This is helpful in deciding when to replace part of the plan with a GPU enabled version.
- *
- * @param wrapped what we are wrapping
- * @param conf the config
- * @param parent the parent of this node, if there is one.
- * @param rule holds information related to the config for this object, typically this is the rule
- *          used to wrap the stage.
- * @tparam INPUT the exact type of the class we are wrapping.
- * @tparam BASE the generic base class for this type of stage, i.e. SparkPlan, Expression, etc.
- * @tparam OUTPUT when converting to a GPU enabled version of the plan, the generic base
- *                    type for all GPU enabled versions.
- */
-abstract class RapidsConvert[INPUT <: BASE, BASE, OUTPUT <: BASE, METATYPE <: RapidsMeta[INPUT, BASE, OUTPUT]](
-    val meta: METATYPE,
+abstract class RapidsConvert[INPUT <: BASE, BASE, OUTPUT <: BASE,
+  METATYPE <: RapidsMeta[INPUT, BASE, OUTPUT]](
     rule: DataFromReplacementRule) {
 
   /**
    * Convert what this wraps to a GPU enabled version.
    */
-  def convertToGpu(): OUTPUT
+  def convertToGpu(meta: METATYPE): OUTPUT
 
   /**
    * Keep this on the CPU, but possibly convert its children under it to run on the GPU if enabled.
@@ -61,7 +33,7 @@ abstract class RapidsConvert[INPUT <: BASE, BASE, OUTPUT <: BASE, METATYPE <: Ra
    * like SparkPlan, each part of the query can be converted independent of other parts. As such in
    * a subclass this should be overridden to do the correct thing.
    */
-  def convertToCpu(): BASE = meta.wrapped
+  def convertToCpu(meta: METATYPE): BASE = meta.wrapped
 
 }
 
@@ -70,8 +42,7 @@ abstract class RapidsConvert[INPUT <: BASE, BASE, OUTPUT <: BASE, METATYPE <: Ra
  * Base class for metadata around `Scan`.
  */
 abstract class ScanConvert[INPUT <: Scan](
-    scanMeta: ScanMeta[INPUT],
     rule: DataFromReplacementRule)
-  extends RapidsConvert[INPUT, Scan, Scan, ScanMeta[INPUT]](scanMeta, rule) {
+  extends RapidsConvert[INPUT, Scan, Scan, ScanMeta[INPUT]](rule) {
   }
 
