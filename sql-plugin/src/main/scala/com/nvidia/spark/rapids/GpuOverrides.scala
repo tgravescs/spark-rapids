@@ -233,12 +233,15 @@ class ScanRule[INPUT <: Scan](
         Option[RapidsMeta[_, _, _]],
         DataFromReplacementRule) => ScanMeta[INPUT],
     desc: String,
-    tag: ClassTag[INPUT])
+    tag: ClassTag[INPUT],
+    doConvert: Option[ScanConvert[INPUT]] = None)
   extends ReplacementRule[INPUT, Scan, ScanMeta[INPUT]](
     doWrap, desc, None, tag) {
 
   override val confKeyPart: String = "input"
   override val operationName: String = "Input"
+
+
 }
 
 /**
@@ -756,6 +759,17 @@ object GpuOverrides extends Logging {
       desc: String,
       doWrap: (INPUT, RapidsConf, Option[RapidsMeta[_, _, _]], DataFromReplacementRule)
           => ScanMeta[INPUT])
+      (implicit tag: ClassTag[INPUT]): ScanRule[INPUT] = {
+    assert(desc != null)
+    assert(doWrap != null)
+    new ScanRule[INPUT](doWrap, desc, tag)
+  }
+
+  def scan[INPUT <: Scan](
+      desc: String,
+      doWrap: (INPUT, RapidsConf, Option[RapidsMeta[_, _, _]], DataFromReplacementRule)
+          => ScanMeta[INPUT],
+      doConvert: (INPUT, DataFromReplacementRule) => ScanConvert[INPUT])
       (implicit tag: ClassTag[INPUT]): ScanRule[INPUT] = {
     assert(desc != null)
     assert(doWrap != null)
