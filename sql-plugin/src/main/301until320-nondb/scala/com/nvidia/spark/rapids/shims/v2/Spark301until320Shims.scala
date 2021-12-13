@@ -59,7 +59,7 @@ import org.apache.spark.sql.types._
 /**
 * Shim base class that can be compiled with from 301 until 320
 */
-trait Spark301util320Shims extends SparkShims {
+trait Spark301until320Shims extends SparkShims {
   override def parquetRebaseReadKey: String =
     SQLConf.LEGACY_PARQUET_REBASE_MODE_IN_READ.key
   override def parquetRebaseWriteKey: String =
@@ -72,15 +72,6 @@ trait Spark301util320Shims extends SparkShims {
     conf.getConf(SQLConf.LEGACY_PARQUET_REBASE_MODE_IN_READ)
   override def parquetRebaseWrite(conf: SQLConf): String =
     conf.getConf(SQLConf.LEGACY_PARQUET_REBASE_MODE_IN_WRITE)
-  override def int96ParquetRebaseRead(conf: SQLConf): String =
-    parquetRebaseRead(conf)
-  override def int96ParquetRebaseWrite(conf: SQLConf): String =
-    parquetRebaseWrite(conf)
-  override def int96ParquetRebaseReadKey: String =
-    parquetRebaseReadKey
-  override def int96ParquetRebaseWriteKey: String =
-    parquetRebaseWriteKey
-  override def hasSeparateINT96RebaseConf: Boolean = false
 
   override def sessionFromPlan(plan: SparkPlan): SparkSession = {
     plan.sqlContext.sparkSession
