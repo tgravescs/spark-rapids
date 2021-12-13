@@ -19,6 +19,8 @@ set -ex
 
 . jenkins/version-def.sh
 
+mvn --version
+
 ## export 'M2DIR' so that shims can get the correct cudf/spark dependency info
 export M2DIR="$WORKSPACE/.m2"
 # build, install, and deploy all the versions we support, but skip deploy of individual dist module since we
@@ -28,7 +30,7 @@ export M2DIR="$WORKSPACE/.m2"
 mvn -U -B -Dbuildver=302 clean install -pl '!tools' $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER
 [[ $SKIP_DEPLOY != 'true' ]] && mvn -B -Dbuildver=302 deploy -pl '!tools,!dist' $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER -DskipTests
 mvn -U -B -Dbuildver=303 clean install -pl '!tools' $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER
-[[ $SKIP_DEPLOY != 'true' ]] && mvn -B -Dbuildver=303 deploy -pl '!tools,!dist' $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER -DskipTests
+[[ $SKIP_DEPLOY != 'true' ]] && mvn -X -B -Dbuildver=303 deploy -pl '!tools,!dist' $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER -DskipTests
 mvn -U -B -Dbuildver=304 clean install -pl '!tools' $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER
 [[ $SKIP_DEPLOY != 'true' ]] && mvn -B -Dbuildver=304 deploy -pl '!tools,!dist' $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER -DskipTests
 mvn -U -B -Dbuildver=311 clean install $MVN_URM_MIRROR -Dmaven.repo.local=$M2DIR -Dcuda.version=$CUDA_CLASSIFIER
