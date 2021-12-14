@@ -32,7 +32,7 @@ import org.apache.spark.sql.types.{ArrayType, DataType, IntegerType, MapType, St
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 class GpuGenerateExecSparkPlanMeta(
-    gen: GenerateExec,
+    val gen: GenerateExec,
     conf: RapidsConf,
     p: Option[RapidsMeta[_, _, _]],
     r: DataFromReplacementRule) extends SparkPlanMeta[GenerateExec](gen, conf, p, r) {

@@ -73,8 +73,9 @@ import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
  * @tparam WRAP_TYPE base class that should be returned by doWrap.
  */
 abstract class ReplacementConvertRule[INPUT <: BASE, BASE, OUTPUT <: BASE,
-  CONVERT_TYPE <: RapidsConvert[INPUT, BASE, OUTPUT, _]](
-    protected var doConvert: (DataFromReplacementRule) => CONVERT_TYPE,
+  CONVERT_TYPE <: RapidsConvert[INPUT, BASE, OUTPUT, _],
+  META_TYPE <: RapidsMeta[_, _, _]](
+    protected var doConvert: () => CONVERT_TYPE,
     protected var desc: String,
     protected val checks: Option[TypeChecks[_]],
     final val tag: ClassTag[INPUT]) {
@@ -85,15 +86,14 @@ abstract class ReplacementConvertRule[INPUT <: BASE, BASE, OUTPUT <: BASE,
    * @param func the function
    * @return this for chaining.
    */
-  final def convert(func: (DataFromReplacementRule) => CONVERT_TYPE): this.type = {
+ /* final def convert(func: (META_TYPE, DataFromReplacementRule) => CONVERT_TYPE): this.type = {
     doConvert = func
     this
-  }
+  } */
 
-  final def convert(
-      r: DataFromReplacementRule): CONVERT_TYPE = {
-    doConvert(r)
-  }
+  final def convert(): CONVERT_TYPE = {
+   doConvert()
+ }
 
   def getClassFor: Class[_] = tag.runtimeClass
 }
@@ -279,10 +279,10 @@ class ScanRule[INPUT <: Scan](
 }
 
 class ScanConvertRule[INPUT <: Scan](
-    doConvert: (DataFromReplacementRule) => ScanConvert[INPUT],
+    doConvert: () => ScanConvert[INPUT],
     desc: String,
     tag: ClassTag[INPUT])
-  extends ReplacementConvertRule[INPUT, Scan, Scan, ScanConvert[INPUT]](
+  extends ReplacementConvertRule[INPUT, Scan, Scan, ScanConvert[INPUT], ScanMeta[INPUT]](
     doConvert, desc, None, tag) {
 
 }
@@ -327,6 +327,20 @@ class ExecRule[INPUT <: SparkPlan](
   override val confKeyPart: String = "exec"
   override val operationName: String = "Exec"
 }
+
+/*
+class ExecConvertRule[INPUT <: SparkPlan](
+    doConvert: () => PlanConvert[INPUT],
+    desc: String,
+    tag: ClassTag[INPUT])
+  extends ReplacementConvertRule[INPUT, SparkPlan, SparkPlan,
+    PlanConvert[INPUT], SparkPlanMeta[INPUT]](
+    doConvert, desc, None, tag) {
+
+}
+
+ */
+
 
 /**
  * Holds everything that is needed to replace a `DataWritingCommand` with a
@@ -811,7 +825,7 @@ object GpuOverrides extends Logging {
 
   def scanConvert[INPUT <: Scan](
       desc: String,
-      doConvert: (DataFromReplacementRule) => ScanConvert[INPUT])
+      doConvert: () => ScanConvert[INPUT])
     (implicit tag: ClassTag[INPUT]): ScanConvertRule[INPUT] = {
     new ScanConvertRule[INPUT](doConvert, desc, tag)
   }
@@ -842,6 +856,14 @@ object GpuOverrides extends Logging {
       new DoNotReplaceOrWarnSparkPlanMeta[INPUT](exec, conf, p)
     new ExecRule[INPUT](doWrap, desc, None, tag).invisible()
   }
+
+  /*
+  def execConvert[INPUT <: SparkPlan]()
+    (implicit tag: ClassTag[INPUT]): ExecRule[INPUT] = {
+    new ExecConvertRule[INPUT]()
+  }
+  */
+
 
   def exec[INPUT <: SparkPlan](
       desc: String,
@@ -3357,9 +3379,8 @@ object GpuOverrides extends Logging {
 
   def wrapScanConvert[INPUT <: Scan](meta: ScanMeta[INPUT]): ScanConvert[INPUT] =
     scansConvert.get(meta.wrapped.getClass)
-      .map(r => r.convert(meta, r).asInstanceOf[ScanConvert[INPUT]])
-      .getOrElse(new RuleNotFoundScanConvert(scan))
-
+      .map(r => r.convert().asInstanceOf[ScanConvert[INPUT]])
+      .getOrElse(new RuleNotFoundScanConvert())
 
   def wrapScan[INPUT <: Scan](
       scan: INPUT,
@@ -3394,7 +3415,7 @@ object GpuOverrides extends Logging {
   val commonConvertScans: Map[Class[_ <: Scan], ScanConvertRule[_ <: Scan]] = Seq(
     GpuOverrides.scanConvert[CSVScan](
       "CSV parsing",
-      (r) => new ScanConvert[CSVScan](r) {
+      () => new ScanConvert[CSVScan]() {
         override def convertToGpu(meta: ScanMeta[CSVScan]): Scan =
           GpuCSVScan(meta.wrapped.sparkSession,
             meta.wrapped.fileIndex,
@@ -3486,6 +3507,41 @@ object GpuOverrides extends Logging {
       (a, conf, p, r) => new CreateDataSourceTableAsSelectCommandMeta(a, conf, p, r))
   ).map(r => (r.getClassFor.asSubclass(classOf[DataWritingCommand]), r)).toMap
 
+  /*
+  def wrapPlanConvert[INPUT <: SparkPlan](meta: SparkPlanMeta[INPUT]): PlanConvert[INPUT] =
+    execsConvert.get(meta.wrapped.getClass)
+      .map(r => r.convert().asInstanceOf[PlanConvert[INPUT]])
+      .getOrElse(new RuleNotFoundPlanConvert())
+
+   */
+
+  lazy val execsConvert: Map[Class[_ <: SparkPlan],
+    PlanConvert[_ <: SparkPlan, _ <: SparkPlanMeta[_]]] =
+    commonConvertExecs
+
+  val commonConvertExecs: Map[Class[_ <: SparkPlan],
+    PlanConvert[_ <: SparkPlan, _ <: SparkPlanMeta[_]]] = Seq(
+    new PlanConvert[GenerateExec, GpuGenerateExecSparkPlanMeta]() {
+       override def convertToGpu(meta: GpuGenerateExecSparkPlanMeta): GpuExec =  {
+          GpuGenerateExec(
+            meta.childExprs.head.convertToGpu().asInstanceOf[GpuGenerator],
+            meta.gen.requiredChildOutput,
+            meta.gen.outer,
+            meta.gen.generatorOutput,
+            meta.childPlans.head.convertIfNeeded())
+        }
+      },
+    new PlanConvert[BatchScanExec, SparkPlanMeta[BatchScanExec]]() {
+     // override val childScans: scala.Seq[ScanMeta[_]] =
+       // Seq(GpuOverrides.wrapScan(p.scan, conf, Some(this)))
+      override def convertToGpu(meta: SparkPlanMeta[BatchScanExec]): GpuExec =  {
+        logWarning("convert to gpu batch scan exec old way")
+        GpuBatchScanExec(meta.wrapped.output, meta.childScans.head.convertToGpu())
+      }
+    }
+  ).collect { case r if r != null => (r.getClassFor.asSubclass(classOf[SparkPlan]), r) }.toMap
+
+
   def wrapPlan[INPUT <: SparkPlan](
       plan: INPUT,
       conf: RapidsConf,
@@ -3529,8 +3585,10 @@ object GpuOverrides extends Logging {
         override val childScans: scala.Seq[ScanMeta[_]] =
           Seq(GpuOverrides.wrapScan(p.scan, conf, Some(this)))
 
-        override def convertToGpu(): GpuExec =
+        override def convertToGpu(): GpuExec = {
+          logWarning("convert to gpu batch scan exec old way")
           GpuBatchScanExec(p.output, childScans.head.convertToGpu())
+        }
       }),
     exec[CoalesceExec](
       "The backend for the dataframe coalesce method",
@@ -3819,9 +3877,46 @@ object GpuOverrides extends Logging {
     wrap
   }
 
+  /*
+  final def convertIfNeeded(wrap: SparkPlanMeta[SparkPlan]): SparkPlan = {
+    if (wrap.shouldThisBeRemoved) {
+      if (wrap.childPlans.isEmpty) {
+        throw new IllegalStateException("can't remove when plan has no children")
+      } else if (wrap.childPlans.size > 1) {
+        throw new IllegalStateException("can't remove when plan has more than 1 child")
+      }
+      convertIfNeeded(wrap.childPlans.head)
+    } else {
+      if (wrap.wrapped.isInstanceOf[Scan]) {
+        logWarning("Scan found going to call other convert")
+        val wrapConverted = wrapScanConvert(wrap.childScans.head)
+        val cScan = wrap.childScans.head
+        wrapConverted.convertToGpu(cScan)
+      }
+      if (wrap.canThisBeReplaced) {
+        wrap.convertToGpu()
+      } else {
+        wrap.convertToCpu()
+      }
+    }
+  }
+  */
+
+
   private def doConvertPlan(wrap: SparkPlanMeta[SparkPlan], conf: RapidsConf,
       optimizations: Seq[Optimization]): SparkPlan = {
-    val convertedPlan = wrap.convertIfNeeded()
+    val convertedPlan =  if (execsConvert.contains(wrap.wrapped.getClass)) {
+       val func = execsConvert.get(wrap.wrapped.getClass)
+      if (func.nonEmpty) {
+        func.get.convertToGpu(wrap)
+      } else {
+        wrap.convertIfNeeded()
+      }
+    } else {
+      wrap.convertIfNeeded()
+    }
+   //  val convertedPlan = convertIfNeeded(wrap)
+
     val sparkPlan = addSortsIfNeeded(convertedPlan, conf)
     GpuOverrides.listeners.foreach(_.optimizedPlan(wrap, sparkPlan, optimizations))
     sparkPlan

@@ -16,11 +16,15 @@
 
 package com.nvidia.spark.rapids
 
+import scala.reflect.ClassTag
+
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.connector.read.Scan
+import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 
 abstract class RapidsConvert[INPUT <: BASE, BASE, OUTPUT <: BASE,
-  METATYPE <: RapidsMeta[INPUT, BASE, OUTPUT]](
-    rule: DataFromReplacementRule) {
+  METATYPE <: RapidsMeta[INPUT, BASE, OUTPUT]]() {
 
   /**
    * Convert what this wraps to a GPU enabled version.
@@ -41,8 +45,50 @@ abstract class RapidsConvert[INPUT <: BASE, BASE, OUTPUT <: BASE,
 /**
  * Base class for metadata around `Scan`.
  */
-abstract class ScanConvert[INPUT <: Scan](
-    rule: DataFromReplacementRule)
-  extends RapidsConvert[INPUT, Scan, Scan, ScanMeta[INPUT]](rule) {
+abstract class ScanConvert[INPUT <: Scan]()
+  extends RapidsConvert[INPUT, Scan, Scan, ScanMeta[INPUT]]() {
   }
 
+/**
+ * Metadata for `Scan` with no rule found
+ */
+final class RuleNotFoundScanConvert[INPUT <: Scan]()
+  extends ScanConvert[INPUT]() {
+
+  override def convertToGpu(meta: ScanMeta[INPUT]): Scan =
+    throw new IllegalStateException("Cannot be converted to GPU")
+}
+
+
+abstract class PlanConvert[INPUT <: SparkPlan,
+  META <: SparkPlanMeta[INPUT]](implicit tag: ClassTag[INPUT])
+  extends RapidsConvert[INPUT, SparkPlan, GpuExec, META]() {
+
+  override def convertToCpu(meta: META): SparkPlan = {
+    meta.wrapped.withNewChildren(meta.childPlans.map(_.convertIfNeeded()))
+  }
+
+  def getClassFor: Class[_] = tag.runtimeClass
+
+  /**
+   * If this is enabled to be converted to a GPU version convert it and return the result, else
+   * do what is needed to possibly convert the rest of the plan.
+   */
+  final def convertIfNeeded(meta: META): SparkPlan = {
+    if (meta.shouldThisBeRemoved) {
+      if (meta.childPlans.isEmpty) {
+        throw new IllegalStateException("can't remove when plan has no children")
+      } else if (meta.childPlans.size > 1) {
+        throw new IllegalStateException("can't remove when plan has more than 1 child")
+      }
+      meta.childPlans.head.convertIfNeeded()
+    } else {
+      if (meta.canThisBeReplaced) {
+        convertToGpu(meta)
+      } else {
+        convertToCpu(meta)
+      }
+    }
+  }
+
+}
