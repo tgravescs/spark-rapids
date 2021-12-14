@@ -82,6 +82,44 @@
     </modules>
     <profiles>
         <profile>
+            <id>release248</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+                <property>
+                    <name>buildver</name>
+                    <value>248</value>
+                </property>
+            </activation>
+            <properties>
+                <spark.version>${spark248.version}</spark.version>
+                <spark.test.version>${spark248.version}</spark.test.version>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>add-profile-src-30+</id>
+                                <goals><goal>add-source</goal></goals>
+                                <phase>generate-sources</phase>
+                                <configuration>
+                                    <sources>
+                                        <source>${project.basedir}/src/main/2x/scala</source>
+                                        <source>${project.basedir}/src/main/pre320-treenode/scala</source>
+                                    </sources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+            <modules>
+                <module>aggregator</module>
+            </modules>
+        </profile>
+        <profile>
             <id>release301</id>
             <activation>
                 <activeByDefault>true</activeByDefault>
@@ -106,6 +144,7 @@
                                 <phase>generate-sources</phase>
                                 <configuration>
                                     <sources>
+                                        <source>${project.basedir}/src/main/300+-all/scala</source>
                                         <source>${project.basedir}/src/main/301+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/301until310-all/scala</source>
                                         <source>${project.basedir}/src/main/301until310-nondb/scala</source>
@@ -195,6 +234,7 @@
                                 <phase>generate-sources</phase>
                                 <configuration>
                                     <sources>
+                                        <source>${project.basedir}/src/main/300+-all/scala</source>
                                         <source>${project.basedir}/src/main/301+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/301until310-all/scala</source>
                                         <source>${project.basedir}/src/main/301until310-nondb/scala</source>
@@ -239,6 +279,7 @@
                                 <phase>generate-sources</phase>
                                 <configuration>
                                     <sources>
+                                        <source>${project.basedir}/src/main/300+-all/scala</source>
                                         <source>${project.basedir}/src/main/301+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/301until310-all/scala</source>
                                         <source>${project.basedir}/src/main/301until310-nondb/scala</source>
@@ -283,6 +324,7 @@
                                 <phase>generate-sources</phase>
                                 <configuration>
                                     <sources>
+                                        <source>${project.basedir}/src/main/300+-all/scala</source>
                                         <source>${project.basedir}/src/main/301+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/301until320-all/scala</source>
                                         <source>${project.basedir}/src/main/301until320-nondb/scala</source>
@@ -441,6 +483,7 @@
                                 <phase>generate-sources</phase>
                                 <configuration>
                                     <sources>
+                                        <source>${project.basedir}/src/main/300+-all/scala</source>
                                         <source>${project.basedir}/src/main/301+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/301until320-all/scala</source>
                                         <source>${project.basedir}/src/main/301until320-nondb/scala</source>
@@ -489,6 +532,7 @@
                                 <phase>generate-sources</phase>
                                 <configuration>
                                     <sources>
+                                        <source>${project.basedir}/src/main/300+-all/scala</source>
                                         <source>${project.basedir}/src/main/301+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/301until320-all/scala</source>
                                         <source>${project.basedir}/src/main/301until320-nondb/scala</source>
@@ -537,6 +581,7 @@
                                 <phase>generate-sources</phase>
                                 <configuration>
                                     <sources>
+                                        <source>${project.basedir}/src/main/300+-all/scala</source>
                                         <source>${project.basedir}/src/main/301+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/301until330-all/scala</source>
                                         <source>${project.basedir}/src/main/311+-all/scala</source>
@@ -580,6 +625,7 @@
                                 <phase>generate-sources</phase>
                                 <configuration>
                                     <sources>
+                                        <source>${project.basedir}/src/main/300+-all/scala</source>
                                         <source>${project.basedir}/src/main/301+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/301until330-all/scala</source>
                                         <source>${project.basedir}/src/main/311+-all/scala</source>
@@ -623,6 +669,7 @@
                                 <phase>generate-sources</phase>
                                 <configuration>
                                     <sources>
+                                        <source>${project.basedir}/src/main/300+-all/scala</source>
                                         <source>${project.basedir}/src/main/301+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/311+-all/scala</source>
                                         <source>${project.basedir}/src/main/311+-nondb/scala</source>
@@ -666,6 +713,7 @@
                                 <phase>generate-sources</phase>
                                 <configuration>
                                     <sources>
+                                        <source>${project.basedir}/src/main/300+-all/scala</source>
                                         <source>${project.basedir}/src/main/301+-nondb/scala</source>
                                         <source>${project.basedir}/src/main/301until320-all/scala</source>
                                         <source>${project.basedir}/src/main/301until320-nondb/scala</source>
@@ -771,6 +819,7 @@
         <!--
          If you update a dependency version so it is no longer a SNAPSHOT
          please update the snapshot-shims profile as well so it is accurate -->
+        <spark248.version>2.4.8</spark248.version>
         <spark301.version>3.0.1</spark301.version>
         <spark301db.version>3.0.1-databricks</spark301db.version>
         <spark302.version>3.0.2</spark302.version>
