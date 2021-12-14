@@ -2844,8 +2844,7 @@ object GpuOverrides extends Logging {
       desc = "Create a map",
       CreateMapCheck,
       (a, conf, p, r) => new ExprMeta[CreateMap](a, conf, p, r) {
-      }
-    )
+      })
   ).map(r => (r.getClassFor.asSubclass(classOf[Expression]), r)).toMap
 
   // Shim expressions should be last to allow overrides with shim-specific versions
@@ -3425,7 +3424,7 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
           }
         }
       }
-      // GpuOverrides.doConvertPlan(wrap, conf, optimizations)
+      GpuOverrides.doConvertPlan(wrap, conf, optimizations)
     }
   }
 }
