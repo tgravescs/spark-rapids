@@ -20,13 +20,10 @@ import java.time.ZoneId
 
 import scala.collection.mutable
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, BinaryExpression, ComplexTypeMergingExpression, Expression, QuaternaryExpression, String2TrimExpression, TernaryExpression, UnaryExpression, WindowExpression, WindowFunction}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, BinaryExpression, ComplexTypeMergingExpression, Expression, String2TrimExpression, TernaryExpression, UnaryExpression, WindowExpression, WindowFunction}
 import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, AggregateFunction, ImperativeAggregate, TypedImperativeAggregate}
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
-import org.apache.spark.sql.catalyst.trees.TreeNodeTag
-import org.apache.spark.sql.connector.read.Scan
 import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.execution.aggregate.BaseAggregateExec
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.rapids.{CpuToGpuAggregateBufferConverter, GpuToCpuAggregateBufferConverter}
@@ -54,7 +51,6 @@ final class NoRuleDataFromReplacementRule extends DataFromReplacementRule {
 }
 
 object RapidsMeta {
-  val gpuSupportedTag = TreeNodeTag[Set[String]]("rapids.gpu.supported")
 }
 
 /**
@@ -124,7 +120,6 @@ abstract class RapidsMeta[INPUT <: BASE, BASE, OUTPUT <: BASE](
   protected var cannotRunOnGpuBecauseOfSparkPlan: Boolean = false
   protected var cannotRunOnGpuBecauseOfCost: Boolean = false
 
-  import RapidsMeta.gpuSupportedTag
 
   /**
    * Recursively force a section of the plan back onto CPU, stopping once a plan
@@ -176,12 +171,12 @@ abstract class RapidsMeta[INPUT <: BASE, BASE, OUTPUT <: BASE](
     cannotBeReplacedReasons.get.add(because)
     // annotate the real spark plan with the reason as well so that the information is available
     // during query stage planning when AQE is on
-    wrapped match {
+  /*  wrapped match {
       case p: SparkPlan =>
         p.setTagValue(gpuSupportedTag,
           p.getTagValue(gpuSupportedTag).getOrElse(Set.empty) + because)
       case _ =>
-    }
+    } */
   }
 
   final def mustBeReplaced(because: String): Unit = {
@@ -474,6 +469,7 @@ final class RuleNotFoundPartMeta[INPUT <: Partitioning](
 /**
  * Base class for metadata around `Scan`.
  */
+/*
 abstract class ScanMeta[INPUT <: Scan](scan: INPUT,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
@@ -489,9 +485,12 @@ abstract class ScanMeta[INPUT <: Scan](scan: INPUT,
   override def tagSelfForGpu(): Unit = {}
 }
 
+ */
+
 /**
  * Metadata for `Scan` with no rule found
  */
+/*
 final class RuleNotFoundScanMeta[INPUT <: Scan](
     scan: INPUT,
     conf: RapidsConf,
@@ -505,6 +504,8 @@ final class RuleNotFoundScanMeta[INPUT <: Scan](
   override def convertToGpu(): Scan =
     throw new IllegalStateException("Cannot be converted to GPU")
 }
+
+ */
 
 /**
  * Base class for metadata around `DataWritingCommand`.
@@ -625,10 +626,12 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
 
       willNotWorkOnGpu("Columnar exchange without columnar children is inefficient")
 
-      childPlans.head.wrapped
+     /* childPlans.head.wrapped
           .getTagValue(GpuOverrides.preRowToColProjection).foreach { r2c =>
         wrapped.setTagValue(GpuOverrides.preRowToColProjection, r2c)
       }
+
+      */
     }
   }
 
@@ -692,9 +695,12 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
    * previously stored on the spark plan to determine whether this operator can run on GPU
    */
   def checkExistingTags(): Unit = {
+    /*
     wrapped.getTagValue(RapidsMeta.gpuSupportedTag)
       .foreach(_.diff(cannotBeReplacedReasons.get)
       .foreach(willNotWorkOnGpu))
+
+     */
   }
 
   /**
@@ -861,12 +867,15 @@ object ExpressionContext {
     parent.get.wrapped match {
       case agg: SparkPlan if ShimLoader.getSparkShims.isWindowFunctionExec(agg) =>
         WindowAggExprContext
+        /*
       case agg: BaseAggregateExec =>
         if (agg.groupingExpressions.isEmpty) {
           ReductionAggExprContext
         } else {
           GroupByAggExprContext
         }
+
+         */
       case _ => throw new IllegalStateException(
         s"Found an aggregation function in an unexpected context $parent")
     }
@@ -1165,7 +1174,7 @@ abstract class ImperativeAggExprMeta[INPUT <: ImperativeAggregate](
     rule: DataFromReplacementRule)
   extends AggExprMeta[INPUT](expr, conf, parent, rule) {
 
-  def convertToGpu(childExprs: Seq[Expression]): GpuExpression =
+  override def convertToGpu(childExprs: Seq[Expression]): GpuExpression =
     throw new IllegalStateException("Cannot be converted to GPU")
 }
 
@@ -1225,7 +1234,8 @@ abstract class BinaryExprMeta[INPUT <: BinaryExpression](
     convertToGpu(lhs, rhs)
   }
 
-  def convertToGpu(lhs: Expression, rhs: Expression): GpuExpression
+  def convertToGpu(lhs: Expression, rhs: Expression): GpuExpression =
+    throw new NotImplementedError("2x")
 }
 
 /** Base metadata class for binary expressions that support conversion to AST */
@@ -1260,12 +1270,14 @@ abstract class TernaryExprMeta[INPUT <: TernaryExpression](
   }
 
   def convertToGpu(val0: Expression, val1: Expression,
-                   val2: Expression): GpuExpression
+                   val2: Expression): GpuExpression =
+    throw new NotImplementedError("2x")
 }
 
 /**
  * Base class for metadata around `QuaternaryExpression`.
  */
+/*
 abstract class QuaternaryExprMeta[INPUT <: QuaternaryExpression](
     expr: INPUT,
     conf: RapidsConf,
@@ -1279,8 +1291,11 @@ abstract class QuaternaryExprMeta[INPUT <: QuaternaryExpression](
   }
 
   def convertToGpu(val0: Expression, val1: Expression,
-    val2: Expression, val3: Expression): GpuExpression
+    val2: Expression, val3: Expression): GpuExpression =
+    throw new NotImplementedError("2x")
 }
+
+ */
 
 abstract class String2TrimExpressionMeta[INPUT <: String2TrimExpression](
     expr: INPUT,
@@ -1294,7 +1309,8 @@ abstract class String2TrimExpressionMeta[INPUT <: String2TrimExpression](
     convertToGpu(gpuCol, gpuTrimParam.headOption)
   }
 
-  def convertToGpu(column: Expression, target: Option[Expression] = None): GpuExpression
+  def convertToGpu(column: Expression, target: Option[Expression] = None): GpuExpression =
+    throw new NotImplementedError("2x")
 }
 
 /**
@@ -1309,7 +1325,8 @@ abstract class ComplexTypeMergingExprMeta[INPUT <: ComplexTypeMergingExpression]
   override final def convertToGpu(): GpuExpression =
     convertToGpu(childExprs.map(_.convertToGpu()))
 
-  def convertToGpu(childExprs: Seq[Expression]): GpuExpression
+  def convertToGpu(childExprs: Seq[Expression]): GpuExpression =
+    throw new NotImplementedError("2x")
 }
 
 /**
