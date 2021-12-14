@@ -50,6 +50,10 @@
         2021.2.1
         -->
         <profile>
+            <id>release248</id>
+            <modules><module>spark248</module></modules>
+        </profile>
+        <profile>
             <id>release301</id>
             <modules><module>spark301</module></modules>
         </profile>
