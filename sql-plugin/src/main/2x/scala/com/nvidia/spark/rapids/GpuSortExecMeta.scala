@@ -16,23 +16,7 @@
 
 package com.nvidia.spark.rapids
 
-import java.util.{Comparator, LinkedList, PriorityQueue}
-
-import scala.collection.mutable.ArrayBuffer
-
-import ai.rapids.cudf.{ColumnVector, ContiguousTable, NvtxColor, NvtxRange, Table}
-import com.nvidia.spark.rapids.GpuMetric._
-import com.nvidia.spark.rapids.shims.v2.ShimUnaryExecNode
-
-import org.apache.spark.TaskContext
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Attribute, SortOrder, UnsafeProjection, UnsafeRow}
-import org.apache.spark.sql.catalyst.expressions.codegen.LazilyGeneratedOrdering
-import org.apache.spark.sql.catalyst.plans.physical.{Distribution, OrderedDistribution, Partitioning, UnspecifiedDistribution}
-import org.apache.spark.sql.execution.{SortExec, SparkPlan}
-import org.apache.spark.sql.rapids.execution.TrampolineUtil
-import org.apache.spark.sql.vectorized.ColumnarBatch
+import org.apache.spark.sql.execution.SortExec
 
 sealed trait SortExecType extends Serializable
 
