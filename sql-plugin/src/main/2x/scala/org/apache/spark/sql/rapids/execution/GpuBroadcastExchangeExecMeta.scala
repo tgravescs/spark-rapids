@@ -16,36 +16,10 @@
 
 package org.apache.spark.sql.rapids.execution
 
-import java.io._
-import java.util.UUID
-import java.util.concurrent._
-
-import scala.concurrent.ExecutionContext
-import scala.util.control.NonFatal
-
-import ai.rapids.cudf.{HostMemoryBuffer, JCudfSerialization, NvtxColor, NvtxRange}
-import com.google.common.util.concurrent.ThreadFactoryBuilder
 import com.nvidia.spark.rapids._
-import com.nvidia.spark.rapids.GpuMetric._
-import com.nvidia.spark.rapids.RapidsPluginImplicits._
-import com.nvidia.spark.rapids.shims.v2.{ShimBroadcastExchangeLike, ShimUnaryExecNode}
 
-import org.apache.spark.SparkException
-import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.launcher.SparkLauncher
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.plans.logical.Statistics
-import org.apache.spark.sql.catalyst.plans.physical.{BroadcastMode, BroadcastPartitioning, Partitioning}
-import org.apache.spark.sql.execution.{SparkPlan, SQLExecution}
 import org.apache.spark.sql.execution.exchange.BroadcastExchangeExec
-import org.apache.spark.sql.execution.exchange.BroadcastExchangeExec.MAX_BROADCAST_TABLE_BYTES
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BroadcastNestedLoopJoinExec}
-import org.apache.spark.sql.execution.metric.SQLMetrics
-import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
-import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 
 class GpuBroadcastMeta(
     exchange: BroadcastExchangeExec,
