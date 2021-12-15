@@ -289,6 +289,7 @@ class DataWritingCommandRule[INPUT <: DataWritingCommand](
   override val operationName: String = "Output"
 }
 
+/*
 final class InsertIntoHadoopFsRelationCommandMeta(
     cmd: InsertIntoHadoopFsRelationCommand,
     conf: RapidsConf,
@@ -305,6 +306,7 @@ final class InsertIntoHadoopFsRelationCommandMeta(
 
     val spark = SparkSession.active
 
+    // TODO - tagging requires returning the type here which we don't really want
     fileFormat = cmd.fileFormat match {
       case _: CSVFileFormat =>
         willNotWorkOnGpu("CSV output is not supported")
@@ -325,6 +327,8 @@ final class InsertIntoHadoopFsRelationCommandMeta(
     }
   }
 }
+
+
 
 final class CreateDataSourceTableAsSelectCommandMeta(
     cmd: CreateDataSourceTableAsSelectCommand,
@@ -362,7 +366,7 @@ final class CreateDataSourceTableAsSelectCommandMeta(
   }
 
 }
-
+ */
 /**
  * Listener trait so that tests can confirm that the expected optimizations are being applied
  */
@@ -2436,7 +2440,11 @@ object GpuOverrides extends Logging {
       .map(r => r.wrap(writeCmd, conf, parent, r).asInstanceOf[DataWritingCommandMeta[INPUT]])
       .getOrElse(new RuleNotFoundDataWritingCommandMeta(writeCmd, conf, parent))
 
-  val dataWriteCmds: Map[Class[_ <: DataWritingCommand],
+  val dataWriteCmd: Map[Class[_ <: DataWritingCommand],
+    DataWritingCommandRule[_ <: DataWritingCommand]] = Map.empty
+
+  // TODO - classes require setting gpu type in tag
+ /* val dataWriteCmds: Map[Class[_ <: DataWritingCommand],
       DataWritingCommandRule[_ <: DataWritingCommand]] = Seq(
     dataWriteCmd[InsertIntoHadoopFsRelationCommand](
       "Write to Hadoop filesystem",
@@ -2445,6 +2453,8 @@ object GpuOverrides extends Logging {
       "Create table with select command",
       (a, conf, p, r) => new CreateDataSourceTableAsSelectCommandMeta(a, conf, p, r))
   ).map(r => (r.getClassFor.asSubclass(classOf[DataWritingCommand]), r)).toMap
+
+  */
 
   def wrapPlan[INPUT <: SparkPlan](
       plan: INPUT,
