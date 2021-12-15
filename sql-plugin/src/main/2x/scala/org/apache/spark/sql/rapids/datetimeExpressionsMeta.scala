@@ -21,9 +21,52 @@ import com.nvidia.spark.rapids.DateUtils.TimestampFormatConversionException
 import com.nvidia.spark.rapids.GpuOverrides.extractStringLit
 
 import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, TimeZoneAwareExpression}
-import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 
+object GpuToTimestamp {
+  // We are compatible with Spark for these formats when the timeParserPolicy is CORRECTED
+  // or EXCEPTION. It is possible that other formats may be supported but these are the only
+  // ones that we have tests for.
+  val CORRECTED_COMPATIBLE_FORMATS = Map(
+    "yyyy-MM-dd" -> ParseFormatMeta('-', isTimestamp = false,
+      raw"\A\d{4}-\d{2}-\d{2}\Z"),
+    "yyyy/MM/dd" -> ParseFormatMeta('/', isTimestamp = false,
+      raw"\A\d{4}/\d{1,2}/\d{1,2}\Z"),
+    "yyyy-MM" -> ParseFormatMeta('-', isTimestamp = false,
+      raw"\A\d{4}-\d{2}\Z"),
+    "yyyy/MM" -> ParseFormatMeta('/', isTimestamp = false,
+      raw"\A\d{4}/\d{2}\Z"),
+    "dd/MM/yyyy" -> ParseFormatMeta('/', isTimestamp = false,
+      raw"\A\d{2}/\d{2}/\d{4}\Z"),
+    "yyyy-MM-dd HH:mm:ss" -> ParseFormatMeta('-', isTimestamp = true,
+      raw"\A\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}\Z"),
+    "MM-dd" -> ParseFormatMeta('-', isTimestamp = false,
+      raw"\A\d{2}-\d{2}\Z"),
+    "MM/dd" -> ParseFormatMeta('/', isTimestamp = false,
+      raw"\A\d{2}/\d{2}\Z"),
+    "dd-MM" -> ParseFormatMeta('-', isTimestamp = false,
+      raw"\A\d{2}-\d{2}\Z"),
+    "dd/MM" -> ParseFormatMeta('/', isTimestamp = false,
+      raw"\A\d{2}/\d{2}\Z")
+  )
+  // We are compatible with Spark for these formats when the timeParserPolicy is LEGACY. It
+  // is possible that other formats may be supported but these are the only ones that we have
+  // tests for.
+  val LEGACY_COMPATIBLE_FORMATS = Map(
+    "yyyy-MM-dd" -> ParseFormatMeta('-', isTimestamp = false,
+      raw"\A\d{4}-\d{1,2}-\d{1,2}(\D|\s|\Z)"),
+    "yyyy/MM/dd" -> ParseFormatMeta('/', isTimestamp = false,
+      raw"\A\d{4}/\d{1,2}/\d{1,2}(\D|\s|\Z)"),
+    "dd-MM-yyyy" -> ParseFormatMeta('-', isTimestamp = false,
+      raw"\A\d{1,2}-\d{1,2}-\d{4}(\D|\s|\Z)"),
+    "dd/MM/yyyy" -> ParseFormatMeta('/', isTimestamp = false,
+      raw"\A\d{1,2}/\d{1,2}/\d{4}(\D|\s|\Z)"),
+    "yyyy-MM-dd HH:mm:ss" -> ParseFormatMeta('-', isTimestamp = true,
+      raw"\A\d{4}-\d{1,2}-\d{1,2}[ T]\d{1,2}:\d{1,2}:\d{1,2}(\D|\s|\Z)"),
+    "yyyy/MM/dd HH:mm:ss" -> ParseFormatMeta('/', isTimestamp = true,
+      raw"\A\d{4}/\d{1,2}/\d{1,2}[ T]\d{1,2}:\d{1,2}:\d{1,2}(\D|\s|\Z)")
+  )
+}
 
 abstract class UnixTimeExprMeta[A <: BinaryExpression with TimeZoneAwareExpression]
    (expr: A, conf: RapidsConf,
@@ -60,9 +103,12 @@ abstract class UnixTimeExprMeta[A <: BinaryExpression with TimeZoneAwareExpressi
                 // - we can only support 4 digit years but Spark supports a wider range
                 // - we use a proleptic Gregorian calender but Spark uses a hybrid Julian+Gregorian
                 //   calender in LEGACY mode
+                // TODO - ansi
+                /*
                 if (SQLConf.get.ansiEnabled) {
                   willNotWorkOnGpu("LEGACY format in ANSI mode is not supported on the GPU")
-                } else if (!conf.incompatDateFormats) {
+                } else */
+                 if (!conf.incompatDateFormats) {
                   willNotWorkOnGpu(s"LEGACY format '$sparkFormat' on the GPU is not guaranteed " +
                     s"to produce the same results as Spark on CPU. Set " +
                     s"${RapidsConf.INCOMPATIBLE_DATE_FORMATS.key}=true to force onto GPU.")
