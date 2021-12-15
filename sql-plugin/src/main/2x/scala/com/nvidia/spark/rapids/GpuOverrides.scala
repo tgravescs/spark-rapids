@@ -797,16 +797,6 @@ object GpuOverrides extends Logging {
           TypeSig.UDT).nested())))
 
   val commonExpressions: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = Seq(
-    expr[Literal](
-      "Holds a static value from the query",
-      ExprChecks.projectAndAst(
-        TypeSig.astTypes,
-        (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL + TypeSig.CALENDAR
-            + TypeSig.ARRAY + TypeSig.MAP + TypeSig.STRUCT)
-            .nested(TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
-                TypeSig.ARRAY + TypeSig.MAP + TypeSig.STRUCT),
-        TypeSig.all),
-      (lit, conf, p, r) => new LiteralExprMeta(lit, conf, p, r)),
     expr[Signum](
       "Returns -1.0, 0.0 or 1.0 as expr is negative, 0 or positive",
       ExprChecks.mathUnary,
@@ -976,40 +966,6 @@ object GpuOverrides extends Logging {
       ExprChecks.mathUnary,
       (a, conf, p, r) => new UnaryExprMeta[ToRadians](a, conf, p, r) {
       }),
-    expr[WindowExpression](
-      "Calculates a return value for every input row of a table based on a group (or " +
-        "\"window\") of rows",
-      ExprChecks.windowOnly(
-        (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
-          TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP).nested(),
-        TypeSig.all,
-        Seq(ParamCheck("windowFunction",
-          (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
-            TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP).nested(),
-          TypeSig.all),
-          ParamCheck("windowSpec",
-            TypeSig.CALENDAR + TypeSig.NULL + TypeSig.integral + TypeSig.DECIMAL_64,
-            TypeSig.numericAndInterval))),
-      (windowExpression, conf, p, r) => new GpuWindowExpressionMeta(windowExpression, conf, p, r)),
-    expr[SpecifiedWindowFrame](
-      "Specification of the width of the group (or \"frame\") of input rows " +
-        "around which a window function is evaluated",
-      ExprChecks.projectOnly(
-        TypeSig.CALENDAR + TypeSig.NULL + TypeSig.integral,
-        TypeSig.numericAndInterval,
-        Seq(
-          ParamCheck("lower",
-            TypeSig.CALENDAR + TypeSig.NULL + TypeSig.integral,
-            TypeSig.numericAndInterval),
-          ParamCheck("upper",
-            TypeSig.CALENDAR + TypeSig.NULL + TypeSig.integral,
-            TypeSig.numericAndInterval))),
-      (windowFrame, conf, p, r) => new GpuSpecifiedWindowFrameMeta(windowFrame, conf, p, r) ),
-    expr[WindowSpecDefinition](
-      "Specification of a window function, indicating the partitioning-expression, the row " +
-        "ordering, and the width of the window",
-      WindowSpecCheck,
-      (windowSpec, conf, p, r) => new GpuWindowSpecDefinitionMeta(windowSpec, conf, p, r)),
     expr[CurrentRow.type](
       "Special boundary for a window frame, indicating stopping at the current row",
       ExprChecks.projectOnly(TypeSig.NULL, TypeSig.NULL),
@@ -1049,46 +1005,6 @@ object GpuOverrides extends Logging {
             TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL,
             TypeSig.all))),
       (denseRank, conf, p, r) => new ExprMeta[DenseRank](denseRank, conf, p, r) {
-      }),
-    expr[Lead](
-      "Window function that returns N entries ahead of this one",
-      ExprChecks.windowOnly(
-        (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
-          TypeSig.ARRAY + TypeSig.STRUCT).nested(),
-        TypeSig.all,
-        Seq(
-          ParamCheck("input",
-            (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL +
-              TypeSig.NULL + TypeSig.ARRAY + TypeSig.STRUCT).nested(),
-            TypeSig.all),
-          ParamCheck("offset", TypeSig.INT, TypeSig.INT),
-          ParamCheck("default",
-            (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
-              TypeSig.ARRAY + TypeSig.STRUCT).nested(),
-            TypeSig.all)
-        )
-      ),
-      (lead, conf, p, r) => new OffsetWindowFunctionMeta[Lead](lead, conf, p, r) {
-      }),
-    expr[Lag](
-      "Window function that returns N entries behind this one",
-      ExprChecks.windowOnly(
-        (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
-          TypeSig.ARRAY + TypeSig.STRUCT).nested(),
-        TypeSig.all,
-        Seq(
-          ParamCheck("input",
-            (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL +
-              TypeSig.NULL + TypeSig.ARRAY + TypeSig.STRUCT).nested(),
-            TypeSig.all),
-          ParamCheck("offset", TypeSig.INT, TypeSig.INT),
-          ParamCheck("default",
-            (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
-              TypeSig.ARRAY + TypeSig.STRUCT).nested(),
-            TypeSig.all)
-        )
-      ),
-      (lag, conf, p, r) => new OffsetWindowFunctionMeta[Lag](lag, conf, p, r) {
       }),
     expr[PreciseTimestampConversion](
       "Expression used internally to convert the TimestampType to Long and back without losing " +
@@ -2129,16 +2045,6 @@ object GpuOverrides extends Logging {
           }
         }
       }),
-    expr[StringSplit](
-       "Splits `str` around occurrences that match `regex`",
-      ExprChecks.projectOnly(TypeSig.ARRAY.nested(TypeSig.STRING),
-        TypeSig.ARRAY.nested(TypeSig.STRING),
-        Seq(ParamCheck("str", TypeSig.STRING, TypeSig.STRING),
-          ParamCheck("regexp", TypeSig.lit(TypeEnum.STRING)
-              .withPsNote(TypeEnum.STRING, "very limited subset of regex supported"),
-            TypeSig.STRING),
-          ParamCheck("limit", TypeSig.lit(TypeEnum.INT), TypeSig.INT))),
-      (in, conf, p, r) => new GpuStringSplitMeta(in, conf, p, r)),
     expr[GetStructField](
       "Gets the named field of the struct",
       ExprChecks.unaryProject(
@@ -2408,14 +2314,6 @@ object GpuOverrides extends Logging {
           ParamCheck("len", TypeSig.lit(TypeEnum.INT), TypeSig.INT))),
       (in, conf, p, r) => new TernaryExprMeta[Substring](in, conf, p, r) {
       }),
-    expr[SubstringIndex](
-      "substring_index operator",
-      ExprChecks.projectOnly(TypeSig.STRING, TypeSig.STRING,
-        Seq(ParamCheck("str", TypeSig.STRING, TypeSig.STRING),
-          ParamCheck("delim", TypeSig.lit(TypeEnum.STRING)
-              .withPsNote(TypeEnum.STRING, "only a single character is allowed"), TypeSig.STRING),
-          ParamCheck("count", TypeSig.lit(TypeEnum.INT), TypeSig.INT))),
-      (in, conf, p, r) => new SubstringIndexMeta(in, conf, p, r)),
     expr[StringRepeat](
       "StringRepeat operator that repeats the given strings with numbers of times " +
         "given by repeatTimes",
@@ -2524,25 +2422,6 @@ object GpuOverrides extends Logging {
         ("search", TypeSig.lit(TypeEnum.STRING), TypeSig.STRING)),
       (a, conf, p, r) => new BinaryExprMeta[Like](a, conf, p, r) {
       }),
-    expr[RLike](
-      "RLike",
-      ExprChecks.binaryProject(TypeSig.BOOLEAN, TypeSig.BOOLEAN,
-        ("str", TypeSig.STRING, TypeSig.STRING),
-        ("regexp", TypeSig.lit(TypeEnum.STRING), TypeSig.STRING)),
-      (a, conf, p, r) => new GpuRLikeMeta(a, conf, p, r)).disabledByDefault(
-      "the implementation is not 100% compatible. " +
-        "See the compatibility guide for more information."),
-    expr[RegExpExtract](
-      "RegExpExtract",
-      ExprChecks.projectOnly(TypeSig.STRING, TypeSig.STRING,
-        Seq(ParamCheck("str", TypeSig.STRING, TypeSig.STRING),
-          ParamCheck("regexp", TypeSig.lit(TypeEnum.STRING), TypeSig.STRING),
-          ParamCheck("idx", TypeSig.lit(TypeEnum.INT),
-            TypeSig.lit(TypeEnum.INT)))),
-      (a, conf, p, r) => new GpuRegExpExtractMeta(a, conf, p, r))
-      .disabledByDefault(
-      "the implementation is not 100% compatible. " +
-        "See the compatibility guide for more information."),
     expr[Length](
       "String character length or binary byte length",
       ExprChecks.unaryProject(TypeSig.INT, TypeSig.INT,
@@ -2569,34 +2448,6 @@ object GpuOverrides extends Logging {
       ExprChecks.unaryProject(TypeSig.DECIMAL_64, TypeSig.DECIMAL_128_FULL,
         TypeSig.LONG, TypeSig.LONG),
       (a, conf, p, r) => new UnaryExprMeta[MakeDecimal](a, conf, p, r) {
-      }),
-    expr[Explode](
-      "Given an input array produces a sequence of rows for each value in the array",
-      ExprChecks.unaryProject(
-        // Here is a walk-around representation, since multi-level nested type is not supported yet.
-        // related issue: https://github.com/NVIDIA/spark-rapids/issues/1901
-        TypeSig.ARRAY.nested(TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
-            TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP),
-        TypeSig.ARRAY.nested(TypeSig.all),
-        (TypeSig.ARRAY + TypeSig.MAP).nested(TypeSig.commonCudfTypes + TypeSig.NULL +
-            TypeSig.DECIMAL_128_FULL + TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP),
-        (TypeSig.ARRAY + TypeSig.MAP).nested(TypeSig.all)),
-      (a, conf, p, r) => new GeneratorExprMeta[Explode](a, conf, p, r) {
-        override val supportOuter: Boolean = true
-      }),
-    expr[PosExplode](
-      "Given an input array produces a sequence of rows for each value in the array",
-      ExprChecks.unaryProject(
-        // Here is a walk-around representation, since multi-level nested type is not supported yet.
-        // related issue: https://github.com/NVIDIA/spark-rapids/issues/1901
-        TypeSig.ARRAY.nested(TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
-            TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP),
-        TypeSig.ARRAY.nested(TypeSig.all),
-        (TypeSig.ARRAY + TypeSig.MAP).nested(TypeSig.commonCudfTypes + TypeSig.NULL +
-            TypeSig.DECIMAL_128_FULL + TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP),
-        (TypeSig.ARRAY + TypeSig.MAP).nested(TypeSig.all)),
-      (a, conf, p, r) => new GeneratorExprMeta[PosExplode](a, conf, p, r) {
-        override val supportOuter: Boolean = true
       }),
     expr[CollectList](
       "Collect a list of non-unique elements, not supported in reduction",
@@ -2939,18 +2790,6 @@ object GpuOverrides extends Logging {
           TypeSig.ARRAY + TypeSig.DECIMAL_128_FULL).nested(), TypeSig.all),
       (filter, conf, p, r) => new SparkPlanMeta[FilterExec](filter, conf, p, r) {
       }),
-    exec[ShuffleExchangeExec](
-      "The backend for most data being exchanged between processes",
-      ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
-          TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP).nested()
-          .withPsNote(TypeEnum.STRUCT, "Round-robin partitioning is not supported for nested " +
-              s"structs if ${SQLConf.SORT_BEFORE_REPARTITION.key} is true")
-          .withPsNote(TypeEnum.ARRAY, "Round-robin partitioning is not supported if " +
-              s"${SQLConf.SORT_BEFORE_REPARTITION.key} is true")
-          .withPsNote(TypeEnum.MAP, "Round-robin partitioning is not supported if " +
-              s"${SQLConf.SORT_BEFORE_REPARTITION.key} is true"),
-        TypeSig.all),
-      (shuffle, conf, p, r) => new GpuShuffleMeta(shuffle, conf, p, r)),
     exec[UnionExec](
       "The backend for the union operator",
       ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
@@ -2967,12 +2806,6 @@ object GpuOverrides extends Logging {
           TypeSig.NULL + TypeSig.DECIMAL_128_FULL + TypeSig.STRUCT),
         TypeSig.all),
       (exchange, conf, p, r) => new GpuBroadcastMeta(exchange, conf, p, r)),
-    exec[BroadcastNestedLoopJoinExec](
-      "Implementation of join using brute force. Full outer joins and joins where the " +
-          "broadcast side matches the join side (e.g.: LeftOuter with left broadcast) are not " +
-          "supported",
-      JoinTypeChecks.nonEquiJoinChecks,
-      (join, conf, p, r) => new GpuBroadcastNestedLoopJoinMeta(join, conf, p, r)),
     exec[CartesianProductExec](
       "Implementation of join using brute force",
       ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
@@ -3006,29 +2839,6 @@ object GpuOverrides extends Logging {
       ExecChecks((pluginSupportedOrderableSig + TypeSig.DECIMAL_128_FULL + TypeSig.ARRAY + 
           TypeSig.STRUCT +TypeSig.MAP + TypeSig.BINARY).nested(), TypeSig.all),
       (sort, conf, p, r) => new GpuSortMeta(sort, conf, p, r)),
-    exec[ExpandExec](
-      "The backend for the expand operator",
-      ExecChecks(
-        (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_64 +
-            TypeSig.STRUCT + TypeSig.ARRAY + TypeSig.MAP).nested(),
-        TypeSig.all),
-      (expand, conf, p, r) => new GpuExpandExecMeta(expand, conf, p, r)),
-    exec[WindowExec](
-      "Window-operator backend",
-      ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
-          TypeSig.STRUCT + TypeSig.ARRAY + TypeSig.MAP).nested(),
-        TypeSig.all,
-        Map("partitionSpec" ->
-            InputCheck(TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_64, TypeSig.all))),
-      (windowOp, conf, p, r) =>
-        new GpuWindowExecMeta(windowOp, conf, p, r)
-    ),
-    exec[SampleExec](
-      "The backend for the sample operator",
-      ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.STRUCT + TypeSig.MAP +
-        TypeSig.ARRAY + TypeSig.DECIMAL_128_FULL).nested(), TypeSig.all),
-      (sample, conf, p, r) => new GpuSampleExecMeta(sample, conf, p, r)
-    ),
     // ShimLoader.getSparkShims.aqeShuffleReaderExec,
     // ShimLoader.getSparkShims.neverReplaceShowCurrentNamespaceCommand,
     neverReplaceExec[ExecutedCommandExec]("Table metadata operation"),

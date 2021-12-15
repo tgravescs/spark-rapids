@@ -459,7 +459,7 @@ final class RuleNotFoundPartMeta[INPUT <: Partitioning](
     part: INPUT,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _]])
-  extends PartMeta[INPUT](part, conf, new NoRuleDataFromReplacementRule) {
+  extends PartMeta[INPUT](part, conf) {
 
   override def tagPartForGpu(): Unit = {
     willNotWorkOnGpu(s"GPU does not currently support the operator ${part.getClass}")
@@ -521,7 +521,7 @@ abstract class DataWritingCommandMeta[INPUT <: DataWritingCommand](
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
-    extends RapidsMeta[INPUT, DataWritingCommand, GpuDataWritingCommand](cmd, conf, parent, rule) {
+    extends RapidsMeta[INPUT, DataWritingCommand](cmd, conf, parent, rule) {
 
   override val childPlans: Seq[SparkPlanMeta[_]] = Seq.empty
   override val childExprs: Seq[BaseExprMeta[_]] = Seq.empty
@@ -559,7 +559,7 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
-  extends RapidsMeta[INPUT, SparkPlan, GpuExec](plan, conf, parent, rule) {
+  extends RapidsMeta[INPUT, SparkPlan](plan, conf, parent, rule) {
 
   def tagForExplain(): Unit = {
     if (!canThisBeReplaced) {
@@ -1275,7 +1275,7 @@ abstract class BinaryExprMeta[INPUT <: BinaryExpression](
 abstract class BinaryAstExprMeta[INPUT <: BinaryExpression](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
     extends BinaryExprMeta[INPUT](expr, conf, parent, rule) {
 
