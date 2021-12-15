@@ -62,11 +62,11 @@ import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
  * @tparam BASE the generic base class for this type of stage, i.e. SparkPlan, Expression, etc.
  * @tparam WRAP_TYPE base class that should be returned by doWrap.
  */
-abstract class ReplacementRule[INPUT <: BASE, BASE, WRAP_TYPE <: RapidsMeta[INPUT, BASE, _]](
+abstract class ReplacementRule[INPUT <: BASE, BASE, WRAP_TYPE <: RapidsMeta[INPUT, BASE]](
     protected var doWrap: (
         INPUT,
         RapidsConf,
-        Option[RapidsMeta[_, _, _]],
+        Option[RapidsMeta[_, _]],
         DataFromReplacementRule) => WRAP_TYPE,
     protected var desc: String,
     protected val checks: Option[TypeChecks[_]],
@@ -117,7 +117,7 @@ abstract class ReplacementRule[INPUT <: BASE, BASE, WRAP_TYPE <: RapidsMeta[INPU
   final def wrap(func: (
       INPUT,
       RapidsConf,
-      Option[RapidsMeta[_, _, _]],
+      Option[RapidsMeta[_, _]],
       DataFromReplacementRule) => WRAP_TYPE): this.type = {
     doWrap = func
     this
@@ -186,7 +186,7 @@ abstract class ReplacementRule[INPUT <: BASE, BASE, WRAP_TYPE <: RapidsMeta[INPU
   final def wrap(
       op: BASE,
       conf: RapidsConf,
-      parent: Option[RapidsMeta[_, _, _]],
+      parent: Option[RapidsMeta[_, _]],
       r: DataFromReplacementRule): WRAP_TYPE = {
     doWrap(op.asInstanceOf[INPUT], conf, parent, r)
   }
@@ -201,7 +201,7 @@ class ExprRule[INPUT <: Expression](
     doWrap: (
         INPUT,
         RapidsConf,
-        Option[RapidsMeta[_, _, _]],
+        Option[RapidsMeta[_, _]],
         DataFromReplacementRule) => BaseExprMeta[INPUT],
     desc: String,
     checks: Option[ExprChecks],
@@ -239,7 +239,7 @@ class PartRule[INPUT <: Partitioning](
     doWrap: (
         INPUT,
         RapidsConf,
-        Option[RapidsMeta[_, _, _]],
+        Option[RapidsMeta[_, _]],
         DataFromReplacementRule) => PartMeta[INPUT],
     desc: String,
     checks: Option[PartChecks],
@@ -258,7 +258,7 @@ class ExecRule[INPUT <: SparkPlan](
     doWrap: (
         INPUT,
         RapidsConf,
-        Option[RapidsMeta[_, _, _]],
+        Option[RapidsMeta[_, _]],
         DataFromReplacementRule) => SparkPlanMeta[INPUT],
     desc: String,
     checks: Option[ExecChecks],
@@ -280,7 +280,7 @@ class DataWritingCommandRule[INPUT <: DataWritingCommand](
     doWrap: (
         INPUT,
         RapidsConf,
-        Option[RapidsMeta[_, _, _]],
+        Option[RapidsMeta[_, _]],
         DataFromReplacementRule) => DataWritingCommandMeta[INPUT],
     desc: String,
     tag: ClassTag[INPUT])
@@ -294,7 +294,7 @@ class DataWritingCommandRule[INPUT <: DataWritingCommand](
 final class InsertIntoHadoopFsRelationCommandMeta(
     cmd: InsertIntoHadoopFsRelationCommand,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
     extends DataWritingCommandMeta[InsertIntoHadoopFsRelationCommand](cmd, conf, parent, rule) {
 
@@ -331,7 +331,7 @@ final class InsertIntoHadoopFsRelationCommandMeta(
 final class CreateDataSourceTableAsSelectCommandMeta(
     cmd: CreateDataSourceTableAsSelectCommand,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
   extends DataWritingCommandMeta[CreateDataSourceTableAsSelectCommand](cmd, conf, parent, rule) {
 
@@ -636,7 +636,7 @@ object GpuOverrides extends Logging {
   def isOrContainsFloatingPoint(dataType: DataType): Boolean =
     TrampolineUtil.dataTypeExistsRecursively(dataType, dt => dt == FloatType || dt == DoubleType)
 
-  def checkAndTagFloatAgg(dataType: DataType, conf: RapidsConf, meta: RapidsMeta[_,_,_]): Unit = {
+  def checkAndTagFloatAgg(dataType: DataType, conf: RapidsConf, meta: RapidsMeta[_,_]): Unit = {
     if (!conf.isFloatAggEnabled && isOrContainsFloatingPoint(dataType)) {
       meta.willNotWorkOnGpu("the GPU will aggregate floating point values in" +
           " parallel and the result is not always identical each time. This can cause" +
@@ -650,7 +650,7 @@ object GpuOverrides extends Logging {
       op: String,
       dataType: DataType,
       conf: RapidsConf,
-      meta: RapidsMeta[_,_,_]): Unit = {
+      meta: RapidsMeta[_,_]): Unit = {
     if (conf.hasNans && isOrContainsFloatingPoint(dataType)) {
       meta.willNotWorkOnGpu(s"$op aggregation on floating point columns that can contain NaNs " +
           "will compute incorrect results. If it is known that there are no NaNs, set " +
@@ -697,7 +697,7 @@ object GpuOverrides extends Logging {
   def expr[INPUT <: Expression](
       desc: String,
       pluginChecks: ExprChecks,
-      doWrap: (INPUT, RapidsConf, Option[RapidsMeta[_, _, _]], DataFromReplacementRule)
+      doWrap: (INPUT, RapidsConf, Option[RapidsMeta[_, _]], DataFromReplacementRule)
           => BaseExprMeta[INPUT])
       (implicit tag: ClassTag[INPUT]): ExprRule[INPUT] = {
     assert(desc != null)
@@ -721,7 +721,7 @@ object GpuOverrides extends Logging {
   def part[INPUT <: Partitioning](
       desc: String,
       checks: PartChecks,
-      doWrap: (INPUT, RapidsConf, Option[RapidsMeta[_, _, _]], DataFromReplacementRule)
+      doWrap: (INPUT, RapidsConf, Option[RapidsMeta[_, _]], DataFromReplacementRule)
           => PartMeta[INPUT])
       (implicit tag: ClassTag[INPUT]): PartRule[INPUT] = {
     assert(desc != null)
@@ -739,7 +739,7 @@ object GpuOverrides extends Logging {
     def doWrap(
         exec: INPUT,
         conf: RapidsConf,
-        p: Option[RapidsMeta[_, _, _]],
+        p: Option[RapidsMeta[_, _]],
         cc: DataFromReplacementRule) =
       new DoNotReplaceOrWarnSparkPlanMeta[INPUT](exec, conf, p)
     new ExecRule[INPUT](doWrap, desc, None, tag).invisible()
@@ -748,7 +748,7 @@ object GpuOverrides extends Logging {
   def exec[INPUT <: SparkPlan](
       desc: String,
       pluginChecks: ExecChecks,
-      doWrap: (INPUT, RapidsConf, Option[RapidsMeta[_, _, _]], DataFromReplacementRule)
+      doWrap: (INPUT, RapidsConf, Option[RapidsMeta[_, _]], DataFromReplacementRule)
           => SparkPlanMeta[INPUT])
     (implicit tag: ClassTag[INPUT]): ExecRule[INPUT] = {
     assert(desc != null)
@@ -758,7 +758,7 @@ object GpuOverrides extends Logging {
 
   def dataWriteCmd[INPUT <: DataWritingCommand](
       desc: String,
-      doWrap: (INPUT, RapidsConf, Option[RapidsMeta[_, _, _]], DataFromReplacementRule)
+      doWrap: (INPUT, RapidsConf, Option[RapidsMeta[_, _]], DataFromReplacementRule)
           => DataWritingCommandMeta[INPUT])
       (implicit tag: ClassTag[INPUT]): DataWritingCommandRule[INPUT] = {
     assert(desc != null)
@@ -769,7 +769,7 @@ object GpuOverrides extends Logging {
   def wrapExpr[INPUT <: Expression](
       expr: INPUT,
       conf: RapidsConf,
-      parent: Option[RapidsMeta[_, _, _]]): BaseExprMeta[INPUT] =
+      parent: Option[RapidsMeta[_, _]]): BaseExprMeta[INPUT] =
     expressions.get(expr.getClass)
       .map(r => r.wrap(expr, conf, parent, r).asInstanceOf[BaseExprMeta[INPUT]])
       .getOrElse(new RuleNotFoundExprMeta(expr, conf, parent))
@@ -2774,7 +2774,7 @@ object GpuOverrides extends Logging {
   def wrapPart[INPUT <: Partitioning](
       part: INPUT,
       conf: RapidsConf,
-      parent: Option[RapidsMeta[_, _, _]]): PartMeta[INPUT] =
+      parent: Option[RapidsMeta[_, _]]): PartMeta[INPUT] =
     parts.get(part.getClass)
       .map(r => r.wrap(part, conf, parent, r).asInstanceOf[PartMeta[INPUT]])
       .getOrElse(new RuleNotFoundPartMeta(part, conf, parent))
@@ -2816,7 +2816,7 @@ object GpuOverrides extends Logging {
   def wrapDataWriteCmds[INPUT <: DataWritingCommand](
       writeCmd: INPUT,
       conf: RapidsConf,
-      parent: Option[RapidsMeta[_, _, _]]): DataWritingCommandMeta[INPUT] =
+      parent: Option[RapidsMeta[_, _]]): DataWritingCommandMeta[INPUT] =
     dataWriteCmds.get(writeCmd.getClass)
       .map(r => r.wrap(writeCmd, conf, parent, r).asInstanceOf[DataWritingCommandMeta[INPUT]])
       .getOrElse(new RuleNotFoundDataWritingCommandMeta(writeCmd, conf, parent))
@@ -2834,7 +2834,7 @@ object GpuOverrides extends Logging {
   def wrapPlan[INPUT <: SparkPlan](
       plan: INPUT,
       conf: RapidsConf,
-      parent: Option[RapidsMeta[_, _, _]]): SparkPlanMeta[INPUT]  =
+      parent: Option[RapidsMeta[_, _]]): SparkPlanMeta[INPUT]  =
     execs.get(plan.getClass)
       .map(r => r.wrap(plan, conf, parent, r).asInstanceOf[SparkPlanMeta[INPUT]])
       .getOrElse(new RuleNotFoundSparkPlanMeta(plan, conf, parent))
