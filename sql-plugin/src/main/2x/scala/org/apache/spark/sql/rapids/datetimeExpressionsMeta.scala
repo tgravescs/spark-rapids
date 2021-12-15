@@ -23,6 +23,10 @@ import com.nvidia.spark.rapids.GpuOverrides.extractStringLit
 import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, TimeZoneAwareExpression}
 import org.apache.spark.sql.types._
 
+case class ParseFormatMeta(separator: Char, isTimestamp: Boolean, validRegex: String)
+
+case class RegexReplace(search: String, replace: String)
+
 object GpuToTimestamp {
   // We are compatible with Spark for these formats when the timeParserPolicy is CORRECTED
   // or EXCEPTION. It is possible that other formats may be supported but these are the only
