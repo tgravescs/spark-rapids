@@ -86,7 +86,7 @@ abstract class RapidsMeta[INPUT <: BASE, BASE, OUTPUT <: BASE](
   /**
    * The wrapped scans that should be examined
    */
-  val childScans: Seq[ScanMeta[_]]
+  // val childScans: Seq[ScanMeta[_]]
 
   /**
    * The wrapped partitioning that should be examined
@@ -430,11 +430,12 @@ abstract class PartMeta[INPUT <: Partitioning](part: INPUT,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _, _]],
     rule: DataFromReplacementRule)
-  extends RapidsMeta[INPUT, Partitioning, GpuPartitioning](part, conf, parent, rule) {
+  extends RapidsMeta[INPUT, Partitioning, Partitioning](part, conf, parent, rule) {
+  // TODO - replaced GpuPartitioning with Partitioning
 
   override val childPlans: Seq[SparkPlanMeta[_]] = Seq.empty
   override val childExprs: Seq[BaseExprMeta[_]] = Seq.empty
-  override val childScans: Seq[ScanMeta[_]] = Seq.empty
+  // override val childScans: Seq[ScanMeta[_]] = Seq.empty
   override val childParts: Seq[PartMeta[_]] = Seq.empty
   override val childDataWriteCmds: Seq[DataWritingCommandMeta[_]] = Seq.empty
 
@@ -462,7 +463,7 @@ final class RuleNotFoundPartMeta[INPUT <: Partitioning](
     willNotWorkOnGpu(s"GPU does not currently support the operator ${part.getClass}")
   }
 
-  override def convertToGpu(): GpuPartitioning =
+  override def convertToGpu(): Partitioning =
     throw new IllegalStateException("Cannot be converted to GPU")
 }
 
@@ -588,7 +589,7 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     plan.children.map(GpuOverrides.wrapPlan(_, conf, Some(this)))
   override val childExprs: Seq[BaseExprMeta[_]] =
     plan.expressions.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-  override val childScans: Seq[ScanMeta[_]] = Seq.empty
+  // override val childScans: Seq[ScanMeta[_]] = Seq.empty
   override val childParts: Seq[PartMeta[_]] = Seq.empty
   override val childDataWriteCmds: Seq[DataWritingCommandMeta[_]] = Seq.empty
 
@@ -946,7 +947,7 @@ abstract class BaseExprMeta[INPUT <: Expression](
   override val childPlans: Seq[SparkPlanMeta[_]] = Seq.empty
   override val childExprs: Seq[BaseExprMeta[_]] =
     expr.children.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
-  override val childScans: Seq[ScanMeta[_]] = Seq.empty
+  // override val childScans: Seq[ScanMeta[_]] = Seq.empty
   override val childParts: Seq[PartMeta[_]] = Seq.empty
   override val childDataWriteCmds: Seq[DataWritingCommandMeta[_]] = Seq.empty
 

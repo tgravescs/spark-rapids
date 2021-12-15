@@ -1498,8 +1498,8 @@ object GpuOverrides extends Logging {
             .withPsNote(TypeEnum.STRING, "A limited number of formats are supported"),
             TypeSig.STRING)),
       (a, conf, p, r) => new UnixTimeExprMeta[ToUnixTimestamp](a, conf, p, r) {
-        override def shouldFallbackOnAnsiTimestamp: Boolean =
-          ShimLoader.getSparkShims.shouldFallbackOnAnsiTimestamp
+        override def shouldFallbackOnAnsiTimestamp: Boolean = false
+          // ShimLoader.getSparkShims.shouldFallbackOnAnsiTimestamp
       }),
     expr[UnixTimestamp](
       "Returns the UNIX timestamp of current or specified time",
@@ -1511,8 +1511,8 @@ object GpuOverrides extends Logging {
             .withPsNote(TypeEnum.STRING, "A limited number of formats are supported"),
             TypeSig.STRING)),
       (a, conf, p, r) => new UnixTimeExprMeta[UnixTimestamp](a, conf, p, r) {
-        override def shouldFallbackOnAnsiTimestamp: Boolean =
-          ShimLoader.getSparkShims.shouldFallbackOnAnsiTimestamp
+        override def shouldFallbackOnAnsiTimestamp: Boolean = false
+          // ShimLoader.getSparkShims.shouldFallbackOnAnsiTimestamp
 
       }),
     expr[Hour](
@@ -2747,8 +2747,8 @@ object GpuOverrides extends Logging {
 
   // Shim expressions should be last to allow overrides with shim-specific versions
   val expressions: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] =
-    commonExpressions ++ TimeStamp.getExprs ++ GpuHiveOverrides.exprs ++
-        ShimLoader.getSparkShims.getExprs
+    commonExpressions ++ TimeStamp.getExprs ++ GpuHiveOverrides.exprs // ++
+        // ShimLoader.getSparkShims.getExprs
 
 /*
   def wrapScan[INPUT <: Scan](
@@ -3045,13 +3045,13 @@ object GpuOverrides extends Logging {
         TypeSig.ARRAY + TypeSig.DECIMAL_128_FULL).nested(), TypeSig.all),
       (sample, conf, p, r) => new GpuSampleExecMeta(sample, conf, p, r)
     ),
-    ShimLoader.getSparkShims.aqeShuffleReaderExec,
-    ShimLoader.getSparkShims.neverReplaceShowCurrentNamespaceCommand,
+    // ShimLoader.getSparkShims.aqeShuffleReaderExec,
+    // ShimLoader.getSparkShims.neverReplaceShowCurrentNamespaceCommand,
     neverReplaceExec[ExecutedCommandExec]("Table metadata operation"),
   ).collect { case r if r != null => (r.getClassFor.asSubclass(classOf[SparkPlan]), r) }.toMap
 
   lazy val execs: Map[Class[_ <: SparkPlan], ExecRule[_ <: SparkPlan]] =
-    commonExecs ++ ShimLoader.getSparkShims.getExecs
+    commonExecs // ++ ShimLoader.getSparkShims.getExecs
 
   def getTimeParserPolicy: TimeParserPolicy = {
     // val key = SQLConf.LEGACY_TIME_PARSER_POLICY.key
@@ -3082,6 +3082,7 @@ object GpuOverrides extends Logging {
 
   private def getOptimizations(wrap: SparkPlanMeta[SparkPlan],
       conf: RapidsConf): Seq[Optimization] = {
+        /*
     if (conf.optimizerEnabled) {
       // we need to run these rules both before and after CBO because the cost
       // is impacted by forcing operators onto CPU due to other rules that we have
@@ -3096,6 +3097,8 @@ object GpuOverrides extends Logging {
     } else {
       Seq.empty
     }
+    */
+   Seq.empty
   }
 
   private def addSortsIfNeeded(plan: SparkPlan, conf: RapidsConf): SparkPlan = {
