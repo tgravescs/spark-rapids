@@ -26,7 +26,7 @@ import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
-import org.apache.spark.sql.rapids.{CpuToGpuAggregateBufferConverter, GpuToCpuAggregateBufferConverter}
+import org.apache.spark.sql.execution.window.WindowExec
 import org.apache.spark.sql.types.DataType
 
 trait DataFromReplacementRule {
@@ -459,7 +459,7 @@ final class RuleNotFoundPartMeta[INPUT <: Partitioning](
     part: INPUT,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _]])
-  extends PartMeta[INPUT](part, conf) {
+  extends PartMeta[INPUT](part, conf, parent, new NoRuleDataFromReplacementRule) {
 
   override def tagPartForGpu(): Unit = {
     willNotWorkOnGpu(s"GPU does not currently support the operator ${part.getClass}")
@@ -883,7 +883,8 @@ object ExpressionContext {
     val parent = findParentPlanMeta(meta)
     assert(parent.isDefined, "It is expected that an aggregate function is a child of a SparkPlan")
     parent.get.wrapped match {
-      case agg: SparkPlan if ShimLoader.getSparkShims.isWindowFunctionExec(agg) =>
+      // case agg: SparkPlan if ShimLoader.getSparkShims.isWindowFunctionExec(agg) =>
+      case agg: SparkPlan if agg.isInstanceOf[WindowExec] =>
         WindowAggExprContext
         /*
       case agg: BaseAggregateExec =>
@@ -1230,16 +1231,20 @@ abstract class TypedImperativeAggExprMeta[INPUT <: TypedImperativeAggregate[_]](
    * of wrapped function from CPU format to GPU format. The conversion occurs on the CPU, so the
    * generated expression should be a CPU Expression executed by row.
    */
+  /*
   def createCpuToGpuBufferConverter(): CpuToGpuAggregateBufferConverter =
     throw new NotImplementedError("The method should be implemented by specific functions")
 
+  */
   /**
    * Returns a buffer converter who can generate a Expression to transform the aggregation buffer
    * of wrapped function from GPU format to CPU format. The conversion occurs on the CPU, so the
    * generated expression should be a CPU Expression executed by row.
    */
+  /*
   def createGpuToCpuBufferConverter(): GpuToCpuAggregateBufferConverter =
     throw new NotImplementedError("The method should be implemented by specific functions")
+  */
 
   /**
    * Whether buffers of current Aggregate is able to be converted from CPU to GPU format and

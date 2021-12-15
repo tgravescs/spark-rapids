@@ -24,7 +24,7 @@ import org.apache.spark.sql.types.IntegerType
 abstract class OffsetWindowFunctionMeta[INPUT <: OffsetWindowFunction] (
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
     extends ExprMeta[INPUT](expr, conf, parent, rule) {
   lazy val input: BaseExprMeta[_] = GpuOverrides.wrapExpr(expr.input, conf, Some(this))

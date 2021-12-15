@@ -1700,7 +1700,7 @@ object SupportedOpsDocs {
     println("restrictions on what types are supported for processing. This tries")
     println("to document what operations are supported and what data types each operation supports.")
     println("Because Apache Spark is under active development too and this document was generated")
-    println(s"against version ${ShimLoader.getSparkVersion} of Spark. Most of this should still")
+    println(s"against version TODO - spark version of Spark. Most of this should still")
     println("apply to other versions of Spark, but there may be slight changes.")
     println()
     println("# General limitations")

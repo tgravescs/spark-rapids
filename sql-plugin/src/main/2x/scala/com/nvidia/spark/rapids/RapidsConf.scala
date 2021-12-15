@@ -352,13 +352,13 @@ object RapidsConf {
       .doc("The amount of GPU memory that should remain unallocated by RMM and left for " +
           "system use such as memory needed for kernels and kernel launches.")
       .bytesConf(ByteUnit.BYTE)
-      .createWithDefault(ByteUnit.MiB.toBytes(640))
+      .createWithDefault(ByteUnit.MiB.toBytes(640).toLong)
 
   val HOST_SPILL_STORAGE_SIZE = conf("spark.rapids.memory.host.spillStorageSize")
     .doc("Amount of off-heap host memory to use for buffering spilled GPU data " +
         "before spilling to local disk")
     .bytesConf(ByteUnit.BYTE)
-    .createWithDefault(ByteUnit.GiB.toBytes(1))
+    .createWithDefault(ByteUnit.GiB.toBytes(1).toLong)
 
   val UNSPILL = conf("spark.rapids.memory.gpu.unspill.enabled")
     .doc("When a spilled GPU buffer is needed again, should it be unspilled, or only copied " +
@@ -383,7 +383,7 @@ object RapidsConf {
         "be very limited on some GPUs (e.g. the NVIDIA T4 only has 256 MiB), and it is also used " +
         "by UCX bounce buffers.")
     .bytesConf(ByteUnit.BYTE)
-    .createWithDefault(ByteUnit.MiB.toBytes(8))
+    .createWithDefault(ByteUnit.MiB.toBytes(8).toLong)
 
   val POOLED_MEM = conf("spark.rapids.memory.gpu.pooling.enabled")
     .doc("Should RMM act as a pooling allocator for GPU memory, or should it just pass " +
@@ -1413,15 +1413,17 @@ object RapidsConf {
     if (asTable) {
       printToggleHeader("Scans\n")
     }
+    /*
     GpuOverrides.scans.values.toSeq.sortBy(_.tag.toString).foreach(_.confHelp(asTable))
     if (asTable) {
       printToggleHeader("Partitioning\n")
     }
+    */
     GpuOverrides.parts.values.toSeq.sortBy(_.tag.toString).foreach(_.confHelp(asTable))
   }
   def main(args: Array[String]): Unit = {
     // Include the configs in PythonConfEntries
-    com.nvidia.spark.rapids.python.PythonConfEntries.init()
+    // com.nvidia.spark.rapids.python.PythonConfEntries.init()
     val out = new FileOutputStream(new File(args(0)))
     Console.withOut(out) {
       Console.withErr(out) {

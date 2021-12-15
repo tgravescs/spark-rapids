@@ -16,15 +16,14 @@
 
 package com.nvidia.spark.rapids
 
+import java.time.Instant
 import java.time.LocalDate
 
 import scala.collection.mutable.ListBuffer
 
 import ai.rapids.cudf.{DType, Scalar}
-import com.nvidia.spark.rapids.VersionUtils.isSpark320OrLater
 
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.catalyst.util.DateTimeUtils.localDateToDays
 
 /**
  * Class for helper functions for Date
@@ -60,9 +59,8 @@ object DateUtils {
   val YESTERDAY = "yesterday"
   val TOMORROW = "tomorrow"
 
-  def specialDatesDays: Map[String, Int] = if (isSpark320OrLater) {
-    Map.empty
-  } else {
+  // TODO  need to get isSpark320orlater back
+  def specialDatesDays: Map[String, Int] = {
     val today = currentDate()
     Map(
       EPOCH -> 0,
@@ -73,9 +71,7 @@ object DateUtils {
     )
   }
 
-  def specialDatesSeconds: Map[String, Long] = if (isSpark320OrLater) {
-    Map.empty
-  } else {
+  def specialDatesSeconds: Map[String, Long] =  {
     val today = currentDate()
     val now = DateTimeUtils.instantToMicros(Instant.now())
     Map(
@@ -87,9 +83,7 @@ object DateUtils {
     )
   }
 
-  def specialDatesMicros: Map[String, Long] = if (isSpark320OrLater) {
-    Map.empty
-  } else {
+  def specialDatesMicros: Map[String, Long] = {
     val today = currentDate()
     val now = DateTimeUtils.instantToMicros(Instant.now())
     Map(
@@ -118,7 +112,7 @@ object DateUtils {
       throw new IllegalArgumentException(s"unsupported DType: $unit")
   }
 
-  def currentDate(): Int = localDateToDays(LocalDate.now())
+  def currentDate(): Int = Math.toIntExact(LocalDate.now().toEpochDay)
 
   case class FormatKeywordToReplace(word: String, startIndex: Int, endIndex: Int)
 
