@@ -16,51 +16,15 @@
 
 package org.apache.spark.sql.rapids.execution
 
-import org.json4s.JsonAST
-
-import org.apache.spark.{SparkConf, SparkContext, SparkEnv, TaskContext}
-import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.deploy.SparkHadoopUtil
-import org.apache.spark.executor.InputMetrics
-import org.apache.spark.memory.TaskMemoryManager
-import org.apache.spark.sql.{AnalysisException, SparkSession}
-import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.physical.{BroadcastMode, IdentityBroadcastMode}
-import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.execution.joins.HashedRelationBroadcastMode
-import org.apache.spark.sql.types.{DataType, StructType}
-import org.apache.spark.storage.BlockManagerId
-import org.apache.spark.util.Utils
+import org.apache.spark.sql.types.DataType
 
 object TrampolineUtil {
-  def doExecuteBroadcast[T](child: SparkPlan): Broadcast[T] = child.doExecuteBroadcast()
 
   def isSupportedRelation(mode: BroadcastMode): Boolean = mode match {
     case IdentityBroadcastMode => true
     case _ => false
   }
-
-  def unionLikeMerge(left: DataType, right: DataType): DataType =
-    ShimTrampolineUtil.unionLikeMerge(left, right)
-
-  def fromAttributes(attrs: Seq[Attribute]): StructType = StructType.fromAttributes(attrs)
-
-  def toAttributes(structType: StructType): Seq[Attribute] = structType.toAttributes
-
-  def jsonValue(dataType: DataType): JsonAST.JValue = dataType.jsonValue
-
-  /** Get a human-readable string, e.g.: "4.0 MiB", for a value in bytes. */
-  def bytesToString(size: Long): String = Utils.bytesToString(size)
-
-  /** Returns true if called from code running on the Spark driver. */
-  def isDriver(env: SparkEnv): Boolean = {
-    if (env != null) {
-      env.executorId == SparkContext.DRIVER_IDENTIFIER
-    } else {
-      false
-    }
-  }
-  
 
   /**
    * Return true if the provided predicate function returns true for any
@@ -70,79 +34,5 @@ object TrampolineUtil {
     dt.existsRecursively(f)
   }
 
-  def incInputRecordsRows(inputMetrics: InputMetrics, rows: Long): Unit =
-    inputMetrics.incRecordsRead(rows)
-
-  def makeSparkUpgradeException(
-                                version: String,
-                                message: String,
-                                cause: Throwable): SparkUpgradeException = {
-    new SparkUpgradeException(version, message, cause)
-  }
-
-  /** Shuts down and cleans up any existing Spark session */
-  def cleanupAnyExistingSession(): Unit = SparkSession.cleanupAnyExistingSession()
-
-  def asNullable(dt: DataType): DataType = dt.asNullable
-
-  /** Return a new InputMetrics instance */
-  def newInputMetrics(): InputMetrics = new InputMetrics()
-
-  /**
-   * Increment the task's memory bytes spilled metric. If the current thread does not
-   * correspond to a Spark task then this call does nothing.
-   * @param amountSpilled amount of memory spilled in bytes
-   */
-  def incTaskMetricsMemoryBytesSpilled(amountSpilled: Long): Unit = {
-    Option(TaskContext.get).foreach(_.taskMetrics().incMemoryBytesSpilled(amountSpilled))
-  }
-
-  /**
-   * Increment the task's disk bytes spilled metric. If the current thread does not
-   * correspond to a Spark task then this call does nothing.
-   * @param amountSpilled amount of memory spilled in bytes
-   */
-  def incTaskMetricsDiskBytesSpilled(amountSpilled: Long): Unit = {
-    Option(TaskContext.get).foreach(_.taskMetrics().incDiskBytesSpilled(amountSpilled))
-  }
-
-  /**
-   * Returns a function that can be called to find Hadoop FileSystem bytes read. If
-   * getFSBytesReadOnThreadCallback is called from thread r at time t, the returned callback will
-   * return the bytes read on r since t.
-   */
-  def getFSBytesReadOnThreadCallback(): () => Long = {
-    SparkHadoopUtil.get.getFSBytesReadOnThreadCallback()
-  }
-
-  /** Set the bytes read task input metric */
-  def incBytesRead(inputMetrics: InputMetrics, bytesRead: Long): Unit = {
-    inputMetrics.incBytesRead(bytesRead)
-  }
-
-  /** Get the simple name of a class with fixup for any Scala internal errors */
-  def getSimpleName(cls: Class[_]): String = {
-    Utils.getSimpleName(cls)
-  }
-
-  /** Create a `BlockManagerId` instance */
-  def newBlockManagerId(
-      execId: String,
-      host: String,
-      port: Int,
-      topologyInfo: Option[String] = None): BlockManagerId =
-    BlockManagerId(execId, host, port, topologyInfo)
-
-  def getTaskMemoryManager(): TaskMemoryManager = {
-    TaskContext.get.taskMemoryManager()
-  }
-
-  /** Throw a Spark analysis exception */
-  def throwAnalysisException(msg: String) = throw new AnalysisException(msg)
-
-  /** Set the task context for the current thread */
-  def setTaskContext(tc: TaskContext): Unit = TaskContext.setTaskContext(tc)
-
-  /** Remove the task context for the current thread */
-  def unsetTaskContext(): Unit = TaskContext.unset()
+ 
 }
