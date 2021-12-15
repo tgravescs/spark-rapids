@@ -36,7 +36,8 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.util.ArrayData
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.ScalarSubquery
-import org.apache.spark.sql.execution.aggregate.{HashAggregateExec, ObjectHashAggregateExec, SortAggregateExec}
+import org.apache.spark.sql.execution.datasources.parquet._
+import org.apache.spark.sql.execution.aggregate.{HashAggregateExec}
 import org.apache.spark.sql.execution.command.{CreateDataSourceTableAsSelectCommand, DataWritingCommand, DataWritingCommandExec, ExecutedCommandExec}
 import org.apache.spark.sql.execution.datasources.{FileFormat, InsertIntoHadoopFsRelationCommand}
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
@@ -315,9 +316,9 @@ final class InsertIntoHadoopFsRelationCommandMeta(
         willNotWorkOnGpu("JSON output is not supported")
         None
       case f if GpuOrcFileFormat.isSparkOrcFormat(f) =>
-        GpuOrcFileFormat.tagGpuSupport(this, spark, cmd.options, cmd.query.schema)
+        GpuOrcFileFormatMeta.tagGpuSupport(this, spark, cmd.options, cmd.query.schema)
       case _: ParquetFileFormat =>
-        GpuParquetFileFormat.tagGpuSupport(this, spark, cmd.options, cmd.query.schema)
+        GpuParquetFileFormatMeta.tagGpuSupport(this, spark, cmd.options, cmd.query.schema)
       case _: TextFileFormat =>
         willNotWorkOnGpu("text output is not supported")
         None
