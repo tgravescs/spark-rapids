@@ -59,7 +59,7 @@ class GpuBroadcastMeta(
       willNotWorkOnGpu(
         "Broadcast exchange is only supported for HashedJoin or BroadcastNestedLoopJoin")
     }
-    def isSupported(rm: RapidsMeta[_, _, _]): Boolean = rm.wrapped match {
+    def isSupported(rm: RapidsMeta[_, _]): Boolean = rm.wrapped match {
       case _: BroadcastHashJoinExec => true
       case _: BroadcastNestedLoopJoinExec => true
       case _ => false
