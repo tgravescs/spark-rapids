@@ -42,7 +42,7 @@ object GpuOrcFileFormatMeta extends Logging {
     case _ => false
   }
 
-  def tagGpuSupport(meta: RapidsMeta[_, _, _],
+  def tagGpuSupport(meta: RapidsMeta[_, _],
                     spark: SparkSession,
                     options: Map[String, String],
                     schema: StructType): Option[GpuOrcFileFormat] = {

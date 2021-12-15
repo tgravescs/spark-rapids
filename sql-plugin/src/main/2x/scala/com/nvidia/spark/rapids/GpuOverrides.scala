@@ -1110,9 +1110,13 @@ object GpuOverrides extends Logging {
         val ansiEnabled = false
 
         override def tagSelfForAst(): Unit = {
+          // TODO - ansi in 2.x
+          /*
           if (ansiEnabled && GpuAnsi.needBasicOpOverflowCheck(a.dataType)) {
             willNotWorkInAst("AST unary minus does not support ANSI mode.")
           }
+
+           */
         }
       }),
     expr[UnaryPositive](
@@ -1593,9 +1597,12 @@ object GpuOverrides extends Logging {
         private val ansiEnabled = false
 
         override def tagSelfForAst(): Unit = {
+          /*
           if (ansiEnabled && GpuAnsi.needBasicOpOverflowCheck(a.dataType)) {
             willNotWorkInAst("AST Addition does not support ANSI mode.")
           }
+
+           */
         }
 
       }),
@@ -1612,9 +1619,12 @@ object GpuOverrides extends Logging {
         private val ansiEnabled = false
 
         override def tagSelfForAst(): Unit = {
+          /*
           if (ansiEnabled && GpuAnsi.needBasicOpOverflowCheck(a.dataType)) {
             willNotWorkInAst("AST Subtraction does not support ANSI mode.")
           }
+
+           */
         }
 
       }),
@@ -1630,9 +1640,12 @@ object GpuOverrides extends Logging {
         ("rhs", TypeSig.gpuNumeric + TypeSig.DECIMAL_128_FULL, TypeSig.numeric)),
       (a, conf, p, r) => new BinaryAstExprMeta[Multiply](a, conf, p, r) {
         override def tagExprForGpu(): Unit = {
+          /*
           if (false && GpuAnsi.needBasicOpOverflowCheck(a.dataType)) {
             willNotWorkOnGpu("GPU Multiplication does not support ANSI mode")
           }
+
+           */
         }
 
       }),
@@ -2985,36 +2998,6 @@ object GpuOverrides extends Logging {
               "not allowed for grouping expressions if containing Array or Map as child"),
         TypeSig.all),
       (agg, conf, p, r) => new GpuHashAggregateMeta(agg, conf, p, r)),
-    exec[ObjectHashAggregateExec](
-      "The backend for hash based aggregations supporting TypedImperativeAggregate functions",
-      ExecChecks(
-        // note that binary input is allowed here but there are additional checks later on to
-        // check that we have can support binary in the context of aggregate buffer conversions
-        (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
-          TypeSig.MAP + TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.BINARY)
-            .nested()
-            .withPsNote(TypeEnum.BINARY, "only allowed when aggregate buffers can be " +
-              "converted between CPU and GPU")
-            .withPsNote(TypeEnum.ARRAY, "not allowed for grouping expressions")
-            .withPsNote(TypeEnum.MAP, "not allowed for grouping expressions")
-            .withPsNote(TypeEnum.STRUCT,
-              "not allowed for grouping expressions if containing Array or Map as child"),
-        TypeSig.all),
-      (agg, conf, p, r) => new GpuObjectHashAggregateExecMeta(agg, conf, p, r)),
-    exec[SortAggregateExec](
-      "The backend for sort based aggregations",
-      ExecChecks(
-        (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
-            TypeSig.MAP + TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.BINARY)
-            .nested()
-            .withPsNote(TypeEnum.BINARY, "only allowed when aggregate buffers can be " +
-              "converted between CPU and GPU")
-            .withPsNote(TypeEnum.ARRAY, "not allowed for grouping expressions")
-            .withPsNote(TypeEnum.MAP, "not allowed for grouping expressions")
-            .withPsNote(TypeEnum.STRUCT,
-              "not allowed for grouping expressions if containing Array or Map as child"),
-        TypeSig.all),
-      (agg, conf, p, r) => new GpuSortAggregateExecMeta(agg, conf, p, r)),
     exec[SortExec](
       "The backend for the sort operator",
       // The SortOrder TypeSig will govern what types can actually be used as sorting key data type.
