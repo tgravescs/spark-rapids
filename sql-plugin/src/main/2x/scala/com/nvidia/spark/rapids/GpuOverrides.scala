@@ -43,12 +43,27 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources.text.TextFileFormat
 import org.apache.spark.sql.execution.exchange.{BroadcastExchangeExec, ReusedExchangeExec}
 import org.apache.spark.sql.execution.joins._
-import org.apache.spark.sql.hive.rapids.GpuHiveOverrides
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.rapids._
 import org.apache.spark.sql.rapids.execution._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
+
+object GpuFloorCeil {
+  def unboundedOutputPrecision(dt: DecimalType): Int = {
+    if (dt.scale == 0) {
+      dt.precision
+    } else {
+      dt.precision - dt.scale + 1
+    }
+  }
+}
+
+sealed trait TimeParserPolicy extends Serializable
+object LegacyTimeParserPolicy extends TimeParserPolicy
+object ExceptionTimeParserPolicy extends TimeParserPolicy
+object CorrectedTimeParserPolicy extends TimeParserPolicy
+
 
 /**
  * Base class for all ReplacementRules
@@ -369,6 +384,11 @@ final class CreateDataSourceTableAsSelectCommandMeta(
 /**
  * Listener trait so that tests can confirm that the expected optimizations are being applied
  */
+
+
+sealed abstract class Optimization
+
+
 trait GpuOverridesListener {
   def optimizedPlan(
       plan: SparkPlanMeta[SparkPlan],
@@ -795,6 +815,7 @@ object GpuOverrides extends Logging {
           TypeSig.STRUCT + TypeSig.DECIMAL_128_FULL).nested() + TypeSig.MAP,
       sparkSig = (TypeSig.atomics + TypeSig.STRUCT + TypeSig.ARRAY + TypeSig.MAP +
           TypeSig.UDT).nested())))
+
 
   val commonExpressions: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = Seq(
     expr[Signum](
@@ -2439,7 +2460,7 @@ object GpuOverrides extends Logging {
       .map(r => r.wrap(writeCmd, conf, parent, r).asInstanceOf[DataWritingCommandMeta[INPUT]])
       .getOrElse(new RuleNotFoundDataWritingCommandMeta(writeCmd, conf, parent))
 
-  val dataWriteCmd: Map[Class[_ <: DataWritingCommand],
+  val dataWriteCmds: Map[Class[_ <: DataWritingCommand],
     DataWritingCommandRule[_ <: DataWritingCommand]] = Map.empty
 
   // TODO - classes require setting gpu type in tag
@@ -2534,15 +2555,6 @@ object GpuOverrides extends Logging {
       (globalLimitExec, conf, p, r) =>
         new SparkPlanMeta[GlobalLimitExec](globalLimitExec, conf, p, r) {
         }),
-    exec[CollectLimitExec](
-      "Reduce to single partition and apply limit",
-      ExecChecks((TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
-          TypeSig.STRUCT + TypeSig.ARRAY + TypeSig.MAP).nested(),
-        TypeSig.all),
-      (collectLimitExec, conf, p, r) => new GpuCollectLimitMeta(collectLimitExec, conf, p, r))
-        .disabledByDefault("Collect Limit replacement can be slower on the GPU, if huge number " +
-            "of rows in a batch it could help by limiting the number of rows transferred from " +
-            "GPU to CPU"),
     exec[FilterExec](
       "The backend for most filter statements",
       ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.STRUCT + TypeSig.MAP +
@@ -2654,6 +2666,7 @@ object GpuOverrides extends Logging {
    Seq.empty
   }
 
+  /*
   private def addSortsIfNeeded(plan: SparkPlan, conf: RapidsConf): SparkPlan = {
     plan.transformUp {
       case operator: SparkPlan =>
@@ -2679,15 +2692,19 @@ object GpuOverrides extends Logging {
         val sortMeta = new GpuSortMeta(sort, conf, None, new SortDataFromReplacementRule)
         sortMeta.initReasons()
         sortMeta.tagPlanForGpu()
+        /*
         if (sortMeta.canThisBeReplaced) {
           sortMeta.convertToGpu()
         } else {
           sort
         }
+        */
+       sort
       }
     }
     operator.withNewChildren(children)
   }
+  */
 
   private final class SortDataFromReplacementRule extends DataFromReplacementRule {
     override val operationName: String = "Exec"
@@ -2756,6 +2773,10 @@ object GpuOverrides extends Logging {
   }
 }
 
+trait ExplainPlanBase {
+    def explainPotentialGpuPlan(df: DataFrame, explain: String = "ALL"): String
+}
+
 class ExplainPlanImpl extends ExplainPlanBase {
   override def explainPotentialGpuPlan(df: DataFrame, explain: String): String = {
     GpuOverrides.explainPotentialGpuPlan(df, explain)
@@ -2765,8 +2786,8 @@ class ExplainPlanImpl extends ExplainPlanBase {
 // work around any GpuOverride failures
 object GpuOverrideUtil extends Logging {
   def tryOverride(fn: SparkPlan => SparkPlan): SparkPlan => SparkPlan = { plan =>
-    // TODO - why is this require asInstanceOf
-    val planOriginal = plan.clone().asInstanceOf[SparkPlan]
+    // TODO - 2.x doesn't have a clone() method in TreeNode
+    val planOriginal = plan
     val failOnError = TEST_CONF.get(plan.conf) || !SUPPRESS_PLANNING_FAILURE.get(plan.conf)
     try {
       fn(plan)
