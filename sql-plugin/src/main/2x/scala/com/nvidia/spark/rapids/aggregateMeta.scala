@@ -378,7 +378,7 @@ object GpuTypedImperativeSupportedAggregateExecMeta {
   }
 
      */
-
+/*
   /**
    * Bind converters as TreeNodeTags into the CPU plans who are right before/after the potential
    * R2C/C2R transitions (the transitions are yet inserted).
@@ -421,6 +421,7 @@ object GpuTypedImperativeSupportedAggregateExecMeta {
     }
   }
 
+ */
   private def containTypedImperativeAggregate(meta: GpuBaseAggregateMeta[_],
       desiredMode: Option[AggregateMode] = None): Boolean =
     meta.agg.aggregateExpressions.exists {
@@ -429,6 +430,7 @@ object GpuTypedImperativeSupportedAggregateExecMeta {
       case _ => false
     }
 
+  /*
   private def createBufferConverter(mergeAggMeta: GpuBaseAggregateMeta[_],
       partialAggMeta: GpuBaseAggregateMeta[_],
       fromCpuToGpu: Boolean): Seq[NamedExpression] = {
@@ -475,6 +477,8 @@ object GpuTypedImperativeSupportedAggregateExecMeta {
 
     expressions
   }
+
+   */
 
   /*
   private def getAggregateOfAllStages(
