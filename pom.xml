@@ -798,8 +798,8 @@
         <spark.version.classifier>spark${buildver}</spark.version.classifier>
         <cuda.version>cuda11</cuda.version>
         <cudf.version>22.02.0-SNAPSHOT</cudf.version>
-        <scala.binary.version>2.12</scala.binary.version>
-        <scala.version>2.12.15</scala.version>
+        <scala.binary.version>2.11</scala.binary.version>
+        <scala.version>2.11.12</scala.version>
         <orc.version>1.5.10</orc.version>
         <orc.classifier/>
         <!--

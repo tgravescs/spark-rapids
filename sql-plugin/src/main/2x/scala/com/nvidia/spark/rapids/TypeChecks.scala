@@ -1810,7 +1810,7 @@ object SupportedOpsDocs {
         }
         println("<tr>")
         val execChecks = checks.get.asInstanceOf[ExecChecks]
-        val allData = allSupportedTypes.map { t =>
+        val allData = allSupportedTypes.toList.map { t =>
           (t, execChecks.support(t))
         }.toMap
 
@@ -1893,7 +1893,7 @@ object SupportedOpsDocs {
           ConfHelper.getSqlFunctionsForClass(rule.tag.runtimeClass).map(_.mkString(", "))
         val exprChecks = checks.get.asInstanceOf[ExprChecks]
         // Params can change between contexts, but should not
-        val allData = allSupportedTypes.map { t =>
+        val allData = allSupportedTypes.toList.map { t =>
           (t, exprChecks.support(t))
         }.toMap
         // Now we should get the same keys for each type, so we are only going to look at the first
@@ -1997,7 +1997,7 @@ object SupportedOpsDocs {
           nextOutputAt = totalCount + headerEveryNLines
         }
         val partChecks = checks.get.asInstanceOf[PartChecks]
-        val allData = allSupportedTypes.map { t =>
+        val allData = allSupportedTypes.toList.map { t =>
           (t, partChecks.support(t))
         }.toMap
         // Now we should get the same keys for each type, so we are only going to look at the first

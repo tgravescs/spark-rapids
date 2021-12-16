@@ -2485,6 +2485,18 @@ object GpuOverrides extends Logging {
       .getOrElse(new RuleNotFoundSparkPlanMeta(plan, conf, parent))
 
   val commonExecs: Map[Class[_ <: SparkPlan], ExecRule[_ <: SparkPlan]] = Seq(
+     exec[SortMergeJoinExec](
+        "Sort merge join, replacing with shuffled hash join",
+        JoinTypeChecks.equiJoinExecChecks,
+        (join, conf, p, r) => new GpuSortMergeJoinMeta(join, conf, p, r)),
+     exec[BroadcastHashJoinExec](
+        "Implementation of join using broadcast data",
+        JoinTypeChecks.equiJoinExecChecks,
+        (join, conf, p, r) => new GpuBroadcastHashJoinMeta(join, conf, p, r)),
+     exec[ShuffledHashJoinExec](
+        "Implementation of join using hashed shuffled data",
+        JoinTypeChecks.equiJoinExecChecks,
+        (join, conf, p, r) => new GpuShuffledHashJoinMeta(join, conf, p, r)),
     exec[GenerateExec] (
       "The backend for operations that generate more output rows than input rows like explode",
       ExecChecks(
@@ -2612,7 +2624,7 @@ object GpuOverrides extends Logging {
       (sort, conf, p, r) => new GpuSortMeta(sort, conf, p, r)),
     // ShimLoader.getSparkShims.aqeShuffleReaderExec,
     // ShimLoader.getSparkShims.neverReplaceShowCurrentNamespaceCommand,
-    neverReplaceExec[ExecutedCommandExec]("Table metadata operation"),
+    neverReplaceExec[ExecutedCommandExec]("Table metadata operation")
   ).collect { case r if r != null => (r.getClassFor.asSubclass(classOf[SparkPlan]), r) }.toMap
 
   lazy val execs: Map[Class[_ <: SparkPlan], ExecRule[_ <: SparkPlan]] =
