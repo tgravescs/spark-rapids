@@ -3908,7 +3908,8 @@ object GpuOverrides extends Logging {
     val convertedPlan =  if (execsConvert.contains(wrap.wrapped.getClass)) {
        val func = execsConvert.get(wrap.wrapped.getClass)
       if (func.nonEmpty) {
-        func.get.convertToGpu(wrap)
+        val realFunc = func.get
+        realFunc.convertToGpu(wrap)
       } else {
         wrap.convertIfNeeded()
       }

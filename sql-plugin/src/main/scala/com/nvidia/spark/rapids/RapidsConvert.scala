@@ -18,6 +18,7 @@ package com.nvidia.spark.rapids
 
 import scala.reflect.ClassTag
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.connector.read.Scan
 import org.apache.spark.sql.execution.SparkPlan
@@ -63,6 +64,19 @@ final class RuleNotFoundScanConvert[INPUT <: Scan]()
 abstract class PlanConvert[INPUT <: SparkPlan,
   META <: SparkPlanMeta[INPUT]](implicit tag: ClassTag[INPUT])
   extends RapidsConvert[INPUT, SparkPlan, GpuExec, META]() {
+
+  /**
+   * Convert what this wraps to a GPU enabled version.
+   */
+  // def convertToGpu(wrapped: META): GpuExec
+
+  /**
+   * Keep this on the CPU, but possibly convert its children under it to run on the GPU if enabled.
+   * By default this just returns what is wrapped by this.  For some types of operators/stages,
+   * like SparkPlan, each part of the query can be converted independent of other parts. As such in
+   * a subclass this should be overridden to do the correct thing.
+   */
+  // def convertToCpu(meta: METATYPE): BASE = meta.wrapped
 
   override def convertToCpu(meta: META): SparkPlan = {
     meta.wrapped.withNewChildren(meta.childPlans.map(_.convertIfNeeded()))
