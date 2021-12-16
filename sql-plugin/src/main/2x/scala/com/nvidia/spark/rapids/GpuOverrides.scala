@@ -2486,6 +2486,24 @@ object GpuOverrides extends Logging {
       .getOrElse(new RuleNotFoundSparkPlanMeta(plan, conf, parent))
 
   val commonExecs: Map[Class[_ <: SparkPlan], ExecRule[_ <: SparkPlan]] = Seq(
+     exec[FileSourceScanExec](
+        "Reading data from files, often from Hive tables",
+        ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.STRUCT + TypeSig.MAP +
+          TypeSig.ARRAY + TypeSig.DECIMAL_128_FULL).nested(), TypeSig.all),
+        (fsse, conf, p, r) => new SparkPlanMeta[FileSourceScanExec](fsse, conf, p, r) {
+
+          // partition filters and data filters are not run on the GPU
+          override val childExprs: Seq[ExprMeta[_]] = Seq.empty
+
+          override def tagPlanForGpu(): Unit = {
+            // TODO - this is not real imple just allow parquet
+            this.wrapped.relation.fileFormat match {
+              case _: ParquetFileFormat => // support
+              case f =>
+                this.willNotWorkOnGpu(s"unsupported file format: ${f.getClass.getCanonicalName}")
+            }
+          }
+        }),
      exec[SortMergeJoinExec](
         "Sort merge join, replacing with shuffled hash join",
         JoinTypeChecks.equiJoinExecChecks,
