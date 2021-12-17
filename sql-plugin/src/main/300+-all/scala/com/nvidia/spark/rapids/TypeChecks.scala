@@ -267,7 +267,7 @@ final class TypeSig private(
    * @param name     the name of the expression (typically a parameter name)
    */
   def tagExprParam(
-      meta: RapidsMeta[_, _],
+      meta: RapidsMeta[_, _, _],
       exprMeta: BaseExprMeta[_],
       name: String,
       willNotWork: String => Unit): Unit = {
@@ -700,7 +700,7 @@ object TypeSig {
 }
 
 abstract class TypeChecks[RET] {
-  def tag(meta: RapidsMeta[_, _]): Unit
+  def tag(meta: RapidsMeta[_, _, _]): Unit
 
   def support(dataType: TypeEnum.Value): RET
 
@@ -713,7 +713,7 @@ abstract class TypeChecks[RET] {
   }
 
   protected def tagUnsupportedTypes(
-    meta: RapidsMeta[_, _],
+    meta: RapidsMeta[_, _, _],
     sig: TypeSig,
     fields: Seq[StructField],
     msgFormat: String
@@ -770,11 +770,11 @@ case class ContextChecks(
     tagBase(exprMeta, exprMeta.willNotWorkInAst)
   }
 
-  override def tag(rapidsMeta: RapidsMeta[_, _]): Unit = {
+  override def tag(rapidsMeta: RapidsMeta[_, _, _]): Unit = {
     tagBase(rapidsMeta, rapidsMeta.willNotWorkOnGpu)
   }
 
-  private[this] def tagBase(rapidsMeta: RapidsMeta[_, _], willNotWork: String => Unit): Unit = {
+  private[this] def tagBase(rapidsMeta: RapidsMeta[_, _, _], willNotWork: String => Unit): Unit = {
     val meta = rapidsMeta.asInstanceOf[BaseExprMeta[_]]
     val expr = meta.wrapped.asInstanceOf[Expression]
     meta.typeMeta.dataType match {
@@ -832,7 +832,7 @@ class FileFormatChecks private (
     sparkSig: TypeSig)
     extends TypeChecks[SupportLevel] {
 
-  def tag(meta: RapidsMeta[_, _],
+  def tag(meta: RapidsMeta[_, _, _],
       schema: StructType,
       fileType: FileFormatType,
       op: FileFormatOp): Unit = {
@@ -843,7 +843,7 @@ class FileFormatChecks private (
   override def support(dataType: TypeEnum.Value): SupportLevel =
     sig.getSupportLevel(dataType, sparkSig)
 
-  override def tag(meta: RapidsMeta[_, _]): Unit =
+  override def tag(meta: RapidsMeta[_, _, _]): Unit =
     throw new IllegalStateException("Internal Error not supported")
 
   def getFileFormat: TypeSig = sig
@@ -869,7 +869,7 @@ object FileFormatChecks {
       sparkSig: TypeSig): Map[FileFormatOp, FileFormatChecks] =
     apply(cudfReadWrite, cudfReadWrite, sparkSig)
 
-  def tag(meta: RapidsMeta[_, _],
+  def tag(meta: RapidsMeta[_, _, _],
       schema: StructType,
       fileType: FileFormatType,
       op: FileFormatOp): Unit = {
@@ -890,7 +890,7 @@ class ExecChecks private(
     override val shown: Boolean = true)
     extends TypeChecks[Map[String, SupportLevel]] {
 
-  override def tag(rapidsMeta: RapidsMeta[_, _]): Unit = {
+  override def tag(rapidsMeta: RapidsMeta[_, _, _]): Unit = {
     val meta = rapidsMeta.asInstanceOf[SparkPlanMeta[_]]
 
     // expression.toString to capture ids in not-on-GPU tags
@@ -965,7 +965,7 @@ case class PartChecksImpl(
     repeatingParamCheck: Option[RepeatingParamCheck] = None)
     extends PartChecks {
 
-  override def tag(meta: RapidsMeta[_, _]): Unit = {
+  override def tag(meta: RapidsMeta[_, _, _]): Unit = {
     val part = meta.wrapped
     val children = meta.childExprs
 
@@ -1017,7 +1017,7 @@ abstract class ExprChecks extends TypeChecks[Map[ExpressionContext, Map[String, 
 
 case class ExprChecksImpl(contexts: Map[ExpressionContext, ContextChecks])
     extends ExprChecks {
-  override def tag(meta: RapidsMeta[_, _]): Unit = {
+  override def tag(meta: RapidsMeta[_, _, _]): Unit = {
     val exprMeta = meta.asInstanceOf[BaseExprMeta[_]]
     val context = exprMeta.context
     val checks = contexts.get(context)
@@ -1060,7 +1060,7 @@ object CaseWhenCheck extends ExprChecks {
     // when this supports AST tagBase(exprMeta, meta.willNotWorkInAst)
   }
 
-  override def tag(meta: RapidsMeta[_, _]): Unit = {
+  override def tag(meta: RapidsMeta[_, _, _]): Unit = {
     val exprMeta = meta.asInstanceOf[BaseExprMeta[_]]
     val context = exprMeta.context
     if (context != ProjectExprContext) {
@@ -1110,7 +1110,7 @@ object WindowSpecCheck extends ExprChecks {
     // when this supports AST tagBase(exprMeta, meta.willNotWorkInAst)
   }
 
-  override def tag(meta: RapidsMeta[_, _]): Unit = {
+  override def tag(meta: RapidsMeta[_, _, _]): Unit = {
     val exprMeta = meta.asInstanceOf[BaseExprMeta[_]]
     val context = exprMeta.context
     if (context != ProjectExprContext) {
@@ -1156,7 +1156,7 @@ object CreateMapCheck extends ExprChecks {
     meta.willNotWorkInAst("CreateMap is not supported by AST")
   }
 
-  override def tag(meta: RapidsMeta[_, _]): Unit = {
+  override def tag(meta: RapidsMeta[_, _, _]): Unit = {
     val exprMeta = meta.asInstanceOf[BaseExprMeta[_]]
     val context = exprMeta.context
     if (context != ProjectExprContext) {
@@ -1192,7 +1192,7 @@ object CreateNamedStructCheck extends ExprChecks {
     // when this supports AST tagBase(exprMeta, meta.willNotWorkInAst)
   }
 
-  override def tag(meta: RapidsMeta[_, _]): Unit = {
+  override def tag(meta: RapidsMeta[_, _, _]): Unit = {
     val exprMeta = meta.asInstanceOf[BaseExprMeta[_]]
     val context = exprMeta.context
     if (context != ProjectExprContext) {
@@ -1341,7 +1341,7 @@ class CastChecks extends ExprChecks {
     // when this supports AST tagBase(meta, meta.willNotWorkInAst)
   }
 
-  override def tag(meta: RapidsMeta[_, _]): Unit = {
+  override def tag(meta: RapidsMeta[_, _, _]): Unit = {
     val exprMeta = meta.asInstanceOf[BaseExprMeta[_]]
     val context = exprMeta.context
     if (context != ProjectExprContext) {
@@ -1351,7 +1351,7 @@ class CastChecks extends ExprChecks {
     }
   }
 
-  private[this] def tagBase(meta: RapidsMeta[_, _], willNotWork: String => Unit): Unit = {
+  private[this] def tagBase(meta: RapidsMeta[_, _, _], willNotWork: String => Unit): Unit = {
     val cast = meta.wrapped.asInstanceOf[UnaryExpression]
     val from = cast.child.dataType
     val to = cast.dataType
