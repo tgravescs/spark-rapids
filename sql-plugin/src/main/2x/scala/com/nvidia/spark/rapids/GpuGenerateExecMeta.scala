@@ -22,7 +22,7 @@ import org.apache.spark.sql.execution.GenerateExec
 class GpuGenerateExecSparkPlanMeta(
     gen: GenerateExec,
     conf: RapidsConf,
-    p: Option[RapidsMeta[_, _, _]],
+    p: Option[RapidsMeta[_, _]],
     r: DataFromReplacementRule) extends SparkPlanMeta[GenerateExec](gen, conf, p, r) {
 
   override val childExprs: Seq[BaseExprMeta[_]] = {
@@ -53,7 +53,7 @@ class GpuGenerateExecSparkPlanMeta(
 abstract class GeneratorExprMeta[INPUT <: Generator](
     gen: INPUT,
     conf: RapidsConf,
-    p: Option[RapidsMeta[_, _, _]],
+    p: Option[RapidsMeta[_, _]],
     r: DataFromReplacementRule) extends ExprMeta[INPUT](gen, conf, p, r) {
   /* whether supporting outer generate or not */
   val supportOuter: Boolean = false

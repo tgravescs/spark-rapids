@@ -70,7 +70,7 @@ object RapidsMeta {
 abstract class RapidsMeta[INPUT <: BASE, BASE, OUTPUT <: BASE](
     val wrapped: INPUT,
     val conf: RapidsConf,
-    val parent: Option[RapidsMeta[_, _, _]],
+    val parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule) {
 
   /**
@@ -428,7 +428,7 @@ abstract class RapidsMeta[INPUT <: BASE, BASE, OUTPUT <: BASE](
  */
 abstract class PartMeta[INPUT <: Partitioning](part: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
   extends RapidsMeta[INPUT, Partitioning](part, conf, parent, rule) {
   // TODO - replaced GpuPartitioning with Partitioning
@@ -456,7 +456,7 @@ abstract class PartMeta[INPUT <: Partitioning](part: INPUT,
 final class RuleNotFoundPartMeta[INPUT <: Partitioning](
     part: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]])
+    parent: Option[RapidsMeta[_, _]])
   extends PartMeta[INPUT](part, conf, parent, new NoRuleDataFromReplacementRule) {
 
   override def tagPartForGpu(): Unit = {
@@ -517,7 +517,7 @@ final class RuleNotFoundScanMeta[INPUT <: Scan](
 abstract class DataWritingCommandMeta[INPUT <: DataWritingCommand](
     cmd: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
     extends RapidsMeta[INPUT, DataWritingCommand](cmd, conf, parent, rule) {
 
@@ -536,7 +536,7 @@ abstract class DataWritingCommandMeta[INPUT <: DataWritingCommand](
 final class RuleNotFoundDataWritingCommandMeta[INPUT <: DataWritingCommand](
     cmd: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]])
+    parent: Option[RapidsMeta[_, _]])
     extends DataWritingCommandMeta[INPUT](cmd, conf, parent, new NoRuleDataFromReplacementRule) {
 
   override def tagSelfForGpu(): Unit = {
@@ -555,7 +555,7 @@ final class RuleNotFoundDataWritingCommandMeta[INPUT <: DataWritingCommand](
  */
 abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
   extends RapidsMeta[INPUT, SparkPlan, GpuExec](plan, conf, parent, rule) {
 
@@ -809,7 +809,7 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
 final class RuleNotFoundSparkPlanMeta[INPUT <: SparkPlan](
     plan: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]])
+    parent: Option[RapidsMeta[_, _]])
   extends SparkPlanMeta[INPUT](plan, conf, parent, new NoRuleDataFromReplacementRule) {
 
   override def tagPlanForGpu(): Unit =
@@ -825,7 +825,7 @@ final class RuleNotFoundSparkPlanMeta[INPUT <: SparkPlan](
 final class DoNotReplaceOrWarnSparkPlanMeta[INPUT <: SparkPlan](
     plan: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]])
+    parent: Option[RapidsMeta[_, _]])
     extends SparkPlanMeta[INPUT](plan, conf, parent, new NoRuleDataFromReplacementRule) {
 
   /** We don't want to spam the user with messages about these operators */
@@ -893,7 +893,7 @@ object ExpressionContext {
     }
   }
 
-  def getRegularOperatorContext(meta: RapidsMeta[_, _, _]): ExpressionContext = meta.wrapped match {
+  def getRegularOperatorContext(meta: RapidsMeta[_, _]): ExpressionContext = meta.wrapped match {
     case _: Expression if meta.parent.isDefined => getRegularOperatorContext(meta.parent.get)
     case _ => ProjectExprContext
   }
@@ -949,7 +949,7 @@ object DataTypeMeta {
 abstract class BaseExprMeta[INPUT <: Expression](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
   extends RapidsMeta[INPUT, Expression](expr, conf, parent, rule) {
 
@@ -1097,7 +1097,7 @@ abstract class BaseExprMeta[INPUT <: Expression](
 abstract class ExprMeta[INPUT <: Expression](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
     extends BaseExprMeta[INPUT](expr, conf, parent, rule) {
 
@@ -1111,7 +1111,7 @@ abstract class ExprMeta[INPUT <: Expression](
 abstract class UnaryExprMeta[INPUT <: UnaryExpression](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
   extends ExprMeta[INPUT](expr, conf, parent, rule) {
 
@@ -1136,7 +1136,7 @@ abstract class UnaryExprMeta[INPUT <: UnaryExpression](
 abstract class UnaryAstExprMeta[INPUT <: UnaryExpression](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
     extends UnaryExprMeta[INPUT](expr, conf, parent, rule) {
 }
@@ -1147,7 +1147,7 @@ abstract class UnaryAstExprMeta[INPUT <: UnaryExpression](
 abstract class AggExprMeta[INPUT <: AggregateFunction](
     val expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
   extends ExprMeta[INPUT](expr, conf, parent, rule) {
 
@@ -1182,7 +1182,7 @@ abstract class AggExprMeta[INPUT <: AggregateFunction](
 abstract class ImperativeAggExprMeta[INPUT <: ImperativeAggregate](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
   extends AggExprMeta[INPUT](expr, conf, parent, rule) {
 
@@ -1196,7 +1196,7 @@ abstract class ImperativeAggExprMeta[INPUT <: ImperativeAggregate](
 abstract class TypedImperativeAggExprMeta[INPUT <: TypedImperativeAggregate[_]](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
     extends ImperativeAggExprMeta[INPUT](expr, conf, parent, rule) {
 
@@ -1241,7 +1241,7 @@ abstract class TypedImperativeAggExprMeta[INPUT <: TypedImperativeAggregate[_]](
 abstract class BinaryExprMeta[INPUT <: BinaryExpression](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
   extends ExprMeta[INPUT](expr, conf, parent, rule) {
 
@@ -1258,7 +1258,7 @@ abstract class BinaryExprMeta[INPUT <: BinaryExpression](
 abstract class BinaryAstExprMeta[INPUT <: BinaryExpression](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
     extends BinaryExprMeta[INPUT](expr, conf, parent, rule) {
 
@@ -1276,7 +1276,7 @@ abstract class BinaryAstExprMeta[INPUT <: BinaryExpression](
 abstract class TernaryExprMeta[INPUT <: TernaryExpression](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
   extends ExprMeta[INPUT](expr, conf, parent, rule) {
 
@@ -1316,7 +1316,7 @@ abstract class QuaternaryExprMeta[INPUT <: QuaternaryExpression](
 abstract class String2TrimExpressionMeta[INPUT <: String2TrimExpression](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
     extends ExprMeta[INPUT](expr, conf, parent, rule) {
 
@@ -1336,7 +1336,7 @@ abstract class String2TrimExpressionMeta[INPUT <: String2TrimExpression](
 abstract class ComplexTypeMergingExprMeta[INPUT <: ComplexTypeMergingExpression](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]],
+    parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
   extends ExprMeta[INPUT](expr, conf, parent, rule) {
 
@@ -1354,7 +1354,7 @@ abstract class ComplexTypeMergingExprMeta[INPUT <: ComplexTypeMergingExpression]
 final class RuleNotFoundExprMeta[INPUT <: Expression](
     expr: INPUT,
     conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _, _]])
+    parent: Option[RapidsMeta[_, _]])
   extends ExprMeta[INPUT](expr, conf, parent, new NoRuleDataFromReplacementRule) {
 
   override def tagExprForGpu(): Unit =
