@@ -67,7 +67,7 @@ object RapidsMeta {
  * @tparam OUTPUT when converting to a GPU enabled version of the plan, the generic base
  *                    type for all GPU enabled versions.
  */
-abstract class RapidsMeta[INPUT <: BASE, BASE, OUTPUT <: BASE](
+abstract class RapidsMeta[INPUT <: BASE, BASE](
     val wrapped: INPUT,
     val conf: RapidsConf,
     val parent: Option[RapidsMeta[_, _]],
@@ -101,8 +101,10 @@ abstract class RapidsMeta[INPUT <: BASE, BASE, OUTPUT <: BASE](
   /**
    * Convert what this wraps to a GPU enabled version.
    */
-  def convertToGpu(): OUTPUT =
+  /* def convertToGpu(): OUTPUT =
     throw new IllegalStateException("Cannot be converted to GPU")
+
+   */
 
   /**
    * Keep this on the CPU, but possibly convert its children under it to run on the GPU if enabled.
@@ -557,7 +559,7 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
-  extends RapidsMeta[INPUT, SparkPlan, GpuExec](plan, conf, parent, rule) {
+  extends RapidsMeta[INPUT, SparkPlan](plan, conf, parent, rule) {
 
   def tagForExplain(): Unit = {
     if (!canThisBeReplaced) {
@@ -604,10 +606,6 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
   var cpuCost: Double = 0
   var gpuCost: Double = 0
   var estimatedOutputRows: Option[BigInt] = None
-
-  override def convertToGpu(): GpuExec = {
-    throw new IllegalStateException("should not be calling default impl, means explain only mode")
-  }
 
   override def convertToCpu(): SparkPlan = {
     wrapped.withNewChildren(childPlans.map(_.convertIfNeeded()))
@@ -735,11 +733,14 @@ abstract class SparkPlanMeta[INPUT <: SparkPlan](plan: INPUT,
       }
       childPlans.head.convertIfNeeded()
     } else {
-     if (canThisBeReplaced) {
+     /* if (canThisBeReplaced) {
         convertToGpu()
       } else {
         convertToCpu()
       }
+
+      */
+      convertToCpu
     }
   }
 
@@ -815,8 +816,11 @@ final class RuleNotFoundSparkPlanMeta[INPUT <: SparkPlan](
   override def tagPlanForGpu(): Unit =
     willNotWorkOnGpu(s"GPU does not currently support the operator ${plan.getClass}")
 
+  /*
   override def convertToGpu(): GpuExec =
     throw new IllegalStateException("Cannot be converted to GPU")
+
+   */
 }
 
 /**
@@ -834,8 +838,11 @@ final class DoNotReplaceOrWarnSparkPlanMeta[INPUT <: SparkPlan](
   override def tagPlanForGpu(): Unit =
     willNotWorkOnGpu(s"there is no need to replace ${plan.getClass}")
 
+  /*
   override def convertToGpu(): GpuExec =
     throw new IllegalStateException("Cannot be converted to GPU")
+
+   */
 }
 
 sealed abstract class ExpressionContext
@@ -1101,8 +1108,11 @@ abstract class ExprMeta[INPUT <: Expression](
     rule: DataFromReplacementRule)
     extends BaseExprMeta[INPUT](expr, conf, parent, rule) {
 
+  /*
   override def convertToGpu(): GpuExpression =
     throw new IllegalStateException("Cannot be converted to GPU")
+
+   */
 }
 
 /**
@@ -1115,11 +1125,14 @@ abstract class UnaryExprMeta[INPUT <: UnaryExpression](
     rule: DataFromReplacementRule)
   extends ExprMeta[INPUT](expr, conf, parent, rule) {
 
+  /*
   override final def convertToGpu(): GpuExpression =
     convertToGpu(childExprs.head.convertToGpu())
 
   def convertToGpu(child: Expression): GpuExpression =
     throw new IllegalStateException("Cannot be converted to GPU")
+
+   */
 
   /**
    * `ConstantFolding` executes early in the logical plan process, which
@@ -1161,11 +1174,14 @@ abstract class AggExprMeta[INPUT <: AggregateFunction](
   // not all aggs overwrite this
   def tagAggForGpu(): Unit = {}
 
+  /*
   override final def convertToGpu(): GpuExpression =
     convertToGpu(childExprs.map(_.convertToGpu()))
 
   def convertToGpu(childExprs: Seq[Expression]): GpuExpression =
     throw new IllegalStateException("Cannot be converted to GPU")
+
+   */
 
   // Set to false if the aggregate doesn't overflow and therefore
   // shouldn't error
@@ -1186,8 +1202,11 @@ abstract class ImperativeAggExprMeta[INPUT <: ImperativeAggregate](
     rule: DataFromReplacementRule)
   extends AggExprMeta[INPUT](expr, conf, parent, rule) {
 
+  /*
   override def convertToGpu(childExprs: Seq[Expression]): GpuExpression =
     throw new IllegalStateException("Cannot be converted to GPU")
+
+   */
 }
 
 /**
@@ -1245,6 +1264,7 @@ abstract class BinaryExprMeta[INPUT <: BinaryExpression](
     rule: DataFromReplacementRule)
   extends ExprMeta[INPUT](expr, conf, parent, rule) {
 
+  /*
   override final def convertToGpu(): GpuExpression = {
     val Seq(lhs, rhs) = childExprs.map(_.convertToGpu())
     convertToGpu(lhs, rhs)
@@ -1252,6 +1272,8 @@ abstract class BinaryExprMeta[INPUT <: BinaryExpression](
 
   def convertToGpu(lhs: Expression, rhs: Expression): GpuExpression =
     throw new NotImplementedError("2x")
+
+   */
 }
 
 /** Base metadata class for binary expressions that support conversion to AST */
@@ -1280,6 +1302,7 @@ abstract class TernaryExprMeta[INPUT <: TernaryExpression](
     rule: DataFromReplacementRule)
   extends ExprMeta[INPUT](expr, conf, parent, rule) {
 
+  /*
   override final def convertToGpu(): GpuExpression = {
     val Seq(child0, child1, child2) = childExprs.map(_.convertToGpu())
     convertToGpu(child0, child1, child2)
@@ -1288,6 +1311,8 @@ abstract class TernaryExprMeta[INPUT <: TernaryExpression](
   def convertToGpu(val0: Expression, val1: Expression,
                    val2: Expression): GpuExpression =
     throw new NotImplementedError("2x")
+
+   */
 }
 
 /**
@@ -1320,6 +1345,7 @@ abstract class String2TrimExpressionMeta[INPUT <: String2TrimExpression](
     rule: DataFromReplacementRule)
     extends ExprMeta[INPUT](expr, conf, parent, rule) {
 
+  /*
   override final def convertToGpu(): GpuExpression = {
     val gpuCol :: gpuTrimParam = childExprs.map(_.convertToGpu())
     convertToGpu(gpuCol, gpuTrimParam.headOption)
@@ -1327,6 +1353,8 @@ abstract class String2TrimExpressionMeta[INPUT <: String2TrimExpression](
 
   def convertToGpu(column: Expression, target: Option[Expression] = None): GpuExpression =
     throw new NotImplementedError("2x")
+
+   */
 
 }
 
@@ -1339,13 +1367,14 @@ abstract class ComplexTypeMergingExprMeta[INPUT <: ComplexTypeMergingExpression]
     parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
   extends ExprMeta[INPUT](expr, conf, parent, rule) {
-
+  /*
   override final def convertToGpu(): GpuExpression =
     convertToGpu(childExprs.map(_.convertToGpu()))
 
   def convertToGpu(childExprs: Seq[Expression]): GpuExpression =
     throw new NotImplementedError("2x")
 
+   */
 }
 
 /**
@@ -1360,7 +1389,9 @@ final class RuleNotFoundExprMeta[INPUT <: Expression](
   override def tagExprForGpu(): Unit =
     willNotWorkOnGpu(s"GPU does not currently support the operator ${expr.getClass}")
 
+  /*
   override def convertToGpu(): GpuExpression =
     throw new IllegalStateException("Cannot be converted to GPU")
 
+   */
 }
