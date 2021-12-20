@@ -30,7 +30,7 @@ abstract class RapidsConvert[INPUT <: BASE, BASE, OUTPUT <: BASE,
   /**
    * Convert what this wraps to a GPU enabled version.
    */
-  def convertToGpu(meta: METATYPE): OUTPUT
+  def convertToGpu(meta: SparkPlanMeta[SparkPlan]): OUTPUT
 
   /**
    * Keep this on the CPU, but possibly convert its children under it to run on the GPU if enabled.

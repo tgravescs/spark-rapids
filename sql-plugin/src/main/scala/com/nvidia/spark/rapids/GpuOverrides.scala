@@ -3522,21 +3522,23 @@ object GpuOverrides extends Logging {
   val commonConvertExecs: Map[Class[_ <: SparkPlan],
     PlanConvert[_ <: SparkPlan, _ <: SparkPlanMeta[_]]] = Seq(
     new PlanConvert[GenerateExec, GpuGenerateExecSparkPlanMeta]() {
-       override def convertToGpu(meta: GpuGenerateExecSparkPlanMeta): GpuExec =  {
+       override def convertToGpu(meta: SparkPlanMeta[SparkPlan]): GpuExec =  {
+         val metaGenerate = meta.asInstanceOf[GpuGenerateExecSparkPlanMeta]
           GpuGenerateExec(
             meta.childExprs.head.convertToGpu().asInstanceOf[GpuGenerator],
-            meta.gen.requiredChildOutput,
-            meta.gen.outer,
-            meta.gen.generatorOutput,
-            meta.childPlans.head.convertIfNeeded())
+            metaGenerate.gen.requiredChildOutput,
+            metaGenerate.gen.outer,
+            metaGenerate.gen.generatorOutput,
+            metaGenerate.childPlans.head.convertIfNeeded())
         }
       },
     new PlanConvert[BatchScanExec, SparkPlanMeta[BatchScanExec]]() {
      // override val childScans: scala.Seq[ScanMeta[_]] =
        // Seq(GpuOverrides.wrapScan(p.scan, conf, Some(this)))
-      override def convertToGpu(meta: SparkPlanMeta[BatchScanExec]): GpuExec =  {
-        logWarning("convert to gpu batch scan exec old way")
-        GpuBatchScanExec(meta.wrapped.output, meta.childScans.head.convertToGpu())
+      override def convertToGpu(meta: SparkPlanMeta[SparkPlan]): GpuExec =  {
+         val metaBatch = meta.asInstanceOf[SparkPlanMeta[BatchScanExec]]
+         logWarning("convert to gpu batch scan exec old way")
+         GpuBatchScanExec(metaBatch.wrapped.output, metaBatch.childScans.head.convertToGpu())
       }
     }
   ).collect { case r if r != null => (r.getClassFor.asSubclass(classOf[SparkPlan]), r) }.toMap
