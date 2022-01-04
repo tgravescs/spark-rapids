@@ -71,8 +71,8 @@
     </developers>
 
     <modules>
-        <module>sql-plugin</module>
         <!--
+        <module>sql-plugin</module>
         <module>dist</module>
         <module>shims</module>
         <module>integration_tests</module>
@@ -117,6 +117,9 @@
                     </plugin>
                 </plugins>
             </build>
+            <modules>
+                <module>spark2-sql-plugin</module>
+            </modules>
         </profile>
         <profile>
             <id>release301</id>
@@ -798,8 +801,6 @@
         <spark.version.classifier>spark${buildver}</spark.version.classifier>
         <cuda.version>cuda11</cuda.version>
         <cudf.version>22.02.0-SNAPSHOT</cudf.version>
-        <scala.binary.version>2.11</scala.binary.version>
-        <scala.version>2.11.12</scala.version>
         <orc.version>1.5.10</orc.version>
         <orc.classifier/>
         <!--
@@ -836,6 +837,8 @@
         <spark330.version>3.3.0-SNAPSHOT</spark330.version>
         <mockito.version>3.6.0</mockito.version>
         <scala.plugin.version>4.3.0</scala.plugin.version>
+        <scala.binary.version>2.12</scala.binary.version>
+        <scala.version>2.12.15</scala.version>
         <maven.jar.plugin.version>3.2.0</maven.jar.plugin.version>
         <scalatest-maven-plugin.version>2.0.2</scalatest-maven-plugin.version>
         <guava.cdh.version>30.0-jre</guava.cdh.version>
