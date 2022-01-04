@@ -2620,6 +2620,12 @@ object GpuOverrides extends Logging {
           TypeSig.NULL + TypeSig.DECIMAL_128_FULL + TypeSig.STRUCT),
         TypeSig.all),
       (exchange, conf, p, r) => new GpuBroadcastMeta(exchange, conf, p, r)),
+    exec[BroadcastNestedLoopJoinExec](
+      "Implementation of join using brute force. Full outer joins and joins where the " +
+          "broadcast side matches the join side (e.g.: LeftOuter with left broadcast) are not " +
+          "supported",
+      JoinTypeChecks.nonEquiJoinChecks,
+      (join, conf, p, r) => new GpuBroadcastNestedLoopJoinMeta(join, conf, p, r)),
     exec[CartesianProductExec](
       "Implementation of join using brute force",
       ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
