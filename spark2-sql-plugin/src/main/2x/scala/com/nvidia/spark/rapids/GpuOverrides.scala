@@ -44,6 +44,7 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources.text.TextFileFormat
 import org.apache.spark.sql.execution.exchange.{BroadcastExchangeExec, ReusedExchangeExec, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.joins._
+import org.apache.spark.sql.execution.window.WindowExec
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.rapids._
 import org.apache.spark.sql.rapids.execution._
@@ -2659,6 +2660,23 @@ object GpuOverrides extends Logging {
       ExecChecks((pluginSupportedOrderableSig + TypeSig.DECIMAL_128_FULL + TypeSig.ARRAY + 
           TypeSig.STRUCT +TypeSig.MAP + TypeSig.BINARY).nested(), TypeSig.all),
       (sort, conf, p, r) => new GpuSortMeta(sort, conf, p, r)),
+    exec[ExpandExec](
+      "The backend for the expand operator",
+      ExecChecks(
+        (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_64 +
+            TypeSig.STRUCT + TypeSig.ARRAY + TypeSig.MAP).nested(),
+        TypeSig.all),
+      (expand, conf, p, r) => new GpuExpandExecMeta(expand, conf, p, r)),
+    exec[WindowExec](
+      "Window-operator backend",
+      ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
+          TypeSig.STRUCT + TypeSig.ARRAY + TypeSig.MAP).nested(),
+        TypeSig.all,
+        Map("partitionSpec" ->
+            InputCheck(TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_64, TypeSig.all))),
+      (windowOp, conf, p, r) =>
+        new GpuWindowExecMeta(windowOp, conf, p, r)
+    ),
     // ShimLoader.getSparkShims.aqeShuffleReaderExec,
     // ShimLoader.getSparkShims.neverReplaceShowCurrentNamespaceCommand,
     neverReplaceExec[ExecutedCommandExec]("Table metadata operation")
