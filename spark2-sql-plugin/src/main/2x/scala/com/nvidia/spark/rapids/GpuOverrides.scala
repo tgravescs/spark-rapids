@@ -2677,6 +2677,12 @@ object GpuOverrides extends Logging {
       (windowOp, conf, p, r) =>
         new GpuWindowExecMeta(windowOp, conf, p, r)
     ),
+    exec[SampleExec](
+      "The backend for the sample operator",
+      ExecChecks((TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.STRUCT + TypeSig.MAP +
+        TypeSig.ARRAY + TypeSig.DECIMAL_128_FULL).nested(), TypeSig.all),
+      (sample, conf, p, r) => new SparkPlanMeta[SampleExec](sample, conf, p, r) {}
+    ),
     // ShimLoader.getSparkShims.aqeShuffleReaderExec,
     // ShimLoader.getSparkShims.neverReplaceShowCurrentNamespaceCommand,
     neverReplaceExec[ExecutedCommandExec]("Table metadata operation")
