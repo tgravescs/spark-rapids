@@ -2020,6 +2020,12 @@ object GpuOverrides extends Logging {
             TypeSig.ARRAY.nested(TypeSig.all)),
         ("ordinal", TypeSig.lit(TypeEnum.INT), TypeSig.INT)),
       (in, conf, p, r) => new GpuGetArrayItemMeta(in, conf, p, r)),
+    expr[GetMapValue](
+      "Gets Value from a Map based on a key",
+      ExprChecks.binaryProject(TypeSig.STRING, TypeSig.all,
+        ("map", TypeSig.MAP.nested(TypeSig.STRING), TypeSig.MAP.nested(TypeSig.all)),
+        ("key", TypeSig.lit(TypeEnum.STRING), TypeSig.all)),
+      (in, conf, p, r) => new GpuGetMapValueMeta(in, conf, p, r)),
     expr[ElementAt](
       "Returns element of array at given(1-based) index in value if column is array. " +
         "Returns value for the given key in value if column is map",
