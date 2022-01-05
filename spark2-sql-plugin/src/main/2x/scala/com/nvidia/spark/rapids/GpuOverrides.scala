@@ -2009,6 +2009,17 @@ object GpuOverrides extends Logging {
         TypeSig.STRUCT.nested(TypeSig.all)),
       (expr, conf, p, r) => new UnaryExprMeta[GetStructField](expr, conf, p, r) {
       }),
+    expr[GetArrayItem](
+      "Gets the field at `ordinal` in the Array",
+      ExprChecks.binaryProject(
+        (TypeSig.commonCudfTypes + TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.NULL +
+            TypeSig.DECIMAL_128_FULL + TypeSig.MAP).nested(),
+        TypeSig.all,
+        ("array", TypeSig.ARRAY.nested(TypeSig.commonCudfTypes + TypeSig.ARRAY +
+            TypeSig.STRUCT + TypeSig.NULL + TypeSig.DECIMAL_128_FULL + TypeSig.MAP),
+            TypeSig.ARRAY.nested(TypeSig.all)),
+        ("ordinal", TypeSig.lit(TypeEnum.INT), TypeSig.INT)),
+      (in, conf, p, r) => new GpuGetArrayItemMeta(in, conf, p, r)),
     expr[ElementAt](
       "Returns element of array at given(1-based) index in value if column is array. " +
         "Returns value for the given key in value if column is map",
