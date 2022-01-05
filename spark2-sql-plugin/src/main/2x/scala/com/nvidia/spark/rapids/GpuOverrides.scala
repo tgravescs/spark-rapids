@@ -787,6 +787,16 @@ object GpuOverrides extends Logging {
 
 
   val commonExpressions: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = Seq(
+    expr[Literal](
+      "Holds a static value from the query",
+      ExprChecks.projectAndAst(
+        TypeSig.astTypes,
+        (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL + TypeSig.CALENDAR
+            + TypeSig.ARRAY + TypeSig.MAP + TypeSig.STRUCT)
+            .nested(TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
+                TypeSig.ARRAY + TypeSig.MAP + TypeSig.STRUCT),
+        TypeSig.all),
+      (lit, conf, p, r) => new LiteralExprMeta(lit, conf, p, r)),
     expr[Signum](
       "Returns -1.0, 0.0 or 1.0 as expr is negative, 0 or positive",
       ExprChecks.mathUnary,
