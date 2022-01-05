@@ -34,7 +34,7 @@ import org.apache.spark.sql.catalyst.plans.physical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.util.ArrayData
 import org.apache.spark.sql.execution._
-import org.apache.spark.sql.execution.aggregate.HashAggregateExec
+import org.apache.spark.sql.execution.aggregate._
 import org.apache.spark.sql.execution.ScalarSubquery
 import org.apache.spark.sql.execution.command.{CreateDataSourceTableAsSelectCommand, DataWritingCommand, DataWritingCommandExec, ExecutedCommandExec}
 import org.apache.spark.sql.execution.datasources.{FileFormat, InsertIntoHadoopFsRelationCommand}
@@ -683,39 +683,6 @@ object GpuOverrides extends Logging {
 
   private val nanAggPsNote = "Input must not contain NaNs and" +
       s" ${RapidsConf.HAS_NANS} must be false."
-
-  /**
-   * Helper function specific to ANSI mode for the aggregate functions that should
-   * fallback, since we don't have the same overflow checks that Spark provides in
-   * the CPU
-   * @param checkType Something other than `None` triggers logic to detect whether
-   *                  the agg should fallback in ANSI mode. Otherwise (None), it's
-   *                  an automatic fallback.
-   * @param meta agg expression meta
-   */
-  def checkAndTagAnsiAgg(checkType: Option[DataType], meta: AggExprMeta[_]): Unit = {
-    // val failOnError = SQLConf.get.ansiEnabled
-    val failOnError = true
-    if (failOnError) {
-      if (checkType.isDefined) {
-        val typeToCheck = checkType.get
-        val failedType = typeToCheck match {
-          case _: DecimalType | LongType | IntegerType | ShortType | ByteType => true
-          case _ =>  false
-        }
-        if (failedType) {
-          meta.willNotWorkOnGpu(
-            s"ANSI mode not supported for ${meta.expr} with $typeToCheck result type")
-        }
-      } else {
-        // Average falls into this category, where it produces Doubles, but
-        // internally it uses Double and Long, and Long could overflow (technically)
-        // and failOnError given that it is based on catalyst Add.
-        meta.willNotWorkOnGpu(
-          s"ANSI mode not supported for ${meta.expr}")
-      }
-    }
-  }
 
   def expr[INPUT <: Expression](
       desc: String,
@@ -1643,13 +1610,11 @@ object GpuOverrides extends Logging {
           TypeSig.all)),
         Some(RepeatingParamCheck("filter", TypeSig.BOOLEAN, TypeSig.BOOLEAN))),
       (a, conf, p, r) => new ExprMeta[AggregateExpression](a, conf, p, r) {
-        // private val filter: Option[BaseExprMeta[_]] =
-        //   a.filter.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+        // No filter parameter in 2.x
         private val childrenExprMeta: Seq[BaseExprMeta[Expression]] =
           a.children.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
         override val childExprs: Seq[BaseExprMeta[_]] =
-          childrenExprMeta  // ++ filter.toSeq
-
+          childrenExprMeta
       }),
     expr[SortOrder](
       "Sort order",
@@ -1698,9 +1663,6 @@ object GpuOverrides extends Logging {
                 " pivot values provided")
           }
         }
-
-        // Pivot does not overflow, so it doesn't need the ANSI check
-        override val needsAnsiCheck: Boolean = false
       }),
     expr[Count](
       "Count aggregate operator",
@@ -1732,10 +1694,6 @@ object GpuOverrides extends Logging {
           val dataType = max.child.dataType
           checkAndTagFloatNanAgg("Max", dataType, conf, this)
         }
-
-
-        // Max does not overflow, so it doesn't need the ANSI check
-        override val needsAnsiCheck: Boolean = false
       }),
     expr[Min](
       "Min aggregate operator",
@@ -1752,9 +1710,6 @@ object GpuOverrides extends Logging {
           val dataType = a.child.dataType
           checkAndTagFloatNanAgg("Min", dataType, conf, this)
         }
-
-        // Min does not overflow, so it doesn't need the ANSI check
-        override val needsAnsiCheck: Boolean = false
       }),
     expr[Sum](
       "Sum aggregate operator",
@@ -1782,9 +1737,6 @@ object GpuOverrides extends Logging {
         )
       },
       (a, conf, p, r) => new AggExprMeta[First](a, conf, p, r) {
-
-        // First does not overflow, so it doesn't need the ANSI check
-        override val needsAnsiCheck: Boolean = false
       }),
     expr[Last](
       "last aggregate operator", {
@@ -1799,9 +1751,6 @@ object GpuOverrides extends Logging {
         )
       },
       (a, conf, p, r) => new AggExprMeta[Last](a, conf, p, r) {
-
-        // Last does not overflow, so it doesn't need the ANSI check
-        override val needsAnsiCheck: Boolean = false
       }),
     expr[BRound](
       "Round an expression to d decimal places using HALF_EVEN rounding mode",
@@ -2334,6 +2283,34 @@ object GpuOverrides extends Logging {
         TypeSig.LONG, TypeSig.LONG),
       (a, conf, p, r) => new UnaryExprMeta[MakeDecimal](a, conf, p, r) {
       }),
+   expr[CollectList](
+      // TODO - spark 2.x doesn't have logical link so can't do TypeImperitive Agg checks
+      "Collect a list of non-unique elements, only supported in rolling window in current.",
+      // GpuCollectList is not yet supported under GroupBy and Reduction context.
+      ExprChecks.aggNotGroupByOrReduction(
+        TypeSig.ARRAY.nested(TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL +
+            TypeSig.NULL + TypeSig.STRUCT),
+        TypeSig.ARRAY.nested(TypeSig.all),
+        Seq(ParamCheck("input",
+          (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL +
+              TypeSig.NULL + TypeSig.STRUCT).nested(),
+          TypeSig.all))),
+      (c, conf, p, r) => new ExprMeta[CollectList](c, conf, p, r) {
+      }),
+    expr[CollectSet](
+      // TODO - spark 2.x doesn't have logical link so can't do TypeImperitive Agg checks
+      "Collect a set of unique elements, only supported in rolling window in current.",
+      // GpuCollectSet is not yet supported under GroupBy and Reduction context.
+      ExprChecks.aggNotGroupByOrReduction(
+        TypeSig.ARRAY.nested(TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL +
+            TypeSig.NULL + TypeSig.STRUCT),
+        TypeSig.ARRAY.nested(TypeSig.all),
+        Seq(ParamCheck("input",
+          (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL +
+              TypeSig.NULL + TypeSig.STRUCT).nested(),
+          TypeSig.all))),
+      (c, conf, p, r) => new ExprMeta[CollectSet](c, conf, p, r) {
+      }),
     expr[StddevPop](
       "Aggregation computing population standard deviation",
       ExprChecks.groupByOnly(
@@ -2653,6 +2630,15 @@ object GpuOverrides extends Logging {
               "not allowed for grouping expressions if containing Array or Map as child"),
         TypeSig.all),
       (agg, conf, p, r) => new GpuHashAggregateMeta(agg, conf, p, r)),
+    exec[SortAggregateExec](
+      "The backend for sort based aggregations",
+      // SPARK 2.x we can't check for the TypedImperativeAggregate properly so map/arrya/struct left off
+      ExecChecks(
+        (TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL + TypeSig.MAP)
+                    .nested(TypeSig.STRING),
+        TypeSig.all),
+      (agg, conf, p, r) => new GpuSortAggregateExecMeta(agg, conf, p, r)),
+    // SPARK 2.x we can't check for the TypedImperativeAggregate properly so don't say we do the ObjectHashAggregate
     exec[SortExec](
       "The backend for the sort operator",
       // The SortOrder TypeSig will govern what types can actually be used as sorting key data type.

@@ -25,6 +25,7 @@ import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression,
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
+import org.apache.spark.sql.execution.aggregate._
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.execution.window.WindowExec
 import org.apache.spark.sql.types.DataType
@@ -883,18 +884,20 @@ object ExpressionContext {
     val parent = findParentPlanMeta(meta)
     assert(parent.isDefined, "It is expected that an aggregate function is a child of a SparkPlan")
     parent.get.wrapped match {
-      // case agg: SparkPlan if ShimLoader.getSparkShims.isWindowFunctionExec(agg) =>
       case agg: SparkPlan if agg.isInstanceOf[WindowExec] =>
         WindowAggExprContext
-        /*
-      case agg: BaseAggregateExec =>
+      case agg: HashAggregateExec =>
         if (agg.groupingExpressions.isEmpty) {
           ReductionAggExprContext
         } else {
           GroupByAggExprContext
         }
-
-         */
+      case agg: SortAggregateExec =>
+        if (agg.groupingExpressions.isEmpty) {
+          ReductionAggExprContext
+        } else {
+          GroupByAggExprContext
+        }
       case _ => throw new IllegalStateException(
         s"Found an aggregation function in an unexpected context $parent")
     }
@@ -1166,9 +1169,6 @@ abstract class AggExprMeta[INPUT <: AggregateFunction](
 
   override final def tagExprForGpu(): Unit = {
     tagAggForGpu()
-    if (needsAnsiCheck) {
-      GpuOverrides.checkAndTagAnsiAgg(ansiTypeToCheck, this)
-    }
   }
 
   // not all aggs overwrite this
@@ -1181,7 +1181,6 @@ abstract class AggExprMeta[INPUT <: AggregateFunction](
   def convertToGpu(childExprs: Seq[Expression]): GpuExpression =
     throw new IllegalStateException("Cannot be converted to GPU")
 
-   */
 
   // Set to false if the aggregate doesn't overflow and therefore
   // shouldn't error
@@ -1190,6 +1189,7 @@ abstract class AggExprMeta[INPUT <: AggregateFunction](
   // The type to use to determine whether the aggregate could overflow.
   // Set to None, if we should fallback for all types
   val ansiTypeToCheck: Option[DataType] = Some(expr.dataType)
+   */
 }
 
 /**
@@ -1207,51 +1207,6 @@ abstract class ImperativeAggExprMeta[INPUT <: ImperativeAggregate](
     throw new IllegalStateException("Cannot be converted to GPU")
 
    */
-}
-
-/**
- * Base class for metadata around `TypedImperativeAggregate`.
- */
-abstract class TypedImperativeAggExprMeta[INPUT <: TypedImperativeAggregate[_]](
-    expr: INPUT,
-    conf: RapidsConf,
-    parent: Option[RapidsMeta[_, _]],
-    rule: DataFromReplacementRule)
-    extends ImperativeAggExprMeta[INPUT](expr, conf, parent, rule) {
-
-  /**
-   * Returns aggregation buffer with the actual data type under GPU runtime. This method is
-   * called to override the data types of typed imperative aggregation buffers during GPU
-   * overriding.
-   */
-  def aggBufferAttribute: AttributeReference
-
-  /**
-   * Returns a buffer converter who can generate a Expression to transform the aggregation buffer
-   * of wrapped function from CPU format to GPU format. The conversion occurs on the CPU, so the
-   * generated expression should be a CPU Expression executed by row.
-   */
-  /*
-  def createCpuToGpuBufferConverter(): CpuToGpuAggregateBufferConverter =
-    throw new NotImplementedError("The method should be implemented by specific functions")
-
-  */
-  /**
-   * Returns a buffer converter who can generate a Expression to transform the aggregation buffer
-   * of wrapped function from GPU format to CPU format. The conversion occurs on the CPU, so the
-   * generated expression should be a CPU Expression executed by row.
-   */
-  /*
-  def createGpuToCpuBufferConverter(): GpuToCpuAggregateBufferConverter =
-    throw new NotImplementedError("The method should be implemented by specific functions")
-  */
-
-  /**
-   * Whether buffers of current Aggregate is able to be converted from CPU to GPU format and
-   * reversely in runtime. If true, it assumes both createCpuToGpuBufferConverter and
-   * createGpuToCpuBufferConverter are implemented.
-   */
-  val supportBufferConversion: Boolean = false
 }
 
 /**
