@@ -16,9 +16,9 @@
 
 package com.nvidia.spark.rapids.shims.v2
 
-import com.nvidia.spark.rapids.{DataFromReplacementRule, ExprMeta, RapidsConf, RapidsMeta}
+import com.nvidia.spark.rapids.{BaseExprMeta, DataFromReplacementRule, ExprMeta, GpuOverrides, RapidsConf, RapidsMeta}
 
-import org.apache.spark.sql.catalyst.expressions.{CurrentRow, Expression, Lag, Lead, Literal, RangeFrame, RowFrame, SpecifiedWindowFrame, UnboundedFollowing, UnboundedPreceding, WindowExpression}
+import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.CalendarInterval
 
@@ -323,3 +323,26 @@ object GpuWindowUtil {
 }
 
 case class ParsedBoundary(isUnbounded: Boolean, valueAsLong: Long)
+
+class GpuWindowSpecDefinitionMeta(
+    windowSpec: WindowSpecDefinition,
+    conf: RapidsConf,
+    parent: Option[RapidsMeta[_,_]],
+    rule: DataFromReplacementRule)
+  extends ExprMeta[WindowSpecDefinition](windowSpec, conf, parent, rule) {
+
+  val partitionSpec: Seq[BaseExprMeta[Expression]] =
+    windowSpec.partitionSpec.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+  val orderSpec: Seq[BaseExprMeta[SortOrder]] =
+    windowSpec.orderSpec.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+  val windowFrame: BaseExprMeta[WindowFrame] =
+    GpuOverrides.wrapExpr(windowSpec.frameSpecification, conf, Some(this))
+
+  override val ignoreUnsetDataTypes: Boolean = true
+
+  override def tagExprForGpu(): Unit = {
+    if (!windowSpec.frameSpecification.isInstanceOf[SpecifiedWindowFrame]) {
+      willNotWorkOnGpu(s"WindowFunctions without a SpecifiedWindowFrame are unsupported.")
+    }
+  }
+}

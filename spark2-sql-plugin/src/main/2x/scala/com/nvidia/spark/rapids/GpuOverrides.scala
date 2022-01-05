@@ -845,6 +845,40 @@ object GpuOverrides extends Logging {
       ExprChecks.mathUnary,
       (a, conf, p, r) => new UnaryExprMeta[ToRadians](a, conf, p, r) {
       }),
+   expr[WindowExpression](
+      "Calculates a return value for every input row of a table based on a group (or " +
+        "\"window\") of rows",
+      ExprChecks.windowOnly(
+        (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
+          TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP).nested(),
+        TypeSig.all,
+        Seq(ParamCheck("windowFunction",
+          (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
+            TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP).nested(),
+          TypeSig.all),
+          ParamCheck("windowSpec",
+            TypeSig.CALENDAR + TypeSig.NULL + TypeSig.integral + TypeSig.DECIMAL_64,
+            TypeSig.numericAndInterval))),
+      (windowExpression, conf, p, r) => new GpuWindowExpressionMeta(windowExpression, conf, p, r)),
+    expr[SpecifiedWindowFrame](
+      "Specification of the width of the group (or \"frame\") of input rows " +
+        "around which a window function is evaluated",
+      ExprChecks.projectOnly(
+        TypeSig.CALENDAR + TypeSig.NULL + TypeSig.integral,
+        TypeSig.numericAndInterval,
+        Seq(
+          ParamCheck("lower",
+            TypeSig.CALENDAR + TypeSig.NULL + TypeSig.integral,
+            TypeSig.numericAndInterval),
+          ParamCheck("upper",
+            TypeSig.CALENDAR + TypeSig.NULL + TypeSig.integral,
+            TypeSig.numericAndInterval))),
+      (windowFrame, conf, p, r) => new GpuSpecifiedWindowFrameMeta(windowFrame, conf, p, r) ),
+    expr[WindowSpecDefinition](
+      "Specification of a window function, indicating the partitioning-expression, the row " +
+        "ordering, and the width of the window",
+      WindowSpecCheck,
+      (windowSpec, conf, p, r) => new GpuWindowSpecDefinitionMeta(windowSpec, conf, p, r)),
     expr[CurrentRow.type](
       "Special boundary for a window frame, indicating stopping at the current row",
       ExprChecks.projectOnly(TypeSig.NULL, TypeSig.NULL),
