@@ -919,6 +919,46 @@ object GpuOverrides extends Logging {
             TypeSig.all))),
       (denseRank, conf, p, r) => new ExprMeta[DenseRank](denseRank, conf, p, r) {
       }),
+    expr[Lead](
+      "Window function that returns N entries ahead of this one",
+      ExprChecks.windowOnly(
+        (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
+          TypeSig.ARRAY + TypeSig.STRUCT).nested(),
+        TypeSig.all,
+        Seq(
+          ParamCheck("input",
+            (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL +
+              TypeSig.NULL + TypeSig.ARRAY + TypeSig.STRUCT).nested(),
+            TypeSig.all),
+          ParamCheck("offset", TypeSig.INT, TypeSig.INT),
+          ParamCheck("default",
+            (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
+              TypeSig.ARRAY + TypeSig.STRUCT).nested(),
+            TypeSig.all)
+        )
+      ),
+      (lead, conf, p, r) => new OffsetWindowFunctionMeta[Lead](lead, conf, p, r) {
+      }),
+    expr[Lag](
+      "Window function that returns N entries behind this one",
+      ExprChecks.windowOnly(
+        (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
+          TypeSig.ARRAY + TypeSig.STRUCT).nested(),
+        TypeSig.all,
+        Seq(
+          ParamCheck("input",
+            (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL +
+              TypeSig.NULL + TypeSig.ARRAY + TypeSig.STRUCT).nested(),
+            TypeSig.all),
+          ParamCheck("offset", TypeSig.INT, TypeSig.INT),
+          ParamCheck("default",
+            (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
+              TypeSig.ARRAY + TypeSig.STRUCT).nested(),
+            TypeSig.all)
+        )
+      ),
+      (lag, conf, p, r) => new OffsetWindowFunctionMeta[Lag](lag, conf, p, r) {
+      }),
     expr[PreciseTimestampConversion](
       "Expression used internally to convert the TimestampType to Long and back without losing " +
           "precision, i.e. in microseconds. Used in time windowing",
