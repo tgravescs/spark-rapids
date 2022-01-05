@@ -1210,6 +1210,31 @@ abstract class ImperativeAggExprMeta[INPUT <: ImperativeAggregate](
 }
 
 /**
+ * Base class for metadata around `TypedImperativeAggregate`.
+ */
+abstract class TypedImperativeAggExprMeta[INPUT <: TypedImperativeAggregate[_]](
+    expr: INPUT,
+    conf: RapidsConf,
+    parent: Option[RapidsMeta[_, _]],
+    rule: DataFromReplacementRule)
+    extends ImperativeAggExprMeta[INPUT](expr, conf, parent, rule) {
+
+  /**
+   * Returns aggregation buffer with the actual data type under GPU runtime. This method is
+   * called to override the data types of typed imperative aggregation buffers during GPU
+   * overriding.
+   */
+  def aggBufferAttribute: AttributeReference
+
+  /**
+   * Whether buffers of current Aggregate is able to be converted from CPU to GPU format and
+   * reversely in runtime. If true, it assumes both createCpuToGpuBufferConverter and
+   * createGpuToCpuBufferConverter are implemented.
+   */
+  val supportBufferConversion: Boolean = false
+}
+
+/**
  * Base class for metadata around `BinaryExpression`.
  */
 abstract class BinaryExprMeta[INPUT <: BinaryExpression](

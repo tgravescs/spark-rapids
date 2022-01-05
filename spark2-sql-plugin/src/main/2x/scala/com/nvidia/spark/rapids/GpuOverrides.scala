@@ -1980,6 +1980,24 @@ object GpuOverrides extends Logging {
           }
         }
       }),
+    expr[StringSplit](
+       "Splits `str` around occurrences that match `regex`",
+      ExprChecks.projectOnly(TypeSig.ARRAY.nested(TypeSig.STRING),
+        TypeSig.ARRAY.nested(TypeSig.STRING),
+        Seq(ParamCheck("str", TypeSig.STRING, TypeSig.STRING),
+          ParamCheck("regexp", TypeSig.lit(TypeEnum.STRING)
+              .withPsNote(TypeEnum.STRING, "very limited subset of regex supported"),
+            TypeSig.STRING),
+          ParamCheck("limit", TypeSig.lit(TypeEnum.INT), TypeSig.INT))),
+      (in, conf, p, r) => new GpuStringSplitMeta(in, conf, p, r)),
+    expr[SubstringIndex](
+      "substring_index operator",
+      ExprChecks.projectOnly(TypeSig.STRING, TypeSig.STRING,
+        Seq(ParamCheck("str", TypeSig.STRING, TypeSig.STRING),
+          ParamCheck("delim", TypeSig.lit(TypeEnum.STRING)
+              .withPsNote(TypeEnum.STRING, "only a single character is allowed"), TypeSig.STRING),
+          ParamCheck("count", TypeSig.lit(TypeEnum.INT), TypeSig.INT))),
+      (in, conf, p, r) => new SubstringIndexMeta(in, conf, p, r)),
     expr[GetStructField](
       "Gets the named field of the struct",
       ExprChecks.unaryProject(
@@ -2340,6 +2358,25 @@ object GpuOverrides extends Logging {
         ("search", TypeSig.lit(TypeEnum.STRING), TypeSig.STRING)),
       (a, conf, p, r) => new BinaryExprMeta[Like](a, conf, p, r) {
       }),
+    expr[RLike](
+      "RLike",
+      ExprChecks.binaryProject(TypeSig.BOOLEAN, TypeSig.BOOLEAN,
+        ("str", TypeSig.STRING, TypeSig.STRING),
+        ("regexp", TypeSig.lit(TypeEnum.STRING), TypeSig.STRING)),
+      (a, conf, p, r) => new GpuRLikeMeta(a, conf, p, r)).disabledByDefault(
+      "the implementation is not 100% compatible. " +
+        "See the compatibility guide for more information."),
+     expr[RegExpExtract](
+      "RegExpExtract",
+      ExprChecks.projectOnly(TypeSig.STRING, TypeSig.STRING,
+        Seq(ParamCheck("str", TypeSig.STRING, TypeSig.STRING),
+          ParamCheck("regexp", TypeSig.lit(TypeEnum.STRING), TypeSig.STRING),
+          ParamCheck("idx", TypeSig.lit(TypeEnum.INT),
+            TypeSig.lit(TypeEnum.INT)))),
+      (a, conf, p, r) => new GpuRegExpExtractMeta(a, conf, p, r))
+      .disabledByDefault(
+      "the implementation is not 100% compatible. " +
+        "See the compatibility guide for more information."),
     expr[Length](
       "String character length or binary byte length",
       ExprChecks.unaryProject(TypeSig.INT, TypeSig.INT,
@@ -2366,6 +2403,34 @@ object GpuOverrides extends Logging {
       ExprChecks.unaryProject(TypeSig.DECIMAL_64, TypeSig.DECIMAL_128_FULL,
         TypeSig.LONG, TypeSig.LONG),
       (a, conf, p, r) => new UnaryExprMeta[MakeDecimal](a, conf, p, r) {
+      }),
+    expr[Explode](
+      "Given an input array produces a sequence of rows for each value in the array",
+      ExprChecks.unaryProject(
+        // Here is a walk-around representation, since multi-level nested type is not supported yet.
+        // related issue: https://github.com/NVIDIA/spark-rapids/issues/1901
+        TypeSig.ARRAY.nested(TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
+            TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP),
+        TypeSig.ARRAY.nested(TypeSig.all),
+        (TypeSig.ARRAY + TypeSig.MAP).nested(TypeSig.commonCudfTypes + TypeSig.NULL +
+            TypeSig.DECIMAL_128_FULL + TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP),
+        (TypeSig.ARRAY + TypeSig.MAP).nested(TypeSig.all)),
+      (a, conf, p, r) => new GeneratorExprMeta[Explode](a, conf, p, r) {
+        override val supportOuter: Boolean = true
+      }),
+    expr[PosExplode](
+      "Given an input array produces a sequence of rows for each value in the array",
+      ExprChecks.unaryProject(
+        // Here is a walk-around representation, since multi-level nested type is not supported yet.
+        // related issue: https://github.com/NVIDIA/spark-rapids/issues/1901
+        TypeSig.ARRAY.nested(TypeSig.commonCudfTypes + TypeSig.NULL + TypeSig.DECIMAL_128_FULL +
+            TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP),
+        TypeSig.ARRAY.nested(TypeSig.all),
+        (TypeSig.ARRAY + TypeSig.MAP).nested(TypeSig.commonCudfTypes + TypeSig.NULL +
+            TypeSig.DECIMAL_128_FULL + TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP),
+        (TypeSig.ARRAY + TypeSig.MAP).nested(TypeSig.all)),
+      (a, conf, p, r) => new GeneratorExprMeta[PosExplode](a, conf, p, r) {
+        override val supportOuter: Boolean = true
       }),
    expr[CollectList](
       // TODO - spark 2.x doesn't have logical link so can't do TypeImperitive Agg checks
@@ -2424,6 +2489,54 @@ object GpuOverrides extends Logging {
         Seq(ParamCheck("input", TypeSig.DOUBLE, TypeSig.DOUBLE))),
       (a, conf, p, r) => new AggExprMeta[VarianceSamp](a, conf, p, r) {
       }),
+    expr[ApproximatePercentile](
+      "Approximate percentile",
+      ExprChecks.groupByOnly(
+        // note that output can be single number or array depending on whether percentiles param
+        // is a single number or an array
+        TypeSig.gpuNumeric + TypeSig.DECIMAL_128_FULL +
+            TypeSig.ARRAY.nested(TypeSig.gpuNumeric + TypeSig.DECIMAL_128_FULL),
+        TypeSig.numeric + TypeSig.DATE + TypeSig.TIMESTAMP + TypeSig.ARRAY.nested(
+          TypeSig.numeric + TypeSig.DATE + TypeSig.TIMESTAMP),
+        Seq(
+          ParamCheck("input",
+            TypeSig.gpuNumeric + TypeSig.DECIMAL_128_FULL,
+            TypeSig.numeric + TypeSig.DATE + TypeSig.TIMESTAMP),
+          ParamCheck("percentage",
+            TypeSig.DOUBLE + TypeSig.ARRAY.nested(TypeSig.DOUBLE),
+            TypeSig.DOUBLE + TypeSig.ARRAY.nested(TypeSig.DOUBLE)),
+          ParamCheck("accuracy", TypeSig.INT, TypeSig.INT))),
+      (c, conf, p, r) => new TypedImperativeAggExprMeta[ApproximatePercentile](c, conf, p, r) {
+
+        override def tagAggForGpu(): Unit = {
+          // check if the percentile expression can be supported on GPU
+          childExprs(1).wrapped match {
+            case lit: Literal => lit.value match {
+              case null =>
+                willNotWorkOnGpu(
+                  "approx_percentile on GPU only supports non-null literal percentiles")
+              case a: ArrayData if a.numElements == 0 =>
+                willNotWorkOnGpu(
+                  "approx_percentile on GPU does not support empty percentiles arrays")
+              case a: ArrayData if (0 until a.numElements).exists(a.isNullAt) =>
+                willNotWorkOnGpu(
+                  "approx_percentile on GPU does not support percentiles arrays containing nulls")
+              case _ =>
+                // this is fine
+            }
+            case _ =>
+              willNotWorkOnGpu("approx_percentile on GPU only supports literal percentiles")
+          }
+        }
+        override def aggBufferAttribute: AttributeReference = {
+          // Spark's ApproxPercentile has an aggregation buffer named "buf" with type "BinaryType"
+          // so we need to replace that here with the GPU aggregation buffer reference, which is
+          // a t-digest type
+          val aggBuffer = c.aggBufferAttributes.head
+          aggBuffer.copy(dataType = CudfTDigest.dataType)(aggBuffer.exprId, aggBuffer.qualifier)
+        }
+      }).disabledByDefault("The GPU implementation of approx_percentile is not bit-for-bit " +
+          "compatible with Apache Spark. See the compatibility guide for more information."),
     expr[GetJsonObject](
       "Extracts a json object from path",
       ExprChecks.projectOnly(
@@ -2997,4 +3110,15 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
       GpuOverrides.doConvertPlan(wrap, conf, optimizations)
     }
   }
+}
+
+object CudfTDigest {
+  val dataType: DataType = StructType(Array(
+    StructField("centroids", ArrayType(StructType(Array(
+      StructField("mean", DataTypes.DoubleType, nullable = false),
+      StructField("weight", DataTypes.DoubleType, nullable = false)
+    )), containsNull = false)),
+    StructField("min", DataTypes.DoubleType, nullable = false),
+    StructField("max", DataTypes.DoubleType, nullable = false)
+  ))
 }
