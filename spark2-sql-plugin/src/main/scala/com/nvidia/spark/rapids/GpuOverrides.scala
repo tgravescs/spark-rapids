@@ -825,6 +825,50 @@ object GpuOverrides extends Logging {
         }
 
       }),
+    expr[Abs](
+      "Absolute value",
+      ExprChecks.unaryProjectAndAstInputMatchesOutput(
+        TypeSig.implicitCastsAstTypes, TypeSig.gpuNumeric + TypeSig.DECIMAL_128_FULL,
+        TypeSig.numeric),
+      (a, conf, p, r) => new UnaryAstExprMeta[Abs](a, conf, p, r) {
+      }),
+    expr[RegExpReplace](
+      "RegExpReplace support for string literal input patterns",
+      ExprChecks.projectOnly(TypeSig.STRING, TypeSig.STRING,
+        Seq(ParamCheck("str", TypeSig.STRING, TypeSig.STRING),
+          ParamCheck("regex", TypeSig.lit(TypeEnum.STRING), TypeSig.STRING),
+          ParamCheck("rep", TypeSig.lit(TypeEnum.STRING), TypeSig.STRING))),
+      (a, conf, p, r) => new GpuRegExpReplaceMeta(a, conf, p, r)).disabledByDefault(
+      "the implementation is not 100% compatible. " +
+        "See the compatibility guide for more information."),
+    expr[TimeSub](
+      "Subtracts interval from timestamp",
+      ExprChecks.binaryProject(TypeSig.TIMESTAMP, TypeSig.TIMESTAMP,
+        ("start", TypeSig.TIMESTAMP, TypeSig.TIMESTAMP),
+        ("interval", TypeSig.lit(TypeEnum.CALENDAR)
+          .withPsNote(TypeEnum.CALENDAR, "months not supported"), TypeSig.CALENDAR)),
+      (timeSub, conf, p, r) => new BinaryExprMeta[TimeSub](timeSub, conf, p, r) {
+        override def tagExprForGpu(): Unit = {
+          timeSub.interval match {
+            case Literal(intvl: CalendarInterval, DataTypes.CalendarIntervalType) =>
+              if (intvl.months != 0) {
+                willNotWorkOnGpu("interval months isn't supported")
+              }
+            case _ =>
+          }
+          checkTimeZoneId(timeSub.timeZoneId)
+        }
+      }),
+    expr[ScalaUDF](
+      "User Defined Function, the UDF can choose to implement a RAPIDS accelerated interface " +
+        "to get better performance.",
+      ExprChecks.projectOnly(
+        GpuUserDefinedFunction.udfTypeSig,
+        TypeSig.all,
+        repeatingParamCheck =
+          Some(RepeatingParamCheck("param", GpuUserDefinedFunction.udfTypeSig, TypeSig.all))),
+      (expr, conf, p, r) => new ScalaUDFMetaBase(expr, conf, p, r) {
+      }),
     expr[Literal](
       "Holds a static value from the query",
       ExprChecks.projectAndAst(
@@ -3177,3 +3221,11 @@ object CudfTDigest {
     StructField("max", DataTypes.DoubleType, nullable = false)
   ))
 }
+
+object GpuUserDefinedFunction {
+  // UDFs can support all types except UDT which does not have a clear columnar representation.
+  val udfTypeSig: TypeSig = (TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
+      TypeSig.BINARY + TypeSig.CALENDAR + TypeSig.ARRAY + TypeSig.MAP + TypeSig.STRUCT).nested()
+
+}
+

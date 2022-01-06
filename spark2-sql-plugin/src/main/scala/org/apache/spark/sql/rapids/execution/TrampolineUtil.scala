@@ -19,6 +19,7 @@ package org.apache.spark.sql.execution
 import org.apache.spark.sql.catalyst.plans.physical.{BroadcastMode, IdentityBroadcastMode}
 import org.apache.spark.sql.execution.joins.HashedRelationBroadcastMode
 import org.apache.spark.sql.types.DataType
+import org.apache.spark.util.Utils
 
 object TrampolineUtil {
 
@@ -39,5 +40,9 @@ object TrampolineUtil {
     dt.existsRecursively(f)
   }
 
+  /** Get the simple name of a class with fixup for any Scala internal errors */
+  def getSimpleName(cls: Class[_]): String = {
+    Utils.getSimpleName(cls)
+  }
  
 }
