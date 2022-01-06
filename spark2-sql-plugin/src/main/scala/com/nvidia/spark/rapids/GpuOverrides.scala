@@ -787,6 +787,44 @@ object GpuOverrides extends Logging {
 
 
   val commonExpressions: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] = Seq(
+    expr[Cast](
+      "Convert a column of one type of data into another type",
+      new CastChecks(),
+      (cast, conf, p, r) => new CastExprMeta[Cast](cast, false, conf, p, r,
+        doFloatToIntCheck = false, stringToAnsiDate = false)),
+    expr[Average](
+      "Average aggregate operator",
+      ExprChecks.fullAgg(
+        TypeSig.DOUBLE + TypeSig.DECIMAL_128_FULL,
+        TypeSig.DOUBLE + TypeSig.DECIMAL_128_FULL,
+        Seq(ParamCheck("input",
+          TypeSig.integral + TypeSig.fp + TypeSig.DECIMAL_128_FULL,
+          TypeSig.numeric))),
+      (a, conf, p, r) => new AggExprMeta[Average](a, conf, p, r) {
+        override def tagAggForGpu(): Unit = {
+          // For Decimal Average the SUM adds a precision of 10 to avoid overflowing
+          // then it divides by the count with an output scale that is 4 more than the input
+          // scale. With how our divide works to match Spark, this means that we will need a
+          // precision of 5 more. So 38 - 10 - 5 = 23
+          val dataType = a.child.dataType
+          dataType match {
+            case dt: DecimalType =>
+              if (dt.precision > 23) {
+                if (conf.needDecimalGuarantees) {
+                  willNotWorkOnGpu("GpuAverage cannot guarantee proper overflow checks for " +
+                    s"a precision large than 23. The current precision is ${dt.precision}")
+                } else {
+                  logWarning("Decimal overflow guarantees disabled for " +
+                    s"Average(${a.child.dataType}) produces $dt with an " +
+                    s"intermediate precision of ${dt.precision + 15}")
+                }
+              }
+            case _ => // NOOP
+          }
+          GpuOverrides.checkAndTagFloatAgg(dataType, conf, this)
+        }
+
+      }),
     expr[Literal](
       "Holds a static value from the query",
       ExprChecks.projectAndAst(
