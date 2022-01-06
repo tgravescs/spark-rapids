@@ -18,6 +18,7 @@ package org.apache.spark.sql.rapids.execution
 
 import com.nvidia.spark.rapids._
 
+import org.apache.spark.sql.execution.TrampolineUtil
 import org.apache.spark.sql.execution.exchange.BroadcastExchangeExec
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BroadcastNestedLoopJoinExec}
 

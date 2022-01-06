@@ -14,16 +14,23 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.rapids.execution
+package org.apache.spark.sql.execution
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.plans.physical.{BroadcastMode, IdentityBroadcastMode}
+import org.apache.spark.sql.execution.joins.HashedRelationBroadcastMode
 import org.apache.spark.sql.types.DataType
 
-object TrampolineUtil {
+object TrampolineUtil extends Logging {
 
-  def isSupportedRelation(mode: BroadcastMode): Boolean = mode match {
-    case IdentityBroadcastMode => true
-    case _ => false
+  // package has to be different to access 2.x HashedRelationBroadcastMode
+  def isSupportedRelation(mode: BroadcastMode): Boolean = {
+    logWarning("is supposed relation mode: " + mode)
+    mode match {
+      case _ : HashedRelationBroadcastMode => true
+      case IdentityBroadcastMode => true
+      case _ => false
+    }
   }
 
   /**

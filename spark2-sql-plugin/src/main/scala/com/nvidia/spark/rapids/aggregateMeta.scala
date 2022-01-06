@@ -26,7 +26,7 @@ import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{SortExec, SparkPlan}
 import org.apache.spark.sql.execution.aggregate.{HashAggregateExec, ObjectHashAggregateExec, SortAggregateExec}
-import org.apache.spark.sql.rapids.execution.{TrampolineUtil}
+import org.apache.spark.sql.execution.TrampolineUtil
 import org.apache.spark.sql.types.{ArrayType, DataType, DecimalType, MapType}
 
 // TODO - had to copy the GpuBaseAggregateMeta into each Hash and Sort Meta because no BaseAggregateExec class in Spark 2.x
