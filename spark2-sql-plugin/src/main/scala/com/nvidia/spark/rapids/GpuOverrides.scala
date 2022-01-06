@@ -2750,7 +2750,7 @@ object GpuOverrides extends Logging {
           override def tagPlanForGpu(): Unit = {
             // TODO - this is not real imple just allow parquet
             this.wrapped.relation.fileFormat match {
-              // case _: CSVFileFormat => GpuReadCSVFileFormat.tagSupport(this)
+              case _: CSVFileFormat => GpuReadCSVFileFormat.tagSupport(this)
               case f if GpuReadOrcFileFormat.isSparkOrcFormat(f) => GpuReadOrcFileFormat.tagSupport(this)
               case _: ParquetFileFormat => GpuReadParquetFileFormat.tagSupport(this)
               case f =>
