@@ -45,6 +45,7 @@ import org.apache.spark.sql.execution.datasources.text.TextFileFormat
 import org.apache.spark.sql.execution.exchange.{BroadcastExchangeExec, ReusedExchangeExec, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.joins._
 import org.apache.spark.sql.execution.window.WindowExec
+import org.apache.spark.sql.hive.rapids.GpuHiveOverrides
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.rapids._
 import org.apache.spark.sql.rapids.execution._
@@ -1313,14 +1314,6 @@ object GpuOverrides extends Logging {
       ExprChecks.mathUnaryWithAst,
       (a, conf, p, r) => new UnaryAstExprMeta[Atan](a, conf, p, r) {
       }),
-    /*
-    expr[Atanh](
-      "Inverse hyperbolic tangent",
-      ExprChecks.mathUnaryWithAst,
-      (a, conf, p, r) => new UnaryAstExprMeta[Atanh](a, conf, p, r) {
-      }),
-
-     */
     expr[Cos](
       "Cosine",
       ExprChecks.mathUnaryWithAst,
@@ -2171,21 +2164,6 @@ object GpuOverrides extends Logging {
         TypeSig.MAP.nested(TypeSig.all)),
       (in, conf, p, r) => new UnaryExprMeta[MapValues](in, conf, p, r) {
       }),
-    /*
-    expr[MapEntries](
-      "Returns an unordered array of all entries in the given map",
-      ExprChecks.unaryProject(
-        // Technically the return type is an array of struct, but we cannot really express that
-        TypeSig.ARRAY.nested(TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
-            TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP),
-        TypeSig.ARRAY.nested(TypeSig.all),
-        TypeSig.MAP.nested(TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
-            TypeSig.ARRAY + TypeSig.STRUCT + TypeSig.MAP),
-        TypeSig.MAP.nested(TypeSig.all)),
-      (in, conf, p, r) => new UnaryExprMeta[MapEntries](in, conf, p, r) {
-      }),
-
-     */
     expr[ArrayMin](
       "Returns the minimum value in the array",
       ExprChecks.unaryProject(
@@ -2661,7 +2639,7 @@ object GpuOverrides extends Logging {
 
   // Shim expressions should be last to allow overrides with shim-specific versions
   val expressions: Map[Class[_ <: Expression], ExprRule[_ <: Expression]] =
-    commonExpressions //  ++ TimeStamp.getExprs ++ GpuHiveOverrides.exprs // ++
+    commonExpressions ++ GpuHiveOverrides.exprs //  ++ TimeStamp.getExprs // ++
         // ShimLoader.getSparkShims.getExprs
 
 /*
@@ -2772,7 +2750,9 @@ object GpuOverrides extends Logging {
           override def tagPlanForGpu(): Unit = {
             // TODO - this is not real imple just allow parquet
             this.wrapped.relation.fileFormat match {
-              case _: ParquetFileFormat => // support
+              // case _: CSVFileFormat => GpuReadCSVFileFormat.tagSupport(this)
+              // case f if GpuOrcFileFormat.isSparkOrcFormat(f) => GpuReadOrcFileFormat.tagSupport(this)
+              case _: ParquetFileFormat => GpuReadParquetFileFormat.tagSupport(this)
               case f =>
                 this.willNotWorkOnGpu(s"unsupported file format: ${f.getClass.getCanonicalName}")
             }
