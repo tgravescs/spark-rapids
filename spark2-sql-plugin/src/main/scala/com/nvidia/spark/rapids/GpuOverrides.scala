@@ -2987,7 +2987,7 @@ object GpuOverrides extends Logging {
   }
 
   // Only run the explain and don't actually convert or run on GPU.
-  def explainPotentialGpuPlan(df: DataFrame, explain: String): String = {
+  def explainPotentialGpuPlan(df: DataFrame, explain: String = "ALL"): String = {
     val plan = df.queryExecution.executedPlan
     val conf = new RapidsConf(plan.conf)
     val updatedPlan = prepareExplainOnly(plan)

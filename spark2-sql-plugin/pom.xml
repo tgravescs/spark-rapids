@@ -32,6 +32,8 @@
     <properties>
         <scala.binary.version>2.11</scala.binary.version>
         <scala.version>2.11.12</scala.version>
+        <spark.version>${spark248.version}</spark.version>
+        <spark.test.version>${spark248.version}</spark.test.version>
     </properties>
     <dependencies>
         <dependency>
