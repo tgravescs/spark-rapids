@@ -2751,7 +2751,7 @@ object GpuOverrides extends Logging {
             // TODO - this is not real imple just allow parquet
             this.wrapped.relation.fileFormat match {
               // case _: CSVFileFormat => GpuReadCSVFileFormat.tagSupport(this)
-              // case f if GpuOrcFileFormat.isSparkOrcFormat(f) => GpuReadOrcFileFormat.tagSupport(this)
+              case f if GpuReadOrcFileFormat.isSparkOrcFormat(f) => GpuReadOrcFileFormat.tagSupport(this)
               case _: ParquetFileFormat => GpuReadParquetFileFormat.tagSupport(this)
               case f =>
                 this.willNotWorkOnGpu(s"unsupported file format: ${f.getClass.getCanonicalName}")
