@@ -42,7 +42,6 @@ import org.apache.spark.sql.execution.datasources.json.JsonFileFormat
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.streaming._
-import org.apache.spark.sql.execution.streaming.sources.{RateStreamProvider, TextSocketSourceProvider}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{CalendarIntervalType, StructType}
@@ -60,8 +59,6 @@ object GpuDataSource extends Logging {
     val libsvm = "org.apache.spark.ml.source.libsvm.LibSVMFileFormat"
     val orc = "org.apache.spark.sql.hive.orc.OrcFileFormat"
     val nativeOrc = classOf[OrcFileFormat].getCanonicalName
-    val socket = classOf[TextSocketSourceProvider].getCanonicalName
-    val rate = classOf[RateStreamProvider].getCanonicalName
 
     Map(
       "org.apache.spark.sql.jdbc" -> jdbc,
@@ -82,9 +79,7 @@ object GpuDataSource extends Logging {
       "org.apache.spark.sql.execution.datasources.orc" -> nativeOrc,
       "org.apache.spark.ml.source.libsvm.DefaultSource" -> libsvm,
       "org.apache.spark.ml.source.libsvm" -> libsvm,
-      "com.databricks.spark.csv" -> csv,
-      "org.apache.spark.sql.execution.streaming.TextSocketSourceProvider" -> socket,
-      "org.apache.spark.sql.execution.streaming.RateSourceProvider" -> rate
+      "com.databricks.spark.csv" -> csv
     )
   }
 
@@ -106,8 +101,6 @@ object GpuDataSource extends Logging {
       case name if name.equalsIgnoreCase("orc") &&
           conf.getConf(SQLConf.ORC_IMPLEMENTATION) == "hive" =>
         "org.apache.spark.sql.hive.orc.OrcFileFormat"
-      case "com.databricks.spark.avro" if conf.replaceDatabricksSparkAvroEnabled =>
-        "org.apache.spark.sql.avro.AvroFileFormat"
       case name => name
     }
     val provider2 = s"$provider1.DefaultSource"
@@ -189,81 +182,6 @@ object GpuDataSource extends Logging {
           throw e
         }
     }
-  }
-
-  /**
-   * The key in the "options" map for deciding whether or not to glob paths before use.
-   */
-  val GLOB_PATHS_KEY = "__globPaths__"
-
-  /**
-   * Checks and returns files in all the paths.
-   */
-  private[sql] def checkAndGlobPathIfNecessary(
-      pathStrings: Seq[String],
-      hadoopConf: Configuration,
-      checkEmptyGlobPath: Boolean,
-      checkFilesExist: Boolean,
-      numThreads: Integer = 40,
-      enableGlobbing: Boolean): Seq[Path] = {
-    val qualifiedPaths = pathStrings.map { pathString =>
-      val path = new Path(pathString)
-      val fs = path.getFileSystem(hadoopConf)
-      path.makeQualified(fs.getUri, fs.getWorkingDirectory)
-    }
-
-    // Split the paths into glob and non glob paths, because we don't need to do an existence check
-    // for globbed paths.
-    val (globPaths, nonGlobPaths) = qualifiedPaths.partition(SparkHadoopUtil.get.isGlobPath)
-
-    val globbedPaths =
-      try {
-        ThreadUtils.parmap(globPaths, "globPath", numThreads) { globPath =>
-          val fs = globPath.getFileSystem(hadoopConf)
-          val globResult = if (enableGlobbing) {
-            SparkHadoopUtil.get.globPath(fs, globPath)
-          } else {
-            qualifiedPaths
-          }
-
-          if (checkEmptyGlobPath && globResult.isEmpty) {
-            throw new AnalysisException(s"Path does not exist: $globPath")
-          }
-
-          globResult
-        }.flatten
-      } catch {
-        case e: SparkException => throw e.getCause
-      }
-
-    if (checkFilesExist) {
-      try {
-        ThreadUtils.parmap(nonGlobPaths, "checkPathsExist", numThreads) { path =>
-          val fs = path.getFileSystem(hadoopConf)
-          if (!fs.exists(path)) {
-            throw new AnalysisException(s"Path does not exist: $path")
-          }
-        }
-      } catch {
-        case e: SparkException => throw e.getCause
-      }
-    }
-
-    val allPaths = globbedPaths ++ nonGlobPaths
-    if (checkFilesExist) {
-      val (filteredOut, filteredIn) = allPaths.partition { path =>
-        InMemoryFileIndex.shouldFilterOut(path.getName)
-      }
-      if (filteredIn.isEmpty) {
-        logWarning(
-          s"All paths were ignored:\n  ${filteredOut.mkString("\n  ")}")
-      } else {
-        logDebug(
-          s"Some paths were ignored:\n  ${filteredOut.mkString("\n  ")}")
-      }
-    }
-
-    allPaths
   }
 
 }

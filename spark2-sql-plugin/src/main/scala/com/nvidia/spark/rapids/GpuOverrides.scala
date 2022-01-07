@@ -307,6 +307,7 @@ class DataWritingCommandRule[INPUT <: DataWritingCommand](
   override val operationName: String = "Output"
 }
 
+
 final class InsertIntoHadoopFsRelationCommandMeta(
     cmd: InsertIntoHadoopFsRelationCommand,
     conf: RapidsConf,
@@ -314,12 +315,18 @@ final class InsertIntoHadoopFsRelationCommandMeta(
     rule: DataFromReplacementRule)
     extends DataWritingCommandMeta[InsertIntoHadoopFsRelationCommand](cmd, conf, parent, rule) {
 
+  // spark 2.3 doesn't have this so just code it here
+  def sparkSessionActive: SparkSession = {
+    SparkSession.getActiveSession.getOrElse(SparkSession.getDefaultSession.getOrElse(
+      throw new IllegalStateException("No active or default Spark session found")))
+  }
+
   override def tagSelfForGpu(): Unit = {
     if (cmd.bucketSpec.isDefined) {
       willNotWorkOnGpu("bucketing is not supported")
     }
 
-    val spark = SparkSession.active
+    val spark = sparkSessionActive
 
     cmd.fileFormat match {
       case _: CSVFileFormat =>
@@ -354,6 +361,12 @@ final class CreateDataSourceTableAsSelectCommandMeta(
 
   private var origProvider: Class[_] = _
 
+  // spark 2.3 doesn't have this so just code it here
+  def sparkSessionActive: SparkSession = {
+    SparkSession.getActiveSession.getOrElse(SparkSession.getDefaultSession.getOrElse(
+      throw new IllegalStateException("No active or default Spark session found")))
+  }
+
   override def tagSelfForGpu(): Unit = {
     if (cmd.table.bucketSpec.isDefined) {
       willNotWorkOnGpu("bucketing is not supported")
@@ -362,7 +375,7 @@ final class CreateDataSourceTableAsSelectCommandMeta(
       willNotWorkOnGpu("provider must be defined")
     }
 
-    val spark = SparkSession.active
+    val spark = sparkSessionActive
     origProvider =
       GpuDataSource.lookupDataSource(cmd.table.provider.get, spark.sessionState.conf)
     // Note that the data source V2 always fallsback to the V1 currently.
