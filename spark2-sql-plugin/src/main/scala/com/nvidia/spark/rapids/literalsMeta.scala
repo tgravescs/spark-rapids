@@ -29,7 +29,7 @@ import ai.rapids.cudf.ast
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Literal, UnsafeArrayData}
-import org.apache.spark.sql.catalyst.util.{ArrayData, DateTimeUtils, MapData, TimestampFormatter}
+import org.apache.spark.sql.catalyst.util.{ArrayData, DateTimeUtils, MapData}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.execution.TrampolineUtil
 import org.apache.spark.sql.types._

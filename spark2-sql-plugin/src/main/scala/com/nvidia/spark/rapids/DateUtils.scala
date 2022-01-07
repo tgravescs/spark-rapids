@@ -18,6 +18,7 @@ package com.nvidia.spark.rapids
 
 import java.time.Instant
 import java.time.LocalDate
+import java.util.concurrent.TimeUnit._
 
 import scala.collection.mutable.ListBuffer
 
@@ -71,9 +72,31 @@ object DateUtils {
     )
   }
 
+  // pull in some unit and DateTimeUtils stuff because 2.3.X doesn't have it
+  final val MILLIS_PER_SECOND = 1000L;
+  final val MICROS_PER_MILLIS = 1000L;
+  final val MICROS_PER_SECOND = MILLIS_PER_SECOND * MICROS_PER_MILLIS;
+  private val MIN_SECONDS = Math.floorDiv(Long.MinValue, MICROS_PER_SECOND)
+
+ /**
+   * Gets the number of microseconds since the epoch of 1970-01-01 00:00:00Z from the given
+   * instance of `java.time.Instant`. The epoch microsecond count is a simple incrementing count of
+   * microseconds where microsecond 0 is 1970-01-01 00:00:00Z.
+   */
+  def instantToMicros(instant: Instant): Long = {
+    val secs = instant.getEpochSecond
+    if (secs == MIN_SECONDS) {
+      val us = Math.multiplyExact(secs + 1, MICROS_PER_SECOND)
+      Math.addExact(us, NANOSECONDS.toMicros(instant.getNano) - MICROS_PER_SECOND)
+    } else {
+      val us = Math.multiplyExact(secs, MICROS_PER_SECOND)
+      Math.addExact(us, NANOSECONDS.toMicros(instant.getNano))
+    }
+  }
+
   def specialDatesSeconds: Map[String, Long] =  {
     val today = currentDate()
-    val now = DateTimeUtils.instantToMicros(Instant.now())
+    val now = instantToMicros(Instant.now())
     Map(
       EPOCH -> 0,
       NOW -> now / 1000000L,
@@ -83,9 +106,10 @@ object DateUtils {
     )
   }
 
+
   def specialDatesMicros: Map[String, Long] = {
     val today = currentDate()
-    val now = DateTimeUtils.instantToMicros(Instant.now())
+    val now = instantToMicros(Instant.now())
     Map(
       EPOCH -> 0,
       NOW -> now,

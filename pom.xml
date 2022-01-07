@@ -84,6 +84,45 @@
     </modules>
     <profiles>
         <profile>
+            <id>release232</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+                <property>
+                    <name>buildver</name>
+                    <value>232</value>
+                </property>
+            </activation>
+            <properties>
+                <scala.binary.version>2.11</scala.binary.version>
+                <scala.version>2.11.8</scala.version>
+                <spark.version>${spark232.version}</spark.version>
+                <spark.test.version>${spark232.version}</spark.test.version>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>add-profile-src-30+</id>
+                                <goals><goal>add-source</goal></goals>
+                                <phase>generate-sources</phase>
+                                <configuration>
+                                    <sources>
+                                        <source>${project.basedir}/src/main/230until241/scala</source>
+                                    </sources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+            <modules>
+                <module>spark2-sql-plugin</module>
+            </modules>
+        </profile>
+        <profile>
             <id>release248</id>
             <activation>
                 <activeByDefault>true</activeByDefault>
@@ -93,6 +132,8 @@
                 </property>
             </activation>
             <properties>
+                <scala.binary.version>2.11</scala.binary.version>
+                <scala.version>2.11.12</scala.version>
                 <spark.version>${spark248.version}</spark.version>
                 <spark.test.version>${spark248.version}</spark.test.version>
             </properties>
@@ -108,8 +149,7 @@
                                 <phase>generate-sources</phase>
                                 <configuration>
                                     <sources>
-                                        <source>${project.basedir}/src/main/2x/scala</source>
-                                        <source>${project.basedir}/src/main/pre320-treenode/scala</source>
+                                        <source>${project.basedir}/src/main/241+/scala</source>
                                     </sources>
                                 </configuration>
                             </execution>
@@ -821,6 +861,9 @@
         <!--
          If you update a dependency version so it is no longer a SNAPSHOT
          please update the snapshot-shims profile as well so it is accurate -->
+        <spark232.version>2.3.2</spark232.version>
+        <spark234.version>2.3.4</spark234.version>
+        <spark243.version>2.4.3</spark243.version>
         <spark248.version>2.4.8</spark248.version>
         <spark301.version>3.0.1</spark301.version>
         <spark301db.version>3.0.1-databricks</spark301db.version>
