@@ -434,7 +434,8 @@ abstract class PartMeta[INPUT <: Partitioning](part: INPUT,
     parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
   extends RapidsMeta[INPUT, Partitioning](part, conf, parent, rule) {
-  // TODO - replaced GpuPartitioning with Partitioning
+  // 2.x - replaced GpuPartitioning with Partitioning, should be fine
+  // since BASE only used for convert
 
   override val childPlans: Seq[SparkPlanMeta[_]] = Seq.empty
   override val childExprs: Seq[BaseExprMeta[_]] = Seq.empty

@@ -29,7 +29,7 @@ import org.apache.spark.sql.execution.aggregate.{HashAggregateExec, ObjectHashAg
 import org.apache.spark.sql.execution.TrampolineUtil
 import org.apache.spark.sql.types.{ArrayType, DataType, DecimalType, MapType}
 
-// TODO - had to copy the GpuBaseAggregateMeta into each Hash and Sort Meta because no BaseAggregateExec class in Spark 2.x
+// Spark 2.x - had to copy the GpuBaseAggregateMeta into each Hash and Sort Meta because no BaseAggregateExec class in Spark 2.x
 
 class GpuHashAggregateMeta(
     val agg: HashAggregateExec,

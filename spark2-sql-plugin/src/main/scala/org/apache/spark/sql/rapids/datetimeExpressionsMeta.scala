@@ -107,7 +107,7 @@ abstract class UnixTimeExprMeta[A <: BinaryExpression with TimeZoneAwareExpressi
                 // - we can only support 4 digit years but Spark supports a wider range
                 // - we use a proleptic Gregorian calender but Spark uses a hybrid Julian+Gregorian
                 //   calender in LEGACY mode
-                // TODO - ansi
+                // Spark 2.x - ansi not available
                 /*
                 if (SQLConf.get.ansiEnabled) {
                   willNotWorkOnGpu("LEGACY format in ANSI mode is not supported on the GPU")

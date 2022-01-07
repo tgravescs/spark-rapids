@@ -307,15 +307,12 @@ class DataWritingCommandRule[INPUT <: DataWritingCommand](
   override val operationName: String = "Output"
 }
 
-/*
 final class InsertIntoHadoopFsRelationCommandMeta(
     cmd: InsertIntoHadoopFsRelationCommand,
     conf: RapidsConf,
     parent: Option[RapidsMeta[_, _]],
     rule: DataFromReplacementRule)
     extends DataWritingCommandMeta[InsertIntoHadoopFsRelationCommand](cmd, conf, parent, rule) {
-
-  private var fileFormat: Option[ColumnarFileFormat] = None
 
   override def tagSelfForGpu(): Unit = {
     if (cmd.bucketSpec.isDefined) {
@@ -324,8 +321,7 @@ final class InsertIntoHadoopFsRelationCommandMeta(
 
     val spark = SparkSession.active
 
-    // TODO - tagging requires returning the type here which we don't really want
-    fileFormat = cmd.fileFormat match {
+    cmd.fileFormat match {
       case _: CSVFileFormat =>
         willNotWorkOnGpu("CSV output is not supported")
         None
@@ -333,9 +329,11 @@ final class InsertIntoHadoopFsRelationCommandMeta(
         willNotWorkOnGpu("JSON output is not supported")
         None
       case f if GpuOrcFileFormat.isSparkOrcFormat(f) =>
-        GpuOrcFileFormatMeta.tagGpuSupport(this, spark, cmd.options, cmd.query.schema)
+        GpuOrcFileFormat.tagGpuSupport(this, spark, cmd.options, cmd.query.schema)
+        None
       case _: ParquetFileFormat =>
-        GpuParquetFileFormatMeta.tagGpuSupport(this, spark, cmd.options, cmd.query.schema)
+        GpuParquetFileFormat.tagGpuSupport(this, spark, cmd.options, cmd.query.schema)
+        None
       case _: TextFileFormat =>
         willNotWorkOnGpu("text output is not supported")
         None
@@ -347,7 +345,6 @@ final class InsertIntoHadoopFsRelationCommandMeta(
 }
 
 
-
 final class CreateDataSourceTableAsSelectCommandMeta(
     cmd: CreateDataSourceTableAsSelectCommand,
     conf: RapidsConf,
@@ -356,7 +353,6 @@ final class CreateDataSourceTableAsSelectCommandMeta(
   extends DataWritingCommandMeta[CreateDataSourceTableAsSelectCommand](cmd, conf, parent, rule) {
 
   private var origProvider: Class[_] = _
-  private var gpuProvider: Option[ColumnarFileFormat] = None
 
   override def tagSelfForGpu(): Unit = {
     if (cmd.table.bucketSpec.isDefined) {
@@ -368,15 +364,17 @@ final class CreateDataSourceTableAsSelectCommandMeta(
 
     val spark = SparkSession.active
     origProvider =
-      GpuDataSource.lookupDataSourceWithFallback(cmd.table.provider.get, spark.sessionState.conf)
+      GpuDataSource.lookupDataSource(cmd.table.provider.get, spark.sessionState.conf)
     // Note that the data source V2 always fallsback to the V1 currently.
     // If that changes then this will start failing because we don't have a mapping.
-    gpuProvider = origProvider.getConstructor().newInstance() match {
+    origProvider.getConstructor().newInstance() match {
       case f: FileFormat if GpuOrcFileFormat.isSparkOrcFormat(f) =>
         GpuOrcFileFormat.tagGpuSupport(this, spark, cmd.table.storage.properties, cmd.query.schema)
+        None
       case _: ParquetFileFormat =>
         GpuParquetFileFormat.tagGpuSupport(this, spark,
           cmd.table.storage.properties, cmd.query.schema)
+        None
       case ds =>
         willNotWorkOnGpu(s"Data source class not supported: ${ds}")
         None
@@ -384,11 +382,6 @@ final class CreateDataSourceTableAsSelectCommandMeta(
   }
 
 }
- */
-/**
- * Listener trait so that tests can confirm that the expected optimizations are being applied
- */
-
 
 sealed abstract class Optimization
 
@@ -2556,10 +2549,6 @@ object GpuOverrides extends Logging {
       .getOrElse(new RuleNotFoundDataWritingCommandMeta(writeCmd, conf, parent))
 
   val dataWriteCmds: Map[Class[_ <: DataWritingCommand],
-    DataWritingCommandRule[_ <: DataWritingCommand]] = Map.empty
-
-  // TODO - classes require setting gpu type in tag
- /* val dataWriteCmds: Map[Class[_ <: DataWritingCommand],
       DataWritingCommandRule[_ <: DataWritingCommand]] = Seq(
     dataWriteCmd[InsertIntoHadoopFsRelationCommand](
       "Write to Hadoop filesystem",
@@ -2568,8 +2557,6 @@ object GpuOverrides extends Logging {
       "Create table with select command",
       (a, conf, p, r) => new CreateDataSourceTableAsSelectCommandMeta(a, conf, p, r))
   ).map(r => (r.getClassFor.asSubclass(classOf[DataWritingCommand]), r)).toMap
-
-  */
 
   def wrapPlan[INPUT <: SparkPlan](
       plan: INPUT,

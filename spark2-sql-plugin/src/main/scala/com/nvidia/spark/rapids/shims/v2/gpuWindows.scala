@@ -16,6 +16,8 @@
 
 package com.nvidia.spark.rapids.shims.v2
 
+import java.util.concurrent.TimeUnit
+
 import com.nvidia.spark.rapids.{BaseExprMeta, DataFromReplacementRule, ExprMeta, GpuOverrides, RapidsConf, RapidsMeta}
 
 import org.apache.spark.sql.catalyst.expressions._
@@ -205,10 +207,13 @@ abstract class GpuSpecifiedWindowFrameMetaBase(
             }
             // return the total microseconds
             try {
-              // TODO 2.x different
-              /*Math.addExact(
+              // Spark 2.x different - no days, just months and microseconds
+              // could remove this catch but leaving for now
+              /*
+              Math.addExact(
                 Math.multiplyExact(ci.days.toLong, TimeUnit.DAYS.toMicros(1)),
-                ci.microseconds) */
+                ci.microseconds)
+              */
               ci.microseconds
             } catch {
               case _: ArithmeticException =>

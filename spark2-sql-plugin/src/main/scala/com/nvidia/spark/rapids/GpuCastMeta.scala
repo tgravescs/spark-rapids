@@ -49,7 +49,7 @@ final class CastExprMeta[INPUT <: Cast](
 
   val fromType: DataType = cast.child.dataType
   val toType: DataType = toTypeOverride.getOrElse(cast.dataType)
-  // TODO - 2.x doesn't have config just true
+  // 2.x doesn't have config set to true
   val legacyCastToString: Boolean = true
 
   override def tagExprForGpu(): Unit = recursiveTagExprForGpuCheck()
