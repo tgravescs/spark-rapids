@@ -2787,6 +2787,18 @@ object GpuOverrides extends Logging {
         TypeSig.ARRAY + TypeSig.DECIMAL_128_FULL).nested(), TypeSig.all),
       (sample, conf, p, r) => new SparkPlanMeta[SampleExec](sample, conf, p, r) {}
     ),
+    exec[CollectLimitExec](
+      "Reduce to single partition and apply limit",
+      ExecChecks((TypeSig.commonCudfTypes + TypeSig.DECIMAL_128_FULL + TypeSig.NULL +
+          TypeSig.STRUCT + TypeSig.ARRAY + TypeSig.MAP).nested(),
+        TypeSig.all),
+      (collectLimitExec, conf, p, r) =>
+        new SparkPlanMeta[CollectLimitExec](collectLimitExec, conf, p, r) {
+          override val childParts: scala.Seq[PartMeta[_]] =
+            Seq(GpuOverrides.wrapPart(collectLimitExec.outputPartitioning, conf, Some(this)))})
+        .disabledByDefault("Collect Limit replacement can be slower on the GPU, if huge number " +
+            "of rows in a batch it could help by limiting the number of rows transferred from " +
+            "GPU to CPU"),
     // ShimLoader.getSparkShims.aqeShuffleReaderExec,
     // ShimLoader.getSparkShims.neverReplaceShowCurrentNamespaceCommand,
     neverReplaceExec[ExecutedCommandExec]("Table metadata operation")

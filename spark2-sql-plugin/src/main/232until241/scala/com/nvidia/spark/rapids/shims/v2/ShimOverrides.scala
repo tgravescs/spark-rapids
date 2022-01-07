@@ -20,7 +20,7 @@ import com.nvidia.spark.rapids._
 
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.execution.python.ArrowEvalPythonExec
+import org.apache.spark.sql.execution.python.{ArrowEvalPythonExec, FlatMapGroupsInPandasExec}
 import org.apache.spark.sql.execution.python.PythonUDF
 
 object ShimOverrides {
@@ -80,6 +80,27 @@ object ShimOverrides {
           override def replaceMessage: String = "partially run on GPU"
           override def noReplacementPossibleMessage(reasons: String): String =
             s"cannot run even partially on the GPU because $reasons"
+      }),
+    GpuOverrides.exec[FlatMapGroupsInPandasExec](
+      "The backend for Flat Map Groups Pandas UDF, Accelerates the data transfer between the" +
+        " Java process and the Python process. It also supports scheduling GPU resources" +
+        " for the Python process when enabled.",
+      ExecChecks(TypeSig.commonCudfTypes, TypeSig.all),
+      (flatPy, conf, p, r) => new SparkPlanMeta[FlatMapGroupsInPandasExec](flatPy, conf, p, r) {
+        override def replaceMessage: String = "partially run on GPU"
+        override def noReplacementPossibleMessage(reasons: String): String =
+          s"cannot run even partially on the GPU because $reasons"
+
+        private val groupingAttrs: Seq[BaseExprMeta[Attribute]] =
+          flatPy.groupingAttributes.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+
+        private val udf: BaseExprMeta[PythonUDF] = GpuOverrides.wrapExpr(
+          flatPy.func.asInstanceOf[PythonUDF], conf, Some(this))
+
+        private val resultAttrs: Seq[BaseExprMeta[Attribute]] =
+          flatPy.output.map(GpuOverrides.wrapExpr(_, conf, Some(this)))
+
+        override val childExprs: Seq[BaseExprMeta[_]] = groupingAttrs ++ resultAttrs :+ udf
       })
   ).collect { case r if r != null => (r.getClassFor.asSubclass(classOf[SparkPlan]), r) }.toMap
 
