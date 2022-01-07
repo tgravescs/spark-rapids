@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.nvidia.spark.rapids
+package com.nvidia.spark.rapids.shims.v2
 
 import java.nio.charset.StandardCharsets
 
@@ -23,6 +23,7 @@ import scala.math.max
 
 import ai.rapids.cudf
 import ai.rapids.cudf.{HostMemoryBuffer, NvtxColor, NvtxRange, Table}
+import com.nvidia.spark.rapids._
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.compress.CompressionCodecFactory

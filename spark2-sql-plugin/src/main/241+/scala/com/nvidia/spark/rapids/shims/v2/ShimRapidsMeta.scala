@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package com.nvidia.spark.rapids
+package com.nvidia.spark.rapids.shims.v2
+
+import com.nvidia.spark.rapids._
 
 import org.apache.spark.sql.catalyst.expressions.ComplexTypeMergingExpression
-
 
 /**
  * Base class for metadata around `ComplexTypeMergingExpression`.

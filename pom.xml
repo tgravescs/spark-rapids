@@ -110,7 +110,7 @@
                                 <phase>generate-sources</phase>
                                 <configuration>
                                     <sources>
-                                        <source>${project.basedir}/src/main/230until241/scala</source>
+                                        <source>${project.basedir}/src/main/232until241/scala</source>
                                     </sources>
                                 </configuration>
                             </execution>

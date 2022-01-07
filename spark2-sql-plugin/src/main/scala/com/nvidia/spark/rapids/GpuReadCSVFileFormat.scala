@@ -16,6 +16,7 @@
 
 package com.nvidia.spark.rapids
 
+import com.nvidia.spark.rapids.shims.v2.GpuCSVScan
 import org.apache.hadoop.conf.Configuration
 
 import org.apache.spark.sql.SparkSession
