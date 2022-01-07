@@ -124,7 +124,10 @@ object GpuParquetScanBase {
       meta.willNotWorkOnGpu("GpuParquetScan does not support int96 timestamp conversion")
     }
 
-    // TODO - do we need any checks here.. ie just keep EXCEPTION?
+    // Spark 2.x doesn't have the rebase mode because the changes of calendar type weren't made
+    // so just skip the checks, since this is just explain only it would depend on how
+    // they set when they get to 3.x. The default in 3.x is EXCEPTION which would be good
+    // for us.
 
     /*
     sqlConf.get(ShimLoader.getSparkShims.int96ParquetRebaseReadKey) match {

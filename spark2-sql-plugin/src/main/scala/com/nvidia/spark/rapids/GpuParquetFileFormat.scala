@@ -82,8 +82,10 @@ object GpuParquetFileFormat {
       TrampolineUtil.dataTypeExistsRecursively(field.dataType, _.isInstanceOf[DateType])
     }
 
-
-    // TODO - what to do for 2.x?
+    // Spark 2.x doesn't have the rebase mode because the changes of calendar type weren't made
+    // so just skip the checks, since this is just explain only it would depend on how
+    // they set when they get to 3.x. The default in 3.x is EXCEPTION which would be good
+    // for us.
     /*
     ShimLoader.getSparkShims.int96ParquetRebaseWrite(sqlConf) match {
       case "EXCEPTION" =>

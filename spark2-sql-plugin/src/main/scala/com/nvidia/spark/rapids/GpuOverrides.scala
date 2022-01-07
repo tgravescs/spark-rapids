@@ -2979,7 +2979,7 @@ class ExplainPlanImpl extends ExplainPlanBase {
 /*
 object GpuOverrideUtil extends Logging {
   def tryOverride(fn: SparkPlan => SparkPlan): SparkPlan => SparkPlan = { plan =>
-    // TODO - 2.x doesn't have a clone() method in TreeNode
+    // 2.x doesn't have a clone() method in TreeNode
     val planOriginal = plan
     val failOnError = TEST_CONF.get(plan.conf) || !SUPPRESS_PLANNING_FAILURE.get(plan.conf)
     try {

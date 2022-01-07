@@ -71,13 +71,13 @@ object GpuCSVScan {
   )
 
   def dateFormatInRead(csvOpts: CSVOptions): Option[String] = {
-    // TODO - is it ok to just toString this?
-    Option(csvOpts.dateFormat.toString)
+    // spark 2.x uses FastDateFormat, use getPattern
+    Option(csvOpts.dateFormat.getPattern)
   }
 
   def timestampFormatInRead(csvOpts: CSVOptions): Option[String] = {
-    // TODO - is it ok to just toString this?
-    Option(csvOpts.timestampFormat.toString)
+    // spark 2.x uses FastDateFormat, use getPattern
+    Option(csvOpts.timestampFormat.getPattern)
   }
 
   def tagSupport(
@@ -148,9 +148,10 @@ object GpuCSVScan {
     // TODO parsedOptions.multiLine cudf always does this, but it is not the default and it is not
     //  consistent
 
-    // 2.x doesn't have linSeparator
+    // 2.x doesn't have linSeparator config
     // CSV text with '\n', '\r' and '\r\n' as line separators.
-    // TODO - do we need to check fo \r and \r\n and if so how?
+    // Since I have no way to check in 2.x we will just assume it works for explain until
+    // they move to 3.x
     /*
     if (parsedOptions.lineSeparator.getOrElse("\n") != "\n") {
       meta.willNotWorkOnGpu("GpuCSVScan only supports \"\\n\" as a line separator")
@@ -232,7 +233,8 @@ object GpuCSVScan {
         meta.willNotWorkOnGpu("GpuCSVScan does not support parsing timestamp types. To " +
           s"enable it please set ${RapidsConf.ENABLE_CSV_TIMESTAMPS} to true.")
       }
-      // TODO - 2.x doesn't have getZoneId getTimeZone and then to id
+
+      // Spark 2.x doesn't have zoneId, so use timeZone and then to id
       if (!TypeChecks.areTimestampsSupported(parsedOptions.timeZone.toZoneId)) {
         meta.willNotWorkOnGpu("Only UTC zone id is supported")
       }
