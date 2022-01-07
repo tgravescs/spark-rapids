@@ -1070,7 +1070,7 @@ object GpuOverrides extends Logging {
         val ansiEnabled = false
 
         override def tagSelfForAst(): Unit = {
-          // TODO - ansi in 2.x
+          // Spark 2.x - ansi in not in 2.x
           /*
           if (ansiEnabled && GpuAnsi.needBasicOpOverflowCheck(a.dataType)) {
             willNotWorkInAst("AST unary minus does not support ANSI mode.")
@@ -2358,7 +2358,7 @@ object GpuOverrides extends Logging {
         override val supportOuter: Boolean = true
       }),
    expr[CollectList](
-      // TODO - spark 2.x doesn't have logical link so can't do TypeImperitive Agg checks
+      // spark 2.x doesn't have logical link so can't do TypeImperitive Agg checks
       "Collect a list of non-unique elements, only supported in rolling window in current.",
       // GpuCollectList is not yet supported under GroupBy and Reduction context.
       ExprChecks.aggNotGroupByOrReduction(
@@ -2372,7 +2372,7 @@ object GpuOverrides extends Logging {
       (c, conf, p, r) => new ExprMeta[CollectList](c, conf, p, r) {
       }),
     expr[CollectSet](
-      // TODO - spark 2.x doesn't have logical link so can't do TypeImperitive Agg checks
+      //- spark 2.x doesn't have logical link so can't do TypeImperitive Agg checks
       "Collect a set of unique elements, only supported in rolling window in current.",
       // GpuCollectSet is not yet supported under GroupBy and Reduction context.
       ExprChecks.aggNotGroupByOrReduction(
@@ -2590,7 +2590,6 @@ object GpuOverrides extends Logging {
           override val childExprs: Seq[ExprMeta[_]] = Seq.empty
 
           override def tagPlanForGpu(): Unit = {
-            // TODO - this is not real imple just allow parquet
             this.wrapped.relation.fileFormat match {
               case _: CSVFileFormat => GpuReadCSVFileFormat.tagSupport(this)
               case f if GpuReadOrcFileFormat.isSparkOrcFormat(f) => GpuReadOrcFileFormat.tagSupport(this)
@@ -2825,6 +2824,7 @@ object GpuOverrides extends Logging {
     wrap
   }
 
+  /*
   private def doConvertPlan(wrap: SparkPlanMeta[SparkPlan], conf: RapidsConf,
       optimizations: Seq[Optimization]): SparkPlan = {
     // val convertedPlan = wrap.convertIfNeeded()
@@ -2833,6 +2833,7 @@ object GpuOverrides extends Logging {
     // sparkPlan
     wrap.wrapped
   }
+  */
 
   private def getOptimizations(wrap: SparkPlanMeta[SparkPlan],
       conf: RapidsConf): Seq[Optimization] = {
@@ -2962,6 +2963,7 @@ object GpuOverrides extends Logging {
   }
 }
 
+/*
 trait ExplainPlanBase {
     def explainPotentialGpuPlan(df: DataFrame, explain: String = "ALL"): String
 }
@@ -2971,8 +2973,10 @@ class ExplainPlanImpl extends ExplainPlanBase {
     GpuOverrides.explainPotentialGpuPlan(df, explain)
   }
 }
+*/
 
 // work around any GpuOverride failures
+/*
 object GpuOverrideUtil extends Logging {
   def tryOverride(fn: SparkPlan => SparkPlan): SparkPlan => SparkPlan = { plan =>
     // TODO - 2.x doesn't have a clone() method in TreeNode
@@ -2990,8 +2994,10 @@ object GpuOverrideUtil extends Logging {
     }
   }
 }
+*/
 
 /** Tag the initial plan when AQE is enabled */
+/*
 case class GpuQueryStagePrepOverrides() extends Rule[SparkPlan] with Logging {
   override def apply(sparkPlan: SparkPlan): SparkPlan = GpuOverrideUtil.tryOverride { plan =>
     // Note that we disregard the GPU plan returned here and instead rely on side effects of
@@ -3001,7 +3007,9 @@ case class GpuQueryStagePrepOverrides() extends Rule[SparkPlan] with Logging {
     plan
   }(sparkPlan)
 }
+*/
 
+/*
 case class GpuOverrides() extends Rule[SparkPlan] with Logging {
 
   // Spark calls this method once for the whole plan when AQE is off. When AQE is on, it
@@ -3044,6 +3052,7 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
     }
   }
 }
+*/
 
 object CudfTDigest {
   val dataType: DataType = StructType(Array(
