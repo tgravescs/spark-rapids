@@ -161,7 +161,10 @@ object GpuDeviceManager extends Logging {
     if (threadGpuInitialized.get() == false) {
       val resources = getResourcesFromTaskContext
       val conf = new RapidsConf(SparkEnv.get.conf)
+
       if (rmmTaskInitEnabled) {
+        logWarning("initialize from task: " + conf.rmmPool)
+        logWarning("task context property: " + TaskContext.get().getLocalProperty("tomtest.rmm"))
         initializeGpuAndMemory(resources, conf)
       } else {
         // just set the device if provided so task thread uses right GPU
