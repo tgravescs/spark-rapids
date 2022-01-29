@@ -16,10 +16,10 @@
 
 package com.nvidia.spark.rapids.shims.spark321
 
-import org.apache.parquet.schema.MessageType
-
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.shims.v2._
+import org.apache.parquet.schema.MessageType
+
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFilters
 

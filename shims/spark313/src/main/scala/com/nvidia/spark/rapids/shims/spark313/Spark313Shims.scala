@@ -41,6 +41,7 @@ class Spark313Shims extends SparkBaseShims with Spark30Xuntil33XShims {
       .datetimeRebaseMode(lookupFileMeta, dateTimeRebaseModeFromConf)
     new ParquetFilters(schema, pushDownDate, pushDownTimestamp, pushDownDecimal, pushDownStartWith,
       pushDownInFilterThreshold, caseSensitive, datetimeRebaseMode)
+  }
 
   override def hasCastFloatTimestampUpcast: Boolean = true
 

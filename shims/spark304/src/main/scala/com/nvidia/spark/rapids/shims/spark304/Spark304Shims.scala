@@ -22,7 +22,6 @@ import org.apache.parquet.schema.MessageType
 
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFilters
-import org.apache.spark.sql.internal.SQLConf
 
 class Spark304Shims extends SparkBaseShims with Spark30Xuntil33XShims {
 
@@ -42,4 +41,5 @@ class Spark304Shims extends SparkBaseShims with Spark30Xuntil33XShims {
       .datetimeRebaseMode(lookupFileMeta, dateTimeRebaseModeFromConf)
     new ParquetFilters(schema, pushDownDate, pushDownTimestamp, pushDownDecimal, pushDownStartWith,
       pushDownInFilterThreshold, caseSensitive, datetimeRebaseMode)
+  }
 }

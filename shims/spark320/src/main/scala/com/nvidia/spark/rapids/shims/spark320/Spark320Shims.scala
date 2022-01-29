@@ -18,8 +18,10 @@ package com.nvidia.spark.rapids.shims.spark320
 
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.shims.v2._
+import org.apache.parquet.schema.MessageType
 
-import org.apache.spark.sql.execution.datasources.DataSourceUtils
+import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFilters
 
 class Spark320Shims extends Spark32XShims with Spark30Xuntil33XShims {
   override def getSparkShimVersion: ShimVersion = SparkShimServiceProvider.VERSION
