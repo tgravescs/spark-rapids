@@ -21,7 +21,6 @@ import com.nvidia.spark.rapids.shims.v2._
 import org.apache.parquet.schema.MessageType
 
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFilters
-import org.apache.spark.sql.internal.SQLConf
 
 class Spark302Shims extends SparkBaseShims with Spark30Xuntil33XShims {
 

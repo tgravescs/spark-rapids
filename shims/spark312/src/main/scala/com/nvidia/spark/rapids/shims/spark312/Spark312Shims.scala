@@ -21,7 +21,6 @@ import com.nvidia.spark.rapids.shims.v2._
 import org.apache.parquet.schema.MessageType
 
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFilters
-import org.apache.spark.sql.internal.SQLConf
 
 class Spark312Shims extends SparkBaseShims with Spark30Xuntil33XShims {
 
@@ -37,7 +36,8 @@ class Spark312Shims extends SparkBaseShims with Spark30Xuntil33XShims {
       pushDownStartWith: Boolean,
       pushDownInFilterThreshold: Int,
       caseSensitive: Boolean,
-      datetimeRebaseMode: SQLConf.LegacyBehaviorPolicy.Value): ParquetFilters = {
+      lookupFileMeta: String => String,
+      dateTimeRebaseModeFromConf: String): ParquetFilters = {
     new ParquetFilters(schema, pushDownDate, pushDownTimestamp, pushDownDecimal, pushDownStartWith,
       pushDownInFilterThreshold, caseSensitive)
   }
