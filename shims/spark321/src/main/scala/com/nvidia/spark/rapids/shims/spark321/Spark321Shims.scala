@@ -16,9 +16,29 @@
 
 package com.nvidia.spark.rapids.shims.spark321
 
+import org.apache.parquet.schema.MessageType
+
 import com.nvidia.spark.rapids._
 import com.nvidia.spark.rapids.shims.v2._
+import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFilters
 
 class Spark321Shims extends Spark32XShims with Spark30Xuntil33XShims {
   override def getSparkShimVersion: ShimVersion = SparkShimServiceProvider.VERSION
+
+  override def getParquetFilters(
+      schema: MessageType,
+      pushDownDate: Boolean,
+      pushDownTimestamp: Boolean,
+      pushDownDecimal: Boolean,
+      pushDownStartWith: Boolean,
+      pushDownInFilterThreshold: Int,
+      caseSensitive: Boolean,
+      lookupFileMeta: String => String,
+      dateTimeRebaseModeFromConf: String): ParquetFilters = {
+    val datetimeRebaseMode = DataSourceUtils
+      .datetimeRebaseSpec(lookupFileMeta, dateTimeRebaseModeFromConf)
+    new ParquetFilters(schema, pushDownDate, pushDownTimestamp, pushDownDecimal, pushDownStartWith,
+      pushDownInFilterThreshold, caseSensitive, datetimeRebaseMode)
+  }
 }
