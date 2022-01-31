@@ -1512,4 +1512,10 @@
             </snapshots>
         </repository>
     </repositories>
+<distributionManagement>
+    <repository>
+        <id>absolute directory</id>
+        <url>file:///home/tgraves/deploydir</url>
+    </repository>
+</distributionManagement>
 </project>
