@@ -84,6 +84,11 @@ Usage: java -cp rapids-4-spark-tools_2.12-<version>.jar:$SPARK_HOME/jars/*
       descr = "Size of each field to truncate to inorder to make it easier to read.",
       default = None)
 
+  validate(truncSize) {
+    case size if (size > 0) => Right(Unit)
+    case _ => Left("Error, truncate size must be greater than 0")
+  }
+
   validate(filterCriteria) {
     case crit if (crit.endsWith("-newest-filesystem") ||
         crit.endsWith("-oldest-filesystem")) => Right(Unit)
