@@ -79,6 +79,10 @@ Usage: java -cp rapids-4-spark-tools_2.12-<version>.jar:$SPARK_HOME/jars/*
         "Default is 24 hours (86400 seconds) and must be greater than 3 seconds. If it " +
         "times out, it will report what it was able to process up until the timeout.",
       default = Some(86400))
+  val truncSize: ScallopOption[Long] =
+    opt[Long](required = false,
+      descr = "Size of each field to truncate to inorder to make it easier to read.",
+      default = None)
 
   validate(filterCriteria) {
     case crit if (crit.endsWith("-newest-filesystem") ||

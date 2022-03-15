@@ -137,7 +137,8 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
   // This table is inverse of the other tables where the row keys are
   // property keys and the columns are the application values. So
   // column1 would be all the key values for app index 1.
-  def getProperties(rapidsOnly: Boolean): Seq[RapidsPropertyProfileResult] = {
+  def getProperties(rapidsOnly: Boolean,
+      truncSize: Option[Long]): Seq[RapidsPropertyProfileResult] = {
     val outputHeaders = ArrayBuffer("propertyName")
     val props = HashMap[String, ArrayBuffer[String]]()
     var numApps = 0
@@ -151,7 +152,10 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
         }
       } else {
         // remove the rapids related ones
-        app.sparkProperties.filterKeys(key => !(key.contains("spark.rapids")))
+        val filtered = app.sparkProperties.filterKeys(key => !(key.contains("spark.rapids")))
+        if (truncSize.nonEmpty) {
+          filtered.map { case (k, v) => k.substring(0, truncSize.get)}
+        }
       }
       CollectInformation.addNewProps(propsToKeep, props, numApps)
     }

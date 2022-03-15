@@ -583,7 +583,7 @@ class ApplicationInfoSuite extends FunSuite with Logging {
     assert(apps.size == 1)
     val collect = new CollectInformation(apps)
     for (app <- apps) {
-      val rapidsProps = collect.getProperties(rapidsOnly = true)
+      val rapidsProps = collect.getProperties(rapidsOnly = true, None)
       val rows = rapidsProps.map(_.rows.head)
       assert(rows.length == 5) // 5 properties captured.
       // verify  ucx parameters are captured.
