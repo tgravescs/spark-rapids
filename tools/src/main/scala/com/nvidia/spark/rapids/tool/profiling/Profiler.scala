@@ -279,8 +279,8 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
     val dsInfo = collect.getDataSourceInfo
     val execInfo = collect.getExecutorInfo
     val jobInfo = collect.getJobInfo
-    val rapidsProps = collect.getProperties(rapidsOnly = true)
-    val sparkProps = collect.getProperties(rapidsOnly = false, appArgs.truncSize)
+    val rapidsProps = collect.getProperties(rapidsOnly = true, None)
+    val sparkProps = collect.getProperties(rapidsOnly = false, appArgs.truncSize.toOption)
     val rapidsJar = collect.getRapidsJARInfo
     val sqlMetrics = collect.getSQLPlanMetrics
     // for compare mode we just add in extra tables for matching across applications

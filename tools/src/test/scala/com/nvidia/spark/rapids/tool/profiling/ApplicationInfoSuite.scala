@@ -592,7 +592,7 @@ class ApplicationInfoSuite extends FunSuite with Logging {
       //verify gds parameters are captured.
       assert(rows.contains("spark.rapids.memory.gpu.direct.storage.spill.alignedIO"))
 
-      val sparkProps = collect.getProperties(rapidsOnly = false)
+      val sparkProps = collect.getProperties(rapidsOnly = false, None)
       val sparkPropsRows = sparkProps.map(_.rows.head)
       assert(sparkPropsRows.contains("spark.eventLog.dir"))
       assert(sparkPropsRows.contains("spark.plugins"))

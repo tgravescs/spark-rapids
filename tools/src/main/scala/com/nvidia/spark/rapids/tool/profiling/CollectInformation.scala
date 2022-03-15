@@ -154,7 +154,13 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
         // remove the rapids related ones
         val filtered = app.sparkProperties.filterKeys(key => !(key.contains("spark.rapids")))
         if (truncSize.nonEmpty) {
-          filtered.map { case (k, v) => k.substring(0, truncSize.get)}
+          filtered.map { case (k, v) =>
+            val minSize = Math.min(Math.max(0, v.size), truncSize.get.toInt)
+            logWarning("truncating to size: " + minSize)
+            (k, v.substring(0, Math.max(0, minSize)))
+          }
+        } else {
+          filtered
         }
       }
       CollectInformation.addNewProps(propsToKeep, props, numApps)
