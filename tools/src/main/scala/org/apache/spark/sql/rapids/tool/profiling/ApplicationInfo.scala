@@ -261,12 +261,17 @@ class ApplicationInfo(
     stage
   }
 
+  def printChildren(planInfo: SparkPlanInfo): Unit = {
+    planInfo.children.foreach { c =>
+      logWarning("children of wholestage code gen " + planInfo.nodeName + " are: " + c.simpleString)
+      c.children.foreach(printChildren(_))
+    }
+  }
+
   def getPlanWholeStagecode(planInfo: SparkPlanInfo): Seq[SparkPlanInfo] = {
     val childRes = planInfo.children.flatMap(getPlanWholeStagecode(_))
     if (planInfo.nodeName.contains("WholeStageCodegen")) {
-      planInfo.children.foreach { c =>
-        logWarning("children of wholestage code gen " + c.nodeName + " are: " + c.simpleString)
-      }
+      printChildren(planInfo)
       childRes :+ planInfo
     } else {
       childRes
