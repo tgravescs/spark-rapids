@@ -283,6 +283,7 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
     val sparkProps = collect.getProperties(rapidsOnly = false)
     val rapidsJar = collect.getRapidsJARInfo
     val sqlMetrics = collect.getSQLPlanMetrics
+    val wholeStage = collect.getWholeStageCodeGenMapping
     // for compare mode we just add in extra tables for matching across applications
     // the rest of the tables simply list all applications specified
     val compareRes = if (appArgs.compare()) {
@@ -306,7 +307,7 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
     val removedBMs = healthCheck.getRemovedBlockManager
     val removedExecutors = healthCheck.getRemovedExecutors
     val unsupportedOps = healthCheck.getPossibleUnsupportedSQLPlan
-   
+
     if (printPlans) {
       CollectInformation.printSQLPlans(apps, outputDir)
     }
@@ -338,7 +339,7 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
     }
     (ApplicationSummaryInfo(appInfo, dsInfo, execInfo, jobInfo, rapidsProps, rapidsJar,
       sqlMetrics, jsMetAgg, sqlTaskAggMetrics, durAndCpuMet, skewInfo, failedTasks, failedStages,
-      failedJobs, removedBMs, removedExecutors, unsupportedOps, sparkProps), compareRes)
+      failedJobs, removedBMs, removedExecutors, unsupportedOps, sparkProps, wholeStage), compareRes)
   }
 
   def writeOutput(profileOutputWriter: ProfileOutputWriter,
@@ -393,7 +394,8 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
         appsSum.flatMap(_.removedBMs).sortBy(_.appIndex),
         appsSum.flatMap(_.removedExecutors).sortBy(_.appIndex),
         appsSum.flatMap(_.unsupportedOps).sortBy(_.appIndex),
-        combineProps(rapidsOnly=false, appsSum).sortBy(_.key)
+        combineProps(rapidsOnly=false, appsSum).sortBy(_.key),
+        appsSum.flatMap(_.wholeStage).sortBy(_.appIndex)
       )
       Seq(reduced)
     } else {
@@ -413,7 +415,8 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
         Some("Rapids 4 Spark Jars"))
       profileOutputWriter.write("SQL Plan Metrics for Application", app.sqlMetrics,
         Some("SQL Plan Metrics"))
-
+      profileOutputWriter.write("WholeStageCodeGen Mapping", app.wholeStage,
+        Some("WholeStagecodeGen Mapping"))
       comparedRes.foreach { compareSum =>
         val matchingSqlIds = compareSum.matchingSqlIds
         val matchingStageIds = compareSum.matchingStageIds

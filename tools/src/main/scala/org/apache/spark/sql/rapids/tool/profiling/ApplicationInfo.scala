@@ -232,6 +232,7 @@ class ApplicationInfo(
   val accumIdToStageId: mutable.HashMap[Long, Int] = new mutable.HashMap[Long, Int]()
   var taskEnd: ArrayBuffer[TaskCase] = ArrayBuffer[TaskCase]()
   var unsupportedSQLplan: ArrayBuffer[UnsupportedSQLPlan] = ArrayBuffer[UnsupportedSQLPlan]()
+  var wholeStage: ArrayBuffer[(Long, (String, String))] = ArrayBuffer[(Long, (String, String))]()
 
   private lazy val eventProcessor =  new EventsProcessor(this)
 
@@ -258,12 +259,30 @@ class ApplicationInfo(
     stage
   }
 
+  def getPlanWholeStagecode(planInfo: SparkPlanInfo): Seq[SparkPlanInfo] = {
+    val childRes = planInfo.children.flatMap(getPlanWholeStagecode(_))
+    if (planInfo.nodeName.contains("WholeStageCodegen")) {
+      childRes :+ planInfo
+    } else {
+      childRes
+    }
+  }
+
   /**
    * Function to process SQL Plan Metrics after all events are processed
    */
   def processSQLPlanMetrics(): Unit = {
     for ((sqlID, planInfo) <- sqlPlan) {
       checkMetadataForReadSchema(sqlID, planInfo)
+      logWarning("planinfo is: " + planInfo.simpleString)
+      val allWholes = getPlanWholeStagecode(planInfo)
+      val res = allWholes.flatMap { p =>
+        p.children.map { c => (sqlID, (p.nodeName, c.nodeName)) }
+      }
+      wholeStage ++= res
+      res.foreach { case (k, v) =>
+        logWarning("parent: " + k + " child: " + v)
+      }
       val planGraph = SparkPlanGraph(planInfo)
       // SQLPlanMetric is a case Class of
       // (name: String,accumulatorId: Long,metricType: String)

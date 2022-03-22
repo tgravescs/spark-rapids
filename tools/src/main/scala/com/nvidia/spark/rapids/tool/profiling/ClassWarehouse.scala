@@ -592,3 +592,18 @@ case class CompareProfileResults(outputHeadersIn: Seq[String],
   override val outputHeaders: Seq[String] = outputHeadersIn
   override def convertToSeq: Seq[String] = rows
 }
+
+case class WholeStageCodeGenResults(
+    appIndex: Int,
+    sqlID: Long,
+    parent: String,
+    child: String
+) extends ProfileResult {
+  override val outputHeaders = Seq("appIndex", "sqlID", "parent", "child")
+  override def convertToSeq: Seq[String] = {
+    Seq(appIndex.toString,
+      sqlID.toString,
+      parent,
+      child)
+  }
+}

@@ -164,6 +164,15 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
     }
   }
 
+  // Print SQL whole stage code gen mapping
+  def getWholeStageCodeGenMapping: Seq[WholeStageCodeGenResults] = {
+    apps.flatMap { app =>
+      app.wholeStage.map { mapping =>
+        WholeStageCodeGenResults(app.index, mapping._1, mapping._2._1, mapping._2._2)
+      }
+    }
+  }
+
   // Print SQL Plan Metrics
   def getSQLPlanMetrics: Seq[SQLAccumProfileResults] = {
     val sqlAccums = CollectInformation.generateSQLAccums(apps)
