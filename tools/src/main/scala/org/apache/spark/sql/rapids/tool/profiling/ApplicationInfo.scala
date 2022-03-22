@@ -233,6 +233,8 @@ class ApplicationInfo(
   var taskEnd: ArrayBuffer[TaskCase] = ArrayBuffer[TaskCase]()
   var unsupportedSQLplan: ArrayBuffer[UnsupportedSQLPlan] = ArrayBuffer[UnsupportedSQLPlan]()
   var wholeStage: ArrayBuffer[(Long, (String, String))] = ArrayBuffer[(Long, (String, String))]()
+  // var wholeStage: ArrayBuffer[(Long, mutable.HashMap[String, String])] =
+  //   ArrayBuffer[(Long, mutable.HashMap[String, String])]()
 
   private lazy val eventProcessor =  new EventsProcessor(this)
 
@@ -262,6 +264,9 @@ class ApplicationInfo(
   def getPlanWholeStagecode(planInfo: SparkPlanInfo): Seq[SparkPlanInfo] = {
     val childRes = planInfo.children.flatMap(getPlanWholeStagecode(_))
     if (planInfo.nodeName.contains("WholeStageCodegen")) {
+      planInfo.children.foreach { c =>
+        logWarning("children of wholestage code gen " + c.nodeName + " are: " + c.simpleString)
+      }
       childRes :+ planInfo
     } else {
       childRes
@@ -312,7 +317,6 @@ class ApplicationInfo(
         sqlIdToInfo.get(sqlID).foreach { sql =>
           sql.problematic = potentialProbs
         }
-
         // Then process SQL plan metric type
         for (metric <- node.metrics) {
           val allMetric = SQLMetricInfoCase(sqlID, metric.name,
