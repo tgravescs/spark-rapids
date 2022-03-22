@@ -604,6 +604,7 @@ case class WholeStageCodeGenResults(
   override def convertToSeq: Seq[String] = {
     Seq(appIndex.toString,
       sqlID.toString,
+      nodeID.toString,
       parent,
       child)
   }
