@@ -263,7 +263,8 @@ class ApplicationInfo(
 
   def printChildren(planInfo: SparkPlanInfo, orig: SparkPlanInfo): Unit = {
     planInfo.children.foreach { c =>
-      logWarning("children of wholestage code gen " + orig.nodeName + " are: " + c.simpleString)
+      logWarning("children of wholestage code gen " + orig.nodeName + " current: " +
+        planInfo.nodeName + " chilren are: " + c.simpleString)
       c.children.foreach(printChildren(_, orig))
     }
   }
