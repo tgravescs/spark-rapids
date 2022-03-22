@@ -600,7 +600,7 @@ case class WholeStageCodeGenResults(
     parent: String,
     child: String
 ) extends ProfileResult {
-  override val outputHeaders = Seq("appIndex", "sqlID", "parent", "child")
+  override val outputHeaders = Seq("appIndex", "sqlID", "nodeID", "parent", "child")
   override def convertToSeq: Seq[String] = {
     Seq(appIndex.toString,
       sqlID.toString,
