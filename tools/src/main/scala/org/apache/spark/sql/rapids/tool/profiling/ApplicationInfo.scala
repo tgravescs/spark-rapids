@@ -259,24 +259,6 @@ class ApplicationInfo(
     stage
   }
 
-  def printChildren(planInfo: SparkPlanInfo, orig: SparkPlanInfo): Unit = {
-    planInfo.children.foreach { c =>
-      //logWarning("children of wholestage code gen " + orig.nodeName + " current: " +
-      //  planInfo.nodeName + " chilren are: " + c.simpleString)
-      c.children.foreach(printChildren(_, orig))
-    }
-  }
-
-  def getPlanWholeStagecode(planInfo: SparkPlanInfo): Seq[SparkPlanInfo] = {
-    val childRes = planInfo.children.flatMap(getPlanWholeStagecode(_))
-    if (planInfo.nodeName.contains("WholeStageCodegen")) {
-      printChildren(planInfo, planInfo)
-      childRes :+ planInfo
-    } else {
-      childRes
-    }
-  }
-
   /**
    * Function to process SQL Plan Metrics after all events are processed
    */
@@ -289,10 +271,8 @@ class ApplicationInfo(
       val allnodes = planGraph.allNodes
       planGraph.nodes.foreach { n =>
         if (n.isInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster]) {
-          logWarning("node : " + n.name + " is a SparkPlanGraphCluster")
           val ch = n.asInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster].nodes
           ch.foreach { c =>
-            logWarning("child of " + n.name + " is " + c.name)
             wholeStage += WholeStageCodeGenResults(index, sqlID, n.id, n.name, c.name)
           }
         }
@@ -322,6 +302,7 @@ class ApplicationInfo(
         sqlIdToInfo.get(sqlID).foreach { sql =>
           sql.problematic = potentialProbs
         }
+
         // Then process SQL plan metric type
         for (metric <- node.metrics) {
           val allMetric = SQLMetricInfoCase(sqlID, metric.name,
