@@ -263,8 +263,8 @@ class ApplicationInfo(
 
   def printChildren(planInfo: SparkPlanInfo, orig: SparkPlanInfo): Unit = {
     planInfo.children.foreach { c =>
-      logWarning("children of wholestage code gen " + orig.nodeName + " current: " +
-        planInfo.nodeName + " chilren are: " + c.simpleString)
+      //logWarning("children of wholestage code gen " + orig.nodeName + " current: " +
+      //  planInfo.nodeName + " chilren are: " + c.simpleString)
       c.children.foreach(printChildren(_, orig))
     }
   }
@@ -291,13 +291,22 @@ class ApplicationInfo(
         p.children.map { c => (sqlID, (p.nodeName, c.nodeName)) }
       }
       wholeStage ++= res
-      res.foreach { case (k, v) =>
-        logWarning("parent: " + k + " child: " + v)
-      }
+      //res.foreach { case (k, v) =>
+      //  logWarning("parent: " + k + " child: " + v)
+      //}
       val planGraph = SparkPlanGraph(planInfo)
       // SQLPlanMetric is a case Class of
       // (name: String,accumulatorId: Long,metricType: String)
       val allnodes = planGraph.allNodes
+      planGraph.nodes.foreach { n =>
+        if (n.isInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster]) {
+          logWarning("node : " + n.name + " is a SparkPlanGraphCluster")
+          val ch = n.asInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster].nodes
+          ch.foreach { c =>
+            logWarning("child of " + n.name + " is " + c.name)
+          }
+        }
+      }
       for (node <- allnodes) {
         checkGraphNodeForReads(sqlID, node)
         if (isDataSetOrRDDPlan(node.desc)) {
