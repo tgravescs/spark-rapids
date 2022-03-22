@@ -596,6 +596,7 @@ case class CompareProfileResults(outputHeadersIn: Seq[String],
 case class WholeStageCodeGenResults(
     appIndex: Int,
     sqlID: Long,
+    nodeID: Long,
     parent: String,
     child: String
 ) extends ProfileResult {
