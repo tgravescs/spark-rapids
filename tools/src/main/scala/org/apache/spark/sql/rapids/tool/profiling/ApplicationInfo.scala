@@ -232,9 +232,7 @@ class ApplicationInfo(
   val accumIdToStageId: mutable.HashMap[Long, Int] = new mutable.HashMap[Long, Int]()
   var taskEnd: ArrayBuffer[TaskCase] = ArrayBuffer[TaskCase]()
   var unsupportedSQLplan: ArrayBuffer[UnsupportedSQLPlan] = ArrayBuffer[UnsupportedSQLPlan]()
-  var wholeStage: ArrayBuffer[(Long, (String, String))] = ArrayBuffer[(Long, (String, String))]()
-  // var wholeStage: ArrayBuffer[(Long, mutable.HashMap[String, String])] =
-  //   ArrayBuffer[(Long, mutable.HashMap[String, String])]()
+  var wholeStage: ArrayBuffer[WholeStageCodeGenResults] = ArrayBuffer[WholeStageCodeGenResults)]()
 
   private lazy val eventProcessor =  new EventsProcessor(this)
 
@@ -285,19 +283,20 @@ class ApplicationInfo(
   def processSQLPlanMetrics(): Unit = {
     for ((sqlID, planInfo) <- sqlPlan) {
       checkMetadataForReadSchema(sqlID, planInfo)
-      logWarning("planinfo is: " + planInfo.simpleString)
-      val allWholes = getPlanWholeStagecode(planInfo)
-      val res = allWholes.flatMap { p =>
-        p.children.map { c => (sqlID, (p.nodeName, c.nodeName)) }
-      }
-      wholeStage ++= res
-      res.foreach { case (k, v) =>
-        logWarning("parent: " + k + " child: " + v)
-      }
       val planGraph = SparkPlanGraph(planInfo)
       // SQLPlanMetric is a case Class of
       // (name: String,accumulatorId: Long,metricType: String)
       val allnodes = planGraph.allNodes
+      planGraph.nodes.foreach { n =>
+        if (n.isInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster]) {
+          logWarning("node : " + n.name + " is a SparkPlanGraphCluster")
+          val ch = n.asInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster].nodes
+          ch.foreach { c =>
+            logWarning("child of " + n.name + " is " + c.name)
+            wholeStage += WholeStageCodeGenResults(index, sqlID, n.id, n.name, c.name)
+          }
+        }
+      }
       for (node <- allnodes) {
         checkGraphNodeForReads(sqlID, node)
         if (isDataSetOrRDDPlan(node.desc)) {
