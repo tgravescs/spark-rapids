@@ -232,6 +232,7 @@ class ApplicationInfo(
   val accumIdToStageId: mutable.HashMap[Long, Int] = new mutable.HashMap[Long, Int]()
   var taskEnd: ArrayBuffer[TaskCase] = ArrayBuffer[TaskCase]()
   var unsupportedSQLplan: ArrayBuffer[UnsupportedSQLPlan] = ArrayBuffer[UnsupportedSQLPlan]()
+  var wholeStage: ArrayBuffer[WholeStageCodeGenResults] = ArrayBuffer[WholeStageCodeGenResults]()
 
   private lazy val eventProcessor =  new EventsProcessor(this)
 
@@ -268,6 +269,14 @@ class ApplicationInfo(
       // SQLPlanMetric is a case Class of
       // (name: String,accumulatorId: Long,metricType: String)
       val allnodes = planGraph.allNodes
+      planGraph.nodes.foreach { n =>
+        if (n.isInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster]) {
+          val ch = n.asInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster].nodes
+          ch.foreach { c =>
+            wholeStage += WholeStageCodeGenResults(index, sqlID, n.id, n.name, c.name)
+          }
+        }
+      }
       for (node <- allnodes) {
         checkGraphNodeForReads(sqlID, node)
         if (isDataSetOrRDDPlan(node.desc)) {

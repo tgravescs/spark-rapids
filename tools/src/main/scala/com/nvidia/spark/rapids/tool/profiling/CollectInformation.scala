@@ -123,7 +123,7 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
   def getJobInfo: Seq[JobInfoProfileResult] = {
     val allRows = apps.flatMap { app =>
       app.jobIdToInfo.map { case (jobId, j) =>
-        JobInfoProfileResult(app.index, j.jobID, j.stageIds, j.sqlID)
+        JobInfoProfileResult(app.index, j.jobID, j.stageIds, j.sqlID, j.startTime, j.endTime)
       }
     }
     if (allRows.size > 0) {
@@ -202,6 +202,13 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
       resRows.sortBy(cols => cols.key)
     } else {
       Seq.empty
+    }
+  }
+
+  // Print SQL whole stage code gen mapping
+  def getWholeStageCodeGenMapping: Seq[WholeStageCodeGenResults] = {
+    apps.flatMap { app =>
+      app.wholeStage
     }
   }
 
