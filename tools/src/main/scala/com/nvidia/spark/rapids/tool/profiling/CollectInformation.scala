@@ -149,8 +149,7 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
       }
     }
     if (allRows.size > 0) {
-      allRows.sortBy(cols => (cols.appIndex, cols.sqlID, cols.jobID,
-        cols.stageId, cols.stageAttemptId))
+      allRows.sortBy(cols => (cols.appIndex, cols.duration))
     } else {
       Seq.empty
     }
