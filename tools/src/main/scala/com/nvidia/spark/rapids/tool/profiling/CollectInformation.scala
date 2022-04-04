@@ -149,7 +149,11 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
       }
     }
     if (allRows.size > 0) {
-      allRows.sortBy(cols => (cols.appIndex, cols.duration))
+      case class Reverse[T](t: T)
+      implicit def ReverseOrdering[T: Ordering]: Ordering[Reverse[T]] =
+        Ordering[T].reverse.on(_.t)
+
+      allRows.sortBy(cols => (cols.appIndex, Reverse(cols.duration)))
     } else {
       Seq.empty
     }

@@ -397,7 +397,7 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
         appsSum.flatMap(_.removedExecutors).sortBy(_.appIndex),
         appsSum.flatMap(_.unsupportedOps).sortBy(_.appIndex),
         combineProps(rapidsOnly=false, appsSum).sortBy(_.key),
-        appsSum.flatMap(_.sqlStageInfo).sortBy(_.appIndex),
+        appsSum.flatMap(_.sqlStageInfo).sortBy(_.duration)(Ordering[Option[Long]].reverse),
         appsSum.flatMap(_.wholeStage).sortBy(_.appIndex)
       )
       Seq(reduced)
