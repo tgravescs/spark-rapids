@@ -101,6 +101,21 @@ case class JobInfoProfileResult(
   }
 }
 
+case class SQLStageInfoProfileResult(
+    appIndex: Int,
+    sqlID: Long,
+    jobID: Int,
+    stageId: Int,
+    stageAttemptId: Int,
+    duration: Option[Long]) extends ProfileResult {
+  override val outputHeaders = Seq("appIndex", "sqlID", "jobID", "stageId",
+    "stageAttemptId", "duration")
+  override def convertToSeq: Seq[String] = {
+    Seq(appIndex.toString, sqlID.toString, jobID.toString, stageId.toString,
+      stageAttemptId.toString, duration.map(_.toString).getOrElse(null))
+  }
+}
+
 case class RapidsJarProfileResult(appIndex: Int, jar: String)  extends ProfileResult {
   override val outputHeaders = Seq("appIndex", "Rapids4Spark jars")
   override def convertToSeq: Seq[String] = {

@@ -133,6 +133,47 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
     }
   }
 
+  def getSQLToStage: Seq[SQLStageInfoProfileResult] = {
+    val allRows = apps.flatMap { app =>
+      val jobsWithSQL = app.jobIdToInfo.filter { case (id, j) =>
+        j.sqlID.nonEmpty
+      }
+      jobsWithSQL.flatMap { case (jobId, j) =>
+        val stages = j.stageIds
+        val stagesInJob = app.stageIdToInfo.filterKeys { case (sid, _) =>
+          stages.contains(sid)
+        }
+        stagesInJob.map { case ((s,sa), info) =>
+          SQLStageInfoProfileResult(app.index, j.sqlID.get, jobId, s, sa, info.duration)
+        }
+      }
+    }
+    if (allRows.size > 0) {
+      allRows.sortBy(cols => (cols.appIndex, cols.sqlID, cols.jobID,
+        cols.stageId, cols.stageAttemptId))
+    } else {
+      Seq.empty
+    }
+  }
+
+  /*
+  def getStageInfo: Seq[StageInfoProfileResult] = {
+    val allRows = apps.flatMap { app =>
+      val jobsWithSQL = app.jobIdToInfo.filter { case (id, j) =>
+        j.sqlID.nonEmpty
+      }
+      app.jobIdToInfo.map { case (jobId, j) =>
+        if
+        // StageInfoProfileResult(app.index, j.jobID, j.stageIds, j.sqlID)
+      }
+    }
+    if (allRows.size > 0) {
+      allRows.sortBy(cols => (cols.appIndex, cols.jobID))
+    } else {
+      Seq.empty
+    }
+  }
+*/
   // Print RAPIDS related or all Spark Properties
   // This table is inverse of the other tables where the row keys are
   // property keys and the columns are the application values. So

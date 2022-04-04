@@ -279,6 +279,7 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
     val dsInfo = collect.getDataSourceInfo
     val execInfo = collect.getExecutorInfo
     val jobInfo = collect.getJobInfo
+    val sqlStageInfo = collect.getSQLToStage
     val rapidsProps = collect.getProperties(rapidsOnly = true)
     val sparkProps = collect.getProperties(rapidsOnly = false)
     val rapidsJar = collect.getRapidsJARInfo
@@ -338,7 +339,8 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
     }
     (ApplicationSummaryInfo(appInfo, dsInfo, execInfo, jobInfo, rapidsProps, rapidsJar,
       sqlMetrics, jsMetAgg, sqlTaskAggMetrics, durAndCpuMet, skewInfo, failedTasks, failedStages,
-      failedJobs, removedBMs, removedExecutors, unsupportedOps, sparkProps), compareRes)
+      failedJobs, removedBMs, removedExecutors, unsupportedOps, sparkProps, sqlStageInfo),
+      compareRes)
   }
 
   def writeOutput(profileOutputWriter: ProfileOutputWriter,
@@ -393,7 +395,8 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
         appsSum.flatMap(_.removedBMs).sortBy(_.appIndex),
         appsSum.flatMap(_.removedExecutors).sortBy(_.appIndex),
         appsSum.flatMap(_.unsupportedOps).sortBy(_.appIndex),
-        combineProps(rapidsOnly=false, appsSum).sortBy(_.key)
+        combineProps(rapidsOnly=false, appsSum).sortBy(_.key),
+        appsSum.flatMap(_.sqlStageInfo).sortBy(_.appIndex)
       )
       Seq(reduced)
     } else {
@@ -405,6 +408,7 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
       profileOutputWriter.write("Data Source Information", app.dsInfo)
       profileOutputWriter.write("Executor Information", app.execInfo)
       profileOutputWriter.write("Job Information", app.jobInfo)
+      profileOutputWriter.write("SQL to Stage Information", app.sqlStageInfo)
       profileOutputWriter.write("Spark Rapids parameters set explicitly", app.rapidsProps,
         Some("Spark Rapids parameters"))
       profileOutputWriter.write("Spark Properties", app.sparkProps,
