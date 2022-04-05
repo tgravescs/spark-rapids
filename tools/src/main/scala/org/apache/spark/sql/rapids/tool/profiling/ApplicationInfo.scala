@@ -390,7 +390,7 @@ class ApplicationInfo(
           nodeIds.flatMap(n => nodeIdToName.get(n))
         }.getOrElse(null)
 
-        SQLStageInfoProfileResult(index, j.sqlID.get, jobId, s, sa, info.duration, nodeNames)
+        SQLStageInfoProfileResult(index, j.sqlID.get, jobId, s, sa, info.duration, nodeNames.toSeq)
       }
     }
 
