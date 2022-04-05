@@ -154,13 +154,14 @@ class SQLExecutionInfoClass(
     var sqlCpuTimePercent: Double = -1)
 
 case class SQLAccumProfileResults(appIndex: Int, sqlID: Long, nodeID: Long,
-    nodeName: String, accumulatorId: Long,
-    name: String, max_value: Long, metricType: String) extends ProfileResult {
+    nodeName: String, accumulatorId: Long, name: String,
+    max_value: Long, metricType: String, stages: Seq[Int]) extends ProfileResult {
   override val outputHeaders = Seq("appIndex", "sqlID", "nodeID", "nodeName", "accumulatorId",
-    "name", "max_value", "metricType")
+    "name", "max_value", "metricType", "stageIds")
+  // TODO - stages separator not comma for csv?
   override def convertToSeq: Seq[String] = {
     Seq(appIndex.toString, sqlID.toString, nodeID.toString, nodeName, accumulatorId.toString,
-      name, max_value.toString, metricType)
+      name, max_value.toString, metricType, stages.mkString(";"))
   }
 }
 
@@ -256,7 +257,8 @@ case class SQLMetricInfoCase(
     metricType: String,
     nodeID: Long,
     nodeName: String,
-    nodeDesc: String)
+    nodeDesc: String,
+    stages: Seq[Int])
 
 case class DriverAccumCase(
     sqlID: Long,

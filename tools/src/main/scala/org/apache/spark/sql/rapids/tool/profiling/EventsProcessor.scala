@@ -391,6 +391,9 @@ class EventsProcessor(app: ApplicationInfo) extends EventProcessorBase[Applicati
 
     stage.duration = ProfileUtils.optionLongMinusOptionLong(stage.completionTime,
       stage.info.submissionTime)
+    val stageId = event.stageInfo.stageId
+    val stageAccumulatorIds = event.stageInfo.accumulables.values.map { m => m.id }.toSeq
+    app.stageAccumulators.put(stageId, stageAccumulatorIds)
 
     // Parse stage accumulables
     for (res <- event.stageInfo.accumulables) {
@@ -398,16 +401,16 @@ class EventsProcessor(app: ApplicationInfo) extends EventProcessorBase[Applicati
         val value = res._2.value.map(_.toString.toLong)
         val update = res._2.update.map(_.toString.toLong)
         val thisMetric = TaskStageAccumCase(
-          event.stageInfo.stageId, event.stageInfo.attemptNumber(),
+          stageId, event.stageInfo.attemptNumber(),
           None, res._2.id, res._2.name, value, update, res._2.internal)
         val arrBuf =  app.taskStageAccumMap.getOrElseUpdate(res._2.id,
           ArrayBuffer[TaskStageAccumCase]())
-        app.accumIdToStageId.put(res._2.id, event.stageInfo.stageId)
+        app.accumIdToStageId.put(res._2.id, stageId)
         arrBuf += thisMetric
       } catch {
         case NonFatal(e) =>
           logWarning("Exception when parsing accumulables for task " +
-              "stageID=" + event.stageInfo.stageId + ": ")
+              "stageID=" + stageId + ": ")
           logWarning(e.toString)
           logWarning("The problematic accumulable is: name="
               + res._2.name + ",value=" + res._2.value + ",update=" + res._2.update)

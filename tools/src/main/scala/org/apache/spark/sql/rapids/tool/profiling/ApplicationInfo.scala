@@ -215,6 +215,8 @@ class ApplicationInfo(
 
   // sqlPlan stores HashMap (sqlID <-> SparkPlanInfo)
   var sqlPlan: mutable.HashMap[Long, SparkPlanInfo] = mutable.HashMap.empty[Long, SparkPlanInfo]
+  val sqlPlanNodeIdToStageIds: mutable.HashMap[Long, Seq[Int]] =
+    mutable.HashMap.empty[Long, Seq[Int]]
 
   // physicalPlanDescription stores HashMap (sqlID <-> physicalPlanDescription)
   var physicalPlanDescription: mutable.HashMap[Long, String] = mutable.HashMap.empty[Long, String]
@@ -229,7 +231,10 @@ class ApplicationInfo(
   var taskStageAccumMap: mutable.HashMap[Long, ArrayBuffer[TaskStageAccumCase]] =
     mutable.HashMap[Long, ArrayBuffer[TaskStageAccumCase]]()
 
+  // TODO - do we really need both these accum to stage? Need to change how accumIdToStageId used
+  val stageAccumulators: mutable.HashMap[Int, Seq[Long]] = new mutable.HashMap[Int, Seq[Long]]()
   val accumIdToStageId: mutable.HashMap[Long, Int] = new mutable.HashMap[Long, Int]()
+
   var taskEnd: ArrayBuffer[TaskCase] = ArrayBuffer[TaskCase]()
   var unsupportedSQLplan: ArrayBuffer[UnsupportedSQLPlan] = ArrayBuffer[UnsupportedSQLPlan]()
   var wholeStage: ArrayBuffer[WholeStageCodeGenResults] = ArrayBuffer[WholeStageCodeGenResults]()
@@ -257,6 +262,35 @@ class ApplicationInfo(
     val stage = stageIdToInfo.getOrElseUpdate((info.stageId, info.attemptNumber),
       new StageInfoClass(info))
     stage
+  }
+
+  /* Connects Operators to Stages by doing the following:
+   * 1. Read SparkGraph to get every Node's name and respective AccumulatorIDs.
+   * 2. Gets each stage's AccumulatorIDs.
+   * 3. Maps Operators to stages by checking for non-zero intersection of 1 and 2's AccumulatorIDs.
+   */
+  def connectOperatorToStage(): Unit = {
+    for ((sqlID, planInfo) <- sqlPlan) {
+      val planGraph = SparkPlanGraph(planInfo)
+      val nodeIdToAccumulatorIds = planGraph.allNodes.map { node =>
+        (node.id, node.metrics.map(_.accumulatorId))
+      }
+
+      // Maps stages to operators by checking for non-zero intersection
+      // between nodeMetrics and stageAccumulateIDs
+      // TODO - would this be more efficient using accumIdToStageId if it had all stage ids?
+      val operatorToStage = nodeIdToAccumulatorIds.map { case (nodeId, nodeAccums) =>
+        val mappedStages = stageAccumulators.flatMap { case (stageId, stageAccums) =>
+          if (nodeAccums.intersect(stageAccums).nonEmpty) {
+            Some(stageId)
+          } else {
+            None
+          }
+        }.toList.sorted
+        (nodeId, mappedStages)
+      }.toMap
+      sqlPlanNodeIdToStageIds ++= operatorToStage
+    }
   }
 
   /**
@@ -305,9 +339,10 @@ class ApplicationInfo(
 
         // Then process SQL plan metric type
         for (metric <- node.metrics) {
+          val stages = sqlPlanNodeIdToStageIds.get(node.id).getOrElse(Seq.empty)
           val allMetric = SQLMetricInfoCase(sqlID, metric.name,
             metric.accumulatorId, metric.metricType, node.id,
-            node.name, node.desc)
+            node.name, node.desc, stages)
 
           allSQLMetrics += allMetric
           if (this.sqlPlanMetricsAdaptive.nonEmpty) {
@@ -317,7 +352,7 @@ class ApplicationInfo(
             adaptive.foreach { adaptiveMetric =>
               val allMetric = SQLMetricInfoCase(sqlID, adaptiveMetric.name,
                 adaptiveMetric.accumulatorId, adaptiveMetric.metricType, node.id,
-                node.name, node.desc)
+                node.name, node.desc, stages)
               // could make this more efficient but seems ok for now
               val exists = allSQLMetrics.filter { a =>
                 ((a.accumulatorId == adaptiveMetric.accumulatorId) && (a.sqlID == sqlID)
