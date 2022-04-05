@@ -144,7 +144,9 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
           stages.contains(sid)
         }
         stagesInJob.map { case ((s,sa), info) =>
-          SQLStageInfoProfileResult(app.index, j.sqlID.get, jobId, s, sa, info.duration)
+          // TODO - fix nodenames
+          SQLStageInfoProfileResult(app.index, j.sqlID.get, jobId, s, sa, info.duration,
+            Seq.empty[String])
         }
       }
     }
