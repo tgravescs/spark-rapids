@@ -383,14 +383,16 @@ class ApplicationInfo(
       stagesInJob.map { case ((s,sa), info) =>
         val nodeIds = sqlPlanNodeIdToStageIds.filter { case (k, v) =>
           v.contains(s)
-        }.keys
+        }.keys.toSeq
         val nodeNames = sqlPlan.get(j.sqlID.get).map { planInfo =>
           val nodes = SparkPlanGraph(planInfo).allNodes
-          val nodeIdToName = nodes.map(n => (n.id, n.name)).toMap
-          nodeIds.flatMap(n => nodeIdToName.get(n) + s"($n)")
+          val validNodes = nodes.filter { n =>
+            nodeIds.contains(n.id)
+          }
+          validNodes.map(n => s"${n.name}(${n.id.toString})")
         }.getOrElse(null)
 
-        SQLStageInfoProfileResult(index, j.sqlID.get, jobId, s, sa, info.duration, nodeNames.toSeq)
+        SQLStageInfoProfileResult(index, j.sqlID.get, jobId, s, sa, info.duration, nodeNames)
       }
     }
     sqlToStages.toSeq
