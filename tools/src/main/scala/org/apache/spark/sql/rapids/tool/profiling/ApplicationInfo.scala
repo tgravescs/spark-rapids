@@ -371,7 +371,7 @@ class ApplicationInfo(
     }
   }
 
-  private def aggregateSQLInfo: Unit = {
+  def aggregateSQLInfo: Seq[SQLStageInfoProfileResult] = {
     val jobsWithSQL = jobIdToInfo.filter { case (id, j) =>
       j.sqlID.nonEmpty
     }
@@ -393,7 +393,7 @@ class ApplicationInfo(
         SQLStageInfoProfileResult(index, j.sqlID.get, jobId, s, sa, info.duration, nodeNames.toSeq)
       }
     }
-
+    sqlToStages.toSeq
   }
 
   private def aggregateAppInfo: Unit = {
