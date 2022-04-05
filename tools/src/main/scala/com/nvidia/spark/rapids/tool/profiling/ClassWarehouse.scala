@@ -110,12 +110,14 @@ case class SQLStageInfoProfileResult(
     jobID: Int,
     stageId: Int,
     stageAttemptId: Int,
-    duration: Option[Long]) extends ProfileResult {
+    duration: Option[Long],
+    nodeNames: Seq[String]) extends ProfileResult {
   override val outputHeaders = Seq("appIndex", "sqlID", "jobID", "stageId",
-    "stageAttemptId", "stage duration")
+    "stageAttemptId", "stage duration", "SQL node names")
   override def convertToSeq: Seq[String] = {
     Seq(appIndex.toString, sqlID.toString, jobID.toString, stageId.toString,
-      stageAttemptId.toString, duration.map(_.toString).getOrElse(null))
+      stageAttemptId.toString, duration.map(_.toString).getOrElse(null),
+      nodeNames.mkString(","))
   }
 }
 

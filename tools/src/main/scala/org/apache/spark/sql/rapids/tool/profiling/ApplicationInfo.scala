@@ -270,7 +270,8 @@ class ApplicationInfo(
    * 3. Maps Operators to stages by checking for non-zero intersection of 1 and 2's AccumulatorIDs.
    */
   def connectOperatorToStage(): Unit = {
-    for ((sqlID, planInfo) <- sqlPlan) {
+    // TODO can we combine into processSQLPlanMetrics
+    for ((_, planInfo) <- sqlPlan) {
       val planGraph = SparkPlanGraph(planInfo)
       val nodeIdToAccumulatorIds = planGraph.allNodes.map { node =>
         (node.id, node.metrics.map(_.accumulatorId))
@@ -368,6 +369,31 @@ class ApplicationInfo(
         }
       }
     }
+  }
+
+  private def aggregateSQLInfo: Unit = {
+    val jobsWithSQL = jobIdToInfo.filter { case (id, j) =>
+      j.sqlID.nonEmpty
+    }
+    val sqlToStages = jobsWithSQL.flatMap { case (jobId, j) =>
+      val stages = j.stageIds
+      val stagesInJob = stageIdToInfo.filterKeys { case (sid, _) =>
+        stages.contains(sid)
+      }
+      stagesInJob.map { case ((s,sa), info) =>
+        val nodeIds = sqlPlanNodeIdToStageIds.filter { case (k, v) =>
+          v.contains(s)
+        }.keys
+        val nodeNames = sqlPlan.get(j.sqlID.get).map { planInfo =>
+          val nodes = SparkPlanGraph(planInfo).allNodes
+          val nodeIdToName = nodes.map(n => (n.id, n.name)).toMap
+          nodeIds.flatMap(n => nodeIdToName.get(n))
+        }.getOrElse(null)
+
+        SQLStageInfoProfileResult(index, j.sqlID.get, jobId, s, sa, info.duration, nodeNames)
+      }
+    }
+
   }
 
   private def aggregateAppInfo: Unit = {
