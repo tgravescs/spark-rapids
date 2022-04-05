@@ -387,7 +387,7 @@ class ApplicationInfo(
         val nodeNames = sqlPlan.get(j.sqlID.get).map { planInfo =>
           val nodes = SparkPlanGraph(planInfo).allNodes
           val nodeIdToName = nodes.map(n => (n.id, n.name)).toMap
-          nodeIds.flatMap(n => nodeIdToName.get(n))
+          nodeIds.flatMap(n => nodeIdToName.get(n) + s"($n)")
         }.getOrElse(null)
 
         SQLStageInfoProfileResult(index, j.sqlID.get, jobId, s, sa, info.duration, nodeNames.toSeq)
