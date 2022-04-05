@@ -161,7 +161,7 @@ case class SQLAccumProfileResults(appIndex: Int, sqlID: Long, nodeID: Long,
   // TODO - stages separator not comma for csv?
   override def convertToSeq: Seq[String] = {
     Seq(appIndex.toString, sqlID.toString, nodeID.toString, nodeName, accumulatorId.toString,
-      name, max_value.toString, metricType, stages.mkString(";"))
+      name, max_value.toString, metricType, stages.mkString(","))
   }
 }
 
