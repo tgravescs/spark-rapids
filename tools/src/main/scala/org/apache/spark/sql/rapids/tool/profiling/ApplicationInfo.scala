@@ -289,6 +289,7 @@ class ApplicationInfo(
         }.toList.sorted
         (nodeId, mappedStages)
       }.toMap
+      logWarning("operator to stage is: " + operatorToStage.mkString(","))
       sqlPlanNodeIdToStageIds ++= operatorToStage
     }
   }
@@ -297,6 +298,7 @@ class ApplicationInfo(
    * Function to process SQL Plan Metrics after all events are processed
    */
   def processSQLPlanMetrics(): Unit = {
+    connectOperatorToStage
     for ((sqlID, planInfo) <- sqlPlan) {
       checkMetadataForReadSchema(sqlID, planInfo)
       val planGraph = SparkPlanGraph(planInfo)
