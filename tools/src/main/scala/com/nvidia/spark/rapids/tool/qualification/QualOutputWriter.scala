@@ -114,9 +114,14 @@ object QualOutputWriter {
   val COMPLEX_TYPES_STR = "Complex Types"
   val NESTED_TYPES_STR = "Nested Complex Types"
   val READ_SCHEMA_STR = "Read Schema"
+  val APP_TARGET_DUR_STR = "Target Duration"
+  val APP_TARGET_COLOR_STR = "Speedup Required"
   val APP_DUR_STR_SIZE: Int = APP_DUR_STR.size
   val SQL_DUR_STR_SIZE: Int = SQL_DUR_STR.size
   val PROBLEM_DUR_SIZE: Int = PROBLEM_DUR_STR.size
+  val APP_TARGET_DUR_STR_SIZE: Int = APP_TARGET_DUR_STR.size
+  val APP_TARGET_COLOR_STR_SIZE: Int = APP_TARGET_COLOR_STR.size
+
 
   def getAppIdSize(sums: Seq[QualificationSummaryInfo]): Int = {
     val sizes = sums.map(_.appId.size)
@@ -171,6 +176,8 @@ object QualOutputWriter {
     LinkedHashMap[String, Int](
       APP_ID_STR -> appIdMaxSize,
       APP_DUR_STR -> APP_DUR_STR_SIZE,
+      APP_TARGET_DUR_STR -> APP_TARGET_DUR_STR_SIZE,
+      APP_TARGET_COLOR_STR -> APP_TARGET_COLOR_STR_SIZE,
       SQL_DUR_STR -> SQL_DUR_STR_SIZE,
       PROBLEM_DUR_STR -> PROBLEM_DUR_SIZE
     )
@@ -226,6 +233,8 @@ object QualOutputWriter {
     val data = ListBuffer[(String, Int)](
       sumInfo.appId -> appIdMaxSize,
       sumInfo.appDuration.toString -> APP_DUR_STR_SIZE,
+      sumInfo.targetAppDuration.toString -> APP_TARGET_DUR_STR_SIZE,
+      sumInfo.targetDurationColor -> APP_TARGET_COLOR_STR_SIZE,
       sumInfo.sqlDataFrameDuration.toString -> SQL_DUR_STR_SIZE,
       sumInfo.sqlDurationForProblematic.toString -> PROBLEM_DUR_SIZE
     )

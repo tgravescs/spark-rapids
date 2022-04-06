@@ -71,14 +71,14 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     // the csv file we write the entire data in descending order
     val allAppsSum = allApps.asScala.toSeq
     val sortedDesc = allAppsSum.sortBy(sum => {
-        (-sum.score, -sum.sqlDataFrameDuration, -sum.appDuration)
+        (-sum.targetAppDuration, -sum.score, -sum.sqlDataFrameDuration, -sum.appDuration)
     })
     val qWriter = new QualOutputWriter(outputDir, reportReadSchema, printStdout)
     qWriter.writeCSV(sortedDesc)
 
     val sortedForReport = if (QualificationArgs.isOrderAsc(order)) {
       allAppsSum.sortBy(sum => {
-        (sum.score, sum.sqlDataFrameDuration, sum.appDuration)
+        (sum.targetAppDuration, sum.score, sum.sqlDataFrameDuration, sum.appDuration)
       })
     } else {
       sortedDesc

@@ -201,6 +201,18 @@ class QualificationAppInfo(
       val endDurationEstimated = this.appEndTime.isEmpty && appDuration > 0
       val sqlDurProblem = getSQLDurationProblematic
       val readScoreRatio = calculateReadScoreRatio
+      val gpuCostRatio = 2.5
+      val gpuPerfMultiplier = 3
+      // in order to make using GPU cost effective, the overall app time
+      // needs to be less than this value
+      val targetAppDuration = appDuration / gpuCostRatio
+      val targetDurationColor = if (sqlDataframeDur <= targetAppDuration) {
+        "red"
+      } else if (sqlDataframeDur > targetAppDuration * gpuPerfMultiplier) {
+        "green"
+      } else {
+        "yellow"
+      }
       val sqlDataframeTaskDuration = calculateTaskDataframeDuration
       val readScoreHumanPercent = 100 * readScoreRatio
       val readScoreHumanPercentRounded = f"${readScoreHumanPercent}%1.2f".toDouble
@@ -221,7 +233,8 @@ class QualificationAppInfo(
         sqlDataframeDur, sqlDataframeTaskDuration, appDuration, executorCpuTimePercent,
         endDurationEstimated, sqlDurProblem, failedIds, readScorePercent,
         readScoreHumanPercentRounded, notSupportFormatAndTypesString,
-        getAllReadFileFormats, writeFormat, allComplexTypes, nestedComplexTypes)
+        getAllReadFileFormats, writeFormat, allComplexTypes, nestedComplexTypes,
+        targetAppDuration, targetDurationColor)
     }
   }
 
@@ -301,7 +314,9 @@ case class QualificationSummaryInfo(
     readFileFormats: String,
     writeDataFormat: String,
     complexTypes: String,
-    nestedComplexTypes: String)
+    nestedComplexTypes: String,
+    targetAppDuration: Double,
+    targetDurationColor: String)
 
 object QualificationAppInfo extends Logging {
   def createApp(
