@@ -46,7 +46,6 @@ object QualificationMain extends Logging {
 
     val eventlogPaths = appArgs.eventlog()
     val filterN = appArgs.filterCriteria
-    val userName = appArgs.userName
     val matchEventLogs = appArgs.matchEventLogs
     val outputDirectory = appArgs.outputDirectory().stripSuffix("/")
     val numOutputRows = appArgs.numOutputRows.getOrElse(1000)
@@ -93,7 +92,8 @@ object QualificationMain extends Logging {
     }
 
     val qual = new Qualification(outputDirectory, numOutputRows, hadoopConf, timeout,
-      nThreads, order, pluginTypeChecker, readScorePercent, reportReadSchema, printStdout)
+      nThreads, order, pluginTypeChecker, readScorePercent, reportReadSchema, printStdout,
+      appArgs)
     val res = qual.qualifyApps(filteredLogs)
     (0, res)
   }
