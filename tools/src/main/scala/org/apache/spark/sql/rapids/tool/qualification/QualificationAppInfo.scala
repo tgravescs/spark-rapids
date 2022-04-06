@@ -205,7 +205,7 @@ class QualificationAppInfo(
 
       // in order to make using GPU cost effective, the overall app time
       // needs to be less than this value
-      val targetAppDuration = appDuration / targetRatio
+      val targetAppDuration = (appDuration / targetRatio).toLong
       val targetDurationColor = if (sqlDataframeDur <= targetAppDuration) {
         "red"
       } else if (sqlDataframeDur > (targetAppDuration * targetMultiplier)) {
@@ -315,7 +315,7 @@ case class QualificationSummaryInfo(
     writeDataFormat: String,
     complexTypes: String,
     nestedComplexTypes: String,
-    targetAppDuration: Double,
+    targetAppDuration: Long,
     targetDurationColor: String)
 
 object QualificationAppInfo extends Logging {

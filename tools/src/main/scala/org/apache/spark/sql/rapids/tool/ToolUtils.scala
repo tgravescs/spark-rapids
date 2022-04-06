@@ -30,7 +30,7 @@ object ToolUtils extends Logging {
     df.showString(numRows, 0)
   }
 
-  // given to duration values, calculate a human readable percent
+  // given two duration values, calculate a human readable percent
   // rounded to 2 decimal places. ie 39.12%
   def calculateDurationPercent(first: Long, total: Long): Double = {
     val firstDec = BigDecimal.decimal(first)
@@ -44,7 +44,7 @@ object ToolUtils extends Logging {
     }
   }
 
-  // given to duration values, calculate a human average
+  // given two duration values, calculate a human average
   // rounded to specified number of decimal places.
   def calculateAverage(first: Long, size: Long, places: Int): Double = {
     val firstDec = BigDecimal.decimal(first)
