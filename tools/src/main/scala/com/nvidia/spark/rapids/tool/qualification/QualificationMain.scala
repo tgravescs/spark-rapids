@@ -93,7 +93,7 @@ object QualificationMain extends Logging {
 
     val qual = new Qualification(outputDirectory, numOutputRows, hadoopConf, timeout,
       nThreads, order, pluginTypeChecker, readScorePercent, reportReadSchema, printStdout,
-      appArgs)
+      appArgs.targetRatio.getOrElse(2.5), appArgs.targetGreenMultiplier.getOrElse(3))
     val res = qual.qualifyApps(filteredLogs)
     (0, res)
   }

@@ -193,7 +193,8 @@ class QualificationAppInfo(
    * @return Option of QualificationSummaryInfo, Some if we were able to process the application
    *         otherwise None.
    */
-  def aggregateStats(appArgs: QualificationArgs): Option[QualificationSummaryInfo] = {
+  def aggregateStats(targetRatio: Double,
+      targetMultiplier: Int): Option[QualificationSummaryInfo] = {
     appInfo.map { info =>
       val appDuration = calculateAppDuration(info.startTime).getOrElse(0L)
       val sqlDataframeDur = calculateSqlDataframeDuration
@@ -202,8 +203,6 @@ class QualificationAppInfo(
       val sqlDurProblem = getSQLDurationProblematic
       val readScoreRatio = calculateReadScoreRatio
 
-      val targetRatio =  appArgs.targetRatio.toOption.getOrElse(2.5)
-      val targetMultiplier = appArgs.targetGreenMultiplier.toOption.getOrElse(3)
       // in order to make using GPU cost effective, the overall app time
       // needs to be less than this value
       val targetAppDuration = appDuration / targetRatio

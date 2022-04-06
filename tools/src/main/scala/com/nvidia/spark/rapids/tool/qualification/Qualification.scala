@@ -35,7 +35,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     timeout: Option[Long], nThreads: Int, order: String,
     pluginTypeChecker: Option[PluginTypeChecker], readScorePercent: Int,
     reportReadSchema: Boolean, printStdout: Boolean,
-    appArgs: QualificationArgs) extends Logging {
+    targetRatio: Double, targetGreenRatio: Int) extends Logging {
 
   private val allApps = new ConcurrentLinkedQueue[QualificationSummaryInfo]()
   // default is 24 hours
@@ -99,7 +99,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
         logWarning(s"No Application found that contain SQL for ${path.eventLog.toString}!")
         None
       } else {
-        val qualSumInfo = app.get.aggregateStats(appArgs: QualificationArgs)
+        val qualSumInfo = app.get.aggregateStats(targetRatio, targetGreenRatio)
         if (qualSumInfo.isDefined) {
           allApps.add(qualSumInfo.get)
           val endTime = System.currentTimeMillis()
