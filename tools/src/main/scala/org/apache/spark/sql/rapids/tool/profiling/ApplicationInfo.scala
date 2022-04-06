@@ -389,7 +389,6 @@ class ApplicationInfo(
           val validNodes = nodes.filter { n =>
             nodeIds.contains(n.id)
           }
-          validNodes.map(n => s"${n.name}(${n.id.toString})")
           val metricsForStage = allSQLMetrics.filter { m =>
             m.stages.contains(s)
           }
@@ -422,9 +421,9 @@ class ApplicationInfo(
             taskMax
           }.reduceLeft(_ max _)
           logWarning(s"metrics with times for stage $s maxtime $maxTime")
-          SQLStageInfoProfileResult(index, j.sqlID.get, jobId, s, sa, info.duration, nodeNames)
-
-        }
+          validNodes.map(n => s"${n.name}(${n.id.toString})")
+        }.getOrElse(null)
+        SQLStageInfoProfileResult(index, j.sqlID.get, jobId, s, sa, info.duration, nodeNames)
       }
     }
     sqlToStages.toSeq
