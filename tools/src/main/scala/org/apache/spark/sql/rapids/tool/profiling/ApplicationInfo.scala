@@ -390,9 +390,41 @@ class ApplicationInfo(
             nodeIds.contains(n.id)
           }
           validNodes.map(n => s"${n.name}(${n.id.toString})")
-        }.getOrElse(null)
+          val metricsForStage = allSQLMetrics.filter { m =>
+            m.stages.contains(s)
+          }
+          val withTimes = metricsForStage.filter { m =>
+            // TODO - is this ok or should we put all times?
+            val allNames = Seq("duration", "sort time", "scan time")
+            allNames.contains(m.name)
+          }
+          val maxTime = withTimes.flatMap { metric =>
+            val sqlId = metric.sqlID
+            val jobsForSql = jobIdToInfo.filter { case (_, jc) =>
+              val jcid = jc.sqlID.getOrElse(-1)
+              jc.sqlID.getOrElse(-1) == sqlId
+            }
+            val stageIdsForSQL = jobsForSql.flatMap(_._2.stageIds).toSeq
+            val accumsOpt = taskStageAccumMap.get(metric.accumulatorId)
+            val taskMax = accumsOpt match {
+              case Some(accums) =>
+                val filtered = accums.filter { a =>
+                  stageIdsForSQL.contains(a.stageId)
+                }
+                val accumValues = filtered.map(_.value.getOrElse(0L))
+                if (accumValues.isEmpty) {
+                  None
+                } else {
+                  Some(accumValues.max)
+                }
+              case None => None
+            }
+            taskMax
+          }.reduceLeft(_ max _)
+          logWarning(s"metrics with times for stage $s maxtime $maxTime")
+          SQLStageInfoProfileResult(index, j.sqlID.get, jobId, s, sa, info.duration, nodeNames)
 
-        SQLStageInfoProfileResult(index, j.sqlID.get, jobId, s, sa, info.duration, nodeNames)
+        }
       }
     }
     sqlToStages.toSeq
