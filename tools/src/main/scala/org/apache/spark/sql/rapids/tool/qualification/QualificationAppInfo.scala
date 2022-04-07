@@ -194,7 +194,7 @@ class QualificationAppInfo(
    *         otherwise None.
    */
   def aggregateStats(targetRatio: Double,
-      targetMultiplier: Int): Option[QualificationSummaryInfo] = {
+      targetMultiplier: Double): Option[QualificationSummaryInfo] = {
     appInfo.map { info =>
       val appDuration = calculateAppDuration(info.startTime).getOrElse(0L)
       val sqlDataframeDur = calculateSqlDataframeDuration
@@ -208,7 +208,7 @@ class QualificationAppInfo(
       val targetAppDuration = (appDuration / targetRatio).toLong
       val targetDurationColor = if (sqlDataframeDur <= targetAppDuration) {
         "red"
-      } else if (sqlDataframeDur > (targetAppDuration * targetMultiplier)) {
+      } else if (sqlDataframeDur > (appDuration / targetMultiplier)) {
         "green"
       } else {
         "yellow"

@@ -35,7 +35,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     timeout: Option[Long], nThreads: Int, order: String,
     pluginTypeChecker: Option[PluginTypeChecker], readScorePercent: Int,
     reportReadSchema: Boolean, printStdout: Boolean,
-    targetRatio: Double, targetGreenRatio: Int) extends Logging {
+    targetRatio: Double, targetGreenRatio: Double) extends Logging {
 
   private val allApps = new ConcurrentLinkedQueue[QualificationSummaryInfo]()
   // default is 24 hours
