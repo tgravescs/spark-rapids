@@ -134,7 +134,7 @@ Usage: java -cp rapids-4-spark-tools_2.12-<version>.jar:$SPARK_HOME/jars/*
   val targetGreenMultiplier: ScallopOption[Int] =
     opt[Int](required = false,
       descr = "SQL time multiplier to say we are Green for target ratio",
-      default = Some(3))
+      default = Some(2))
   val userName: ScallopOption[String] =
     opt[String](required = false,
       descr = "Applications which a particular user has submitted." )
