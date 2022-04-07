@@ -215,8 +215,8 @@ class ApplicationInfo(
 
   // sqlPlan stores HashMap (sqlID <-> SparkPlanInfo)
   var sqlPlan: mutable.HashMap[Long, SparkPlanInfo] = mutable.HashMap.empty[Long, SparkPlanInfo]
-  val sqlPlanNodeIdToStageIds: mutable.HashMap[Long, Seq[Int]] =
-    mutable.HashMap.empty[Long, Seq[Int]]
+  val sqlPlanNodeIdToStageIds: mutable.HashMap[(Long, Long), Seq[Int]] =
+    mutable.HashMap.empty[(Long, Long), Seq[Int]]
 
   // physicalPlanDescription stores HashMap (sqlID <-> physicalPlanDescription)
   var physicalPlanDescription: mutable.HashMap[Long, String] = mutable.HashMap.empty[Long, String]
@@ -271,7 +271,7 @@ class ApplicationInfo(
    */
   def connectOperatorToStage(): Unit = {
     // TODO can we combine into processSQLPlanMetrics
-    for ((_, planInfo) <- sqlPlan) {
+    for ((sqlId, planInfo) <- sqlPlan) {
       val planGraph = SparkPlanGraph(planInfo)
       val nodeIdToAccumulatorIds = planGraph.allNodes.map { node =>
         (node.id, node.metrics.map(_.accumulatorId))
@@ -280,7 +280,7 @@ class ApplicationInfo(
       // Maps stages to operators by checking for non-zero intersection
       // between nodeMetrics and stageAccumulateIDs
       // TODO - would this be more efficient using accumIdToStageId if it had all stage ids?
-      val operatorToStage = nodeIdToAccumulatorIds.map { case (nodeId, nodeAccums) =>
+      val nodeIdToStage = nodeIdToAccumulatorIds.map { case (nodeId, nodeAccums) =>
         val mappedStages = stageAccumulators.flatMap { case (stageId, stageAccums) =>
           if (nodeAccums.intersect(stageAccums).nonEmpty) {
             Some(stageId)
@@ -288,10 +288,10 @@ class ApplicationInfo(
             None
           }
         }.toList.sorted
-        (nodeId, mappedStages)
+        ((sqlId, nodeId), mappedStages)
       }.toMap
-      logWarning("operator to stage is: " + operatorToStage.mkString(","))
-      sqlPlanNodeIdToStageIds ++= operatorToStage
+      logWarning("nodeIdToStage  is: " + nodeIdToStage.mkString(","))
+      sqlPlanNodeIdToStageIds ++= nodeIdToStage
     }
   }
 
@@ -342,7 +342,7 @@ class ApplicationInfo(
 
         // Then process SQL plan metric type
         for (metric <- node.metrics) {
-          val stages = sqlPlanNodeIdToStageIds.get(node.id).getOrElse(Seq.empty)
+          val stages = sqlPlanNodeIdToStageIds.get((sqlID, node.id)).getOrElse(Seq.empty)
           val allMetric = SQLMetricInfoCase(sqlID, metric.name,
             metric.accumulatorId, metric.metricType, node.id,
             node.name, node.desc, stages)
@@ -387,7 +387,7 @@ class ApplicationInfo(
         val nodeNames = sqlPlan.get(j.sqlID.get).map { planInfo =>
           val nodes = SparkPlanGraph(planInfo).allNodes
           val validNodes = nodes.filter { n =>
-            nodeIds.contains(n.id)
+            nodeIds.contains((j.sqlID.get, n.id))
           }
           val metricsForStage = allSQLMetrics.filter { m =>
             m.stages.contains(s)
