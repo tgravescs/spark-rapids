@@ -397,7 +397,7 @@ class ApplicationInfo(
             val allNames = Seq("duration", "sort time", "scan time")
             allNames.contains(m.name)
           }
-          val maxTime = withTimes.flatMap { metric =>
+          val maxTimes = withTimes.flatMap { metric =>
             val sqlId = metric.sqlID
             val jobsForSql = jobIdToInfo.filter { case (_, jc) =>
               val jcid = jc.sqlID.getOrElse(-1)
@@ -419,7 +419,14 @@ class ApplicationInfo(
               case None => None
             }
             taskMax
-          }.reduceLeft(_ max _)
+          }
+          val maxTime = if (maxTimes.size > 1) {
+            maxTimes.reduceLeft(_ max _)
+          } else if (maxTimes.size == 1) {
+            maxTimes(0)
+          } else {
+            0
+          }
           logWarning(s"metrics with times for stage $s maxtime $maxTime")
           validNodes.map(n => s"${n.name}(${n.id.toString})")
         }.getOrElse(null)
