@@ -251,6 +251,7 @@ class QualificationAppInfo(
     val planGraph = SparkPlanGraph(planInfo)
     val allnodes = planGraph.allNodes
     for (node <- allnodes) {
+      logWarning(s"graph node ${node.name} desc: ${node.desc} id: ${node.id}")
       checkGraphNodeForReads(sqlID, node)
       if (isDataSetOrRDDPlan(node.desc)) {
         sqlIDToDataSetOrRDDCase += sqlID
