@@ -2188,13 +2188,13 @@ object SupportedOpsForTools extends Logging {
     }
   }
 
-  private def outputSupportedExecs() {
+  private def outputSupportedExecs(): Unit = {
     // Look at what we have for defaults for some configs because if the configs are off
     // it likely means something isn't completely compatible.
+    // TODO ???
     val conf = new RapidsConf(Map.empty[String, String])
     val types = allSupportedTypes.toSeq
     val header = Seq("Exec", "Notes", "Params") ++ types
-    val execs: Array[String] = Array.fill(types.size)("NA")
     println(header.mkString(","))
     GpuOverrides.execs.values.toSeq.sortBy(_.tag.toString).foreach { rule =>
       val checks = rule.getChecks
@@ -2205,36 +2205,67 @@ object SupportedOpsForTools extends Logging {
         }.toMap
 
         val notes = execChecks.supportNotes
-        // Now we should get the same keys for each type, so we are only going to look at the first
-        // type for now
-        val totalSpan = allData.values.head.size
         val inputs = allData.values.head.keys
 
         val firstTwoCols = Seq(rule.tag.runtimeClass.getSimpleName, rule.notes().getOrElse("None"))
         inputs.foreach { input =>
-          logWarning("inputs each is: " + input)
           val named = notes.get(input)
-            .map(l => input + "(" + l + ")")
+            .map(l => input + "(" + l.mkString(";") + ")")
             .getOrElse(input)
-          logWarning(s"$named")
           val supportLevelOps = allSupportedTypes.toSeq.map { t =>
-            logWarning(s"all supported tesyp: $t each is: " + allData(t)(input).text)
             allData(t)(input).text
           }
-          logWarning("support level ops is: " + supportLevelOps.mkString(","))
           val allCols = (firstTwoCols ++ Seq(named) ++ supportLevelOps)
           println(s"${allCols.map(replaceDelimiter(_, ",")).mkString(",")}")
+        }
+      }
+    }
+  }
 
+  private def outputSupportedExpressions(): Unit = {
+    // Look at what we have for defaults for some configs because if the configs are off
+    // it likely means something isn't completely compatible.
+    val conf = new RapidsConf(Map.empty[String, String])
+    val types = allSupportedTypes.toSeq
+    val header = Seq("Expression", "SQL Func", "Notes", "Context", "Params") ++ types
+    println(header.mkString(","))
+    GpuOverrides.expressions.values.toSeq.sortBy(_.tag.toString).foreach { rule =>
+      val checks = rule.getChecks
+      if (rule.isVisible && checks.isDefined && checks.forall(_.shown)) {
+        val sqlFunctions =
+          ConfHelper.getSqlFunctionsForClass(rule.tag.runtimeClass).map(_.mkString(", "))
+        val exprChecks = checks.get.asInstanceOf[ExprChecks]
+        // Params can change between contexts, but should not
+        val allData = allSupportedTypes.map { t =>
+          (t, exprChecks.support(t))
+        }.toMap
+        val representative = allData.values.head
+        val staticCols = Seq(rule.tag.runtimeClass.getSimpleName,
+          sqlFunctions.getOrElse(" "),
+          rule.notes().getOrElse("None"))
+
+        representative.foreach {
+          case (context, data) =>
+            val contextSpan = data.size
+            println("<td rowSpan=\"" + contextSpan + "\">" + s"$context</td>")
+            data.keys.foreach { param =>
+              println(s"<td>$param</td>")
+              val supportLevelOps = allSupportedTypes.toSeq.map { t =>
+                allData(t)(context)(param).text
+              }
+              val allCols = (staticCols ++ Seq(context.toString) ++ supportLevelOps)
+              println(s"${allCols.map(replaceDelimiter(_, ",")).mkString(",")}")
+            }
         }
       }
     }
   }
 
   def help(printType: String): Unit = {
-    if (printType.toLowerCase().equals("all")) {
-      outputSupportedExecs()
-    } else {
-      outputSupportIO()
+    printType match {
+      case a if (a.equals("execs")) => outputSupportedExecs()
+      case expr if (expr.equals("expr")) => outputSupportedExpressions()
+      case _ => outputSupportIO()
     }
   }
 
