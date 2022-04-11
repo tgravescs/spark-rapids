@@ -39,7 +39,8 @@ class QualificationAppInfo(
   // Determine input column types from read
   // Some could be partitioned data so would have to try to infer.. but what types are supported:
   //   partition data types have to be atomic
-  //   https://github.com/apache/spark/blob/master/sql/core/src/main/scala/org/apache/spark/sql/execution/datasources/PartitioningUtils.scala#L559
+  //   https://github.com/apache/spark/blob/master/sql/core
+  //   /src/main/scala/org/apache/spark/sql/execution/datasources/PartitioningUtils.scala#L559
   //
 
 
@@ -251,7 +252,14 @@ class QualificationAppInfo(
     val planGraph = SparkPlanGraph(planInfo)
     val allnodes = planGraph.allNodes
     for (node <- allnodes) {
-      logWarning(s"graph node ${node.name} desc: ${node.desc} id: ${node.id}")
+      if (node.isInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster]) {
+        val ch = node.asInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster].nodes
+        logWarning(s"graph node ${node.name} desc: ${node.desc} id: " +
+          s"${node.id} children graph cluster: ${ch.mkString(",")}")
+
+      } else {
+        logWarning(s"graph node ${node.name} desc: ${node.desc} id: ${node.id}")
+      }
       checkGraphNodeForReads(sqlID, node)
       if (isDataSetOrRDDPlan(node.desc)) {
         sqlIDToDataSetOrRDDCase += sqlID
