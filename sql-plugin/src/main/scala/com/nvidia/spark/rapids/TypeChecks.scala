@@ -2223,7 +2223,7 @@ object SupportedOpsForTools extends Logging {
           }
           logWarning("support level ops is: " + supportLevelOps.mkString(","))
           val allCols = (firstTwoCols ++ Seq(named) ++ supportLevelOps)
-          println(s"${allCols.map(replaceDelimiter(_, ",").mkString(",")}")
+          println(s"${allCols.map(replaceDelimiter(_, ",")).mkString(",")}")
 
         }
       }
