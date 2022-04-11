@@ -2193,17 +2193,19 @@ object SupportedOpsForTools extends Logging {
         val totalSpan = allData.values.head.size
         val inputs = allData.values.head.keys
 
-        val output = Seq(rule.tag.runtimeClass.getSimpleName, rule.notes().getOrElse("None"))
+        val firstTwoCols = Seq(rule.tag.runtimeClass.getSimpleName, rule.notes().getOrElse("None"))
         inputs.foreach { input =>
           logWarning("inputs each is: " + input)
           val named = notes.get(input)
-            .map(l => input + "<br/>(" + l.mkString(";<br/>") + ")")
+            .map(l => input + "(" + l + ")")
             .getOrElse(input)
           logWarning(s"$named")
-          allSupportedTypes.foreach { t =>
-            logWarning("all suppored tesyp each is: " + t)
-            logWarning(allData(t)(input).text)
+          val supportLevelOps = allSupportedTypes.map { t =>
+            logWarning("all supported tesyp each is: " + t)
+            allData(t)(input).text
           }
+          println(s"${(firstTwoCols ++ Seq(named) ++ supportLevelOps).mkString(",")}")
+
         }
       }
     }
