@@ -64,6 +64,9 @@ trait TypeSigUtilBase {
 
   /** Get numeric and interval TypeSig */
   def getNumericAndInterval: TypeSig
+
+  /** Get Ansi year-month and day-time TypeSig */
+  def getAnsiInterval: TypeSig
 }
 
 /**
@@ -671,6 +674,11 @@ object TypeSig {
    * numeric + CALENDAR
    */
   val numericAndInterval: TypeSig = TypeSigUtil.getNumericAndInterval()
+
+  /**
+   * ANSI year-month and day-time interval for Spark 320+
+   */
+  val ansiIntervals: TypeSig = TypeSigUtil.getAnsiInterval
 
   /**
    * All types that CUDF supports sorting/ordering on.
