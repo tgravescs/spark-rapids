@@ -36,6 +36,14 @@ class QualificationAppInfo(
     readScorePercent: Int)
   extends AppBase(eventLogInfo, hadoopConf) with Logging {
 
+  // Determine input column types from read
+  // Some could be partitioned data so would have to try to infer.. but what types are supported:
+  //   partition data types have to be atomic
+  //   https://github.com/apache/spark/blob/master/sql/core/src/main/scala/org/apache/spark/sql/execution/datasources/PartitioningUtils.scala#L559
+  //
+
+
+
   var appId: String = ""
   var isPluginEnabled = false
   var lastJobEndTime: Option[Long] = None
@@ -208,7 +216,7 @@ class QualificationAppInfo(
       val targetAppDuration = (appDuration / targetRatio).toLong
       val targetDurationColor = if (sqlDataframeDur <= targetAppDuration) {
         "red"
-      } else if (sqlDataframeDur > (appDuration / targetMultiplier)) {
+      } else if (sqlDataframeDur >= (appDuration / targetMultiplier)) {
         "green"
       } else {
         "yellow"

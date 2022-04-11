@@ -22,6 +22,7 @@ import java.time.ZoneId
 import ai.rapids.cudf.DType
 import com.nvidia.spark.rapids.shims.TypeSigUtil
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, UnaryExpression, WindowSpecDefinition}
 import org.apache.spark.sql.types._
 
@@ -2116,7 +2117,7 @@ object SupportedOpsDocs {
   }
 }
 
-object SupportedOpsForTools {
+object SupportedOpsForTools extends Logging {
 
   private lazy val allSupportedTypes =
     TypeSigUtil.getAllSupportedTypes()
@@ -2162,15 +2163,62 @@ object SupportedOpsForTools {
     }
   }
 
-  def help(): Unit = {
-    outputSupportIO()
+  private def outputSupportedExecs() {
+    // Look at what we have for defaults for some configs because if the configs are off
+    // it likely means something isn't completely compatible.
+    val conf = new RapidsConf(Map.empty[String, String])
+    val types = allSupportedTypes.toSeq
+    val header = Seq("Exec", "Notes", "Params") ++ types
+    val execs: Array[String] = Array.fill(types.size)("NA")
+    println(header.mkString(","))
+    GpuOverrides.execs.values.toSeq.sortBy(_.tag.toString).foreach { rule =>
+      val checks = rule.getChecks
+      if (rule.isVisible && checks.forall(_.shown)) {
+        val execChecks = checks.get.asInstanceOf[ExecChecks]
+        val allData = allSupportedTypes.map { t =>
+          (t, execChecks.support(t))
+        }.toMap
+
+        val notes = execChecks.supportNotes
+        // Now we should get the same keys for each type, so we are only going to look at the first
+        // type for now
+        val totalSpan = allData.values.head.size
+        val inputs = allData.values.head.keys
+
+        val output = Seq(rule.tag.runtimeClass.getSimpleName, rule.notes().getOrElse("None"))
+        inputs.foreach { input =>
+          logWarning("inputs each is: " + input)
+          val named = notes.get(input)
+            .map(l => input + "<br/>(" + l.mkString(";<br/>") + ")")
+            .getOrElse(input)
+          logWarning(s"$named")
+          allSupportedTypes.foreach { t =>
+            logWarning("all suppored tesyp each is: " + t)
+            logWarning(allData(t)(input).text)
+          }
+        }
+      }
+    }
+  }
+
+  def help(printType: String): Unit = {
+    if (printType.toLowerCase().equals("all")) {
+      outputSupportedExecs()
+    } else {
+      outputSupportIO()
+    }
   }
 
   def main(args: Array[String]): Unit = {
     val out = new FileOutputStream(new File(args(0)))
+    val printType = if (args.size > 1) {
+      args(1)
+    } else {
+      "ioOnly"
+    }
     Console.withOut(out) {
       Console.withErr(out) {
-        SupportedOpsForTools.help()
+        SupportedOpsForTools.help(printType)
       }
     }
   }

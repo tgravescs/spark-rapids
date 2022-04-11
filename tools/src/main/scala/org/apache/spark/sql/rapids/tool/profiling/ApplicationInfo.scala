@@ -396,7 +396,7 @@ class ApplicationInfo(
             // TODO - is this ok or should we put all times?
             val allNames = Seq("duration", "sort time", "scan time")
             allNames.contains(m.name)
-          }
+          } /*
           val maxTimes = withTimes.flatMap { metric =>
             val sqlId = metric.sqlID
             val jobsForSql = jobIdToInfo.filter { case (_, jc) =>
@@ -428,6 +428,7 @@ class ApplicationInfo(
             0
           }
           logWarning(s"metrics with times for stage $s maxtime $maxTime")
+          */
           validNodes.map(n => s"${n.name}(${n.id.toString})")
         }.getOrElse(null)
         SQLStageInfoProfileResult(index, j.sqlID.get, jobId, s, sa, info.duration, nodeNames)

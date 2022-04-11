@@ -308,8 +308,10 @@ object AppBase {
 
     // If DataSource V2 is used, then Schema may be incomplete with ... appended at the end.
     // We determine complex types and nested complex types until ...
-    val incompleteSchema = individualSchema.filter(x => x.contains("..."))
-    val completeSchema = individualSchema.filterNot(x => x.contains("..."))
+    // val incompleteSchema = individualSchema.filter(x => x.contains("..."))
+    // val completeSchema = individualSchema.filterNot(x => x.contains("..."))
+    // TODO - test
+    val (incompleteSchema, completeSchema) = individualSchema.partition(x => x.contains("..."))
 
     // Check if it has types
     val incompleteTypes = incompleteSchema.map { x =>
