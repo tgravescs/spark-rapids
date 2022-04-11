@@ -2130,6 +2130,23 @@ object SupportedOpsForTools extends Logging {
   private lazy val allSupportedTypes =
     TypeSigUtil.getAllSupportedTypes()
 
+  // if a string contains what we are going to use for a delimiter, replace
+  // it with something else
+  def replaceDelimiter(str: String, delimiter: String): String = {
+    if (str != null && str.contains(delimiter)) {
+      val replaceWith = if (delimiter.equals(",")) {
+        ";"
+      } else if (delimiter.equals(";")) {
+        ":"
+      } else {
+        ";"
+      }
+      str.replace(delimiter, replaceWith)
+    } else {
+      str
+    }
+  }
+
   private def outputSupportIO() {
     // Look at what we have for defaults for some configs because if the configs are off
     // it likely means something isn't completely compatible.
@@ -2200,11 +2217,13 @@ object SupportedOpsForTools extends Logging {
             .map(l => input + "(" + l + ")")
             .getOrElse(input)
           logWarning(s"$named")
-          val supportLevelOps = allSupportedTypes.map { t =>
-            logWarning("all supported tesyp each is: " + t)
+          val supportLevelOps = allSupportedTypes.toSeq.map { t =>
+            logWarning(s"all supported tesyp: $t each is: " + allData(t)(input).text)
             allData(t)(input).text
           }
-          println(s"${(firstTwoCols ++ Seq(named) ++ supportLevelOps).mkString(",")}")
+          logWarning("support level ops is: " + supportLevelOps.mkString(","))
+          val allCols = (firstTwoCols ++ Seq(named) ++ supportLevelOps)
+          println(s"${allCols.map(replaceDelimiter(_, ",").mkString(",")}")
 
         }
       }
