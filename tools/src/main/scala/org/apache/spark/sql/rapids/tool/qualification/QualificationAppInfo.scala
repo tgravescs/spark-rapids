@@ -255,7 +255,7 @@ class QualificationAppInfo(
       if (node.isInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster]) {
         val ch = node.asInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster].nodes
         logWarning(s"graph node ${node.name} desc: ${node.desc} id: " +
-          s"${node.id} children graph cluster: ${ch.mkString(",")}")
+          s"${node.id} children graph cluster: ${ch.map(_.name).mkString(",")}")
 
       } else {
         logWarning(s"graph node ${node.name} desc: ${node.desc} id: ${node.id}")
