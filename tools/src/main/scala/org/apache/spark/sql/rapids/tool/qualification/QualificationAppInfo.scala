@@ -26,7 +26,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.{SparkListener, SparkListenerEvent}
 import org.apache.spark.sql.execution.SparkPlanInfo
-import org.apache.spark.sql.execution.ui.SparkPlanGraph
+import org.apache.spark.sql.execution.ui.{SparkPlanGraph, SparkPlanGraphCluster, SparkPlanGraphNode}
 import org.apache.spark.sql.rapids.tool.{AppBase, ToolUtils}
 
 class QualificationAppInfo(
@@ -134,6 +134,12 @@ class QualificationAppInfo(
   // if the SQL contains a dataset, then duration for it is 0
   // for the SQL dataframe duration
   private def calculateSqlDataframeDuration: Long = {
+    sqlDurationTime.foreach { case (k, v) =>
+      logWarning(s"k $k v: $v")
+    }
+    sqlIDToDataSetOrRDDCase.foreach { case k =>
+      logWarning(s"k $k")
+    }
     sqlDurationTime.filterNot { case (sqlID, dur) =>
       sqlIDToDataSetOrRDDCase.contains(sqlID) || dur == -1
     }.values.sum
@@ -246,16 +252,159 @@ class QualificationAppInfo(
         targetAppDuration, targetDurationColor)
     }
   }
+/*
+  private def parseSingleExpression(exprStr: String): Unit = {
+    // val Pattern = """\(.*\)""".r
+    val Pattern =
+     """(?=\()(?=((?:(?=.*?\((?!.*?\2)(.*\)(?!.*\3).*))(?=.*?\)(?!.*?\3)(.*)).)+?.*?(?=\2)[^(]*(?=\3$)))""".r
+
+    val Pattern = """(?=\()(?:(?=.*?\((?!.*?\1)(.*\)(?!.*\2).*))(?=.*?\)(?!.*?\2)(.*)).)+?.*?(?=\1)[^(]*(?=\2$)""".r
+
+    exprStr match {
+      case Pattern(c) => println(c)
+      case _ =>
+    }
+  }
+
+ */
+  private def parseExpression(exprStr: String): Unit = {
+
+    // Filter ((isnotnull(s_state#688) AND (s_state#688 = TN)) AND isnotnull(s_store_sk#664))
+
+    // can we split on AND/OR/NOT
+    val exprSepAND = if (exprStr.contains("AND")) {
+      exprStr.split(" AND ").map(_.trim)
+    } else {
+      Array(exprStr)
+    }
+    val exprSplit = if (exprStr.contains(" OR ")) {
+      exprSepAND.flatMap(_.split(" OR ").map(_.trim))
+    } else {
+      exprSepAND
+    }
+    // ((isnotnull(s_state#688)
+    // (s_state#688 = TN))
+    // isnotnull(s_store_sk#664))
+    val paranRemoved = exprSplit.map(_.replaceAll("""^\(+""", "").replaceAll("""\)\)$""", ")"))
+    // isnotnull(s_state#688)
+    // s_state#688 = TN)
+    // isnotnull(s_store_sk#664)
+
+    paranRemoved.foreach { case expr =>
+      if (expr.contains(" ")) {
+        // likely some conditional expression
+        // TODO - add in artichmetic stuff (- / * )
+        // TODO - what about years and literals?
+        val pattern = """(\w+) ([+=<>|]+) (\w+)""".r
+        pattern.findFirstMatchIn(expr) match {
+          case Some(func) =>
+            println(s" found expr: $func")
+            if (func.groupCount < 3) {
+              logError("found expr but its not the entire thing, not sure what is going on")
+            }
+            val first = func.group(1)
+            val predicate = func.group(2)
+            val second = func.group(3)
+            // check for variable
+            if (first.contains("#") || second.contains("#")) {
+            } // else if ???
+            val predStr = predicate match {
+              case "=" => "EqualTo"
+              case "<=>" => "EqualNullSafe"
+              case "<" => "LessThan"
+              case ">" => "GreaterThan"
+              case "<=" => "LessThanOrEqual"
+              case ">=" => "GreaterThanOrEqual"
+            }
+            // TODO - lookup function name
+          case None => println("not sure what this is")
+        }
+
+      } else {
+        // likely some function call
+        val pattern = """(\w+)\(.*\)""".r
+        pattern.findFirstMatchIn(expr) match {
+          case Some(func) =>
+            println(s" found func: $func")
+            if (expr.length != func.group(0).length || func.groupCount == 0) {
+              logError("found function but its not the entire thing, not sure what is going on")
+            }
+            val funcName = func.group(1)
+            // TODO - lookup function name
+          case None => println("not sure what this is")
+        }
+
+      }
+    }
+
+    /*
+    val tempStringBuilder = new StringBuilder()
+    val individualExprs: ArrayBuffer[String] = new ArrayBuffer()
+    var angleBracketsCount = 0
+    var parenthesesCount = 0
+    var parenAtBeginning = false
+    var previousChar: Option[Char] = None
+    for ((char, index) <- exprStr.zipWithIndex) {
+      char match {
+        case '<' => angleBracketsCount += 1
+        case '>' => angleBracketsCount -= 1
+        // If the schema has decimals, Example decimal(6,2) then we have to make sure it has both
+        // opening and closing parentheses(unless the string is incomplete due to V2 reader).
+        case '(' =>
+          if (index == 0) {
+            parenAtBeginning = true
+          }
+          if (previousChar.nonEmpty && (previousChar != ' ' && previousChar != '(' && index != 0)) {
+            // this should be as part of an expression
+          } else {
+            // this should be as part of a grouping
+          }
+          parenthesesCount += 1
+        case ')' =>
+          parenthesesCount -= 1
+
+        case ' ' =>
+          // end of a expr, is this true or can have space in side expr where 2 parameters?
+          // func(one, two)
+          logWarning(" found space")
+        case _ =>
+      }
+      if (angleBracketsCount == 0 && parenthesesCount == 0 && char.equals(' ')) {
+        individualExprs += tempStringBuilder.toString
+        tempStringBuilder.setLength(0)
+      } else {
+        tempStringBuilder.append(char);
+      }
+      previousChar = Some(char)
+    }
+
+     */
+  }
+
+  // FilterExec(condition: Expression, child: SparkPlan)
+  // Filter ((isnotnull(s_state#688) AND (s_state#688 = TN)) AND isnotnull(s_store_sk#664))
+  private def processFilterExec(node: SparkPlanGraphNode): Unit = {
+    val expr = node.desc.replaceFirst("Filter ", "")
+    parseExpression(expr)
+  }
+
+  private def processUnknownExec(node: SparkPlanGraphNode): Unit = {
+    // assume its something we don't support
+  }
 
   private[qualification] def processSQLPlan(sqlID: Long, planInfo: SparkPlanInfo): Unit = {
     checkMetadataForReadSchema(sqlID, planInfo)
     val planGraph = SparkPlanGraph(planInfo)
     val allnodes = planGraph.allNodes
     for (node <- allnodes) {
-      if (node.isInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster]) {
-        val ch = node.asInstanceOf[org.apache.spark.sql.execution.ui.SparkPlanGraphCluster].nodes
+      node match {
+        case f if (f.name == "Filter") => processFilterExec(f)
+        case _ =>
+      }
+      if (node.isInstanceOf[SparkPlanGraphCluster]) {
+        val ch = node.asInstanceOf[SparkPlanGraphCluster].nodes
         logWarning(s"graph node ${node.name} desc: ${node.desc} id: " +
-          s"${node.id} children graph cluster: ${ch.mkString(",")}")
+          s"${node.id} children graph cluster: ${ch.map(_.name).mkString(",")}")
 
       } else {
         logWarning(s"graph node ${node.name} desc: ${node.desc} id: ${node.id}")

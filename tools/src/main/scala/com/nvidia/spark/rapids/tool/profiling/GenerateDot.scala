@@ -145,7 +145,7 @@ case class QueryPlanWithMetrics(plan: SparkPlanInfoWithStage, metrics: Map[Long,
  * SparkPlan tree, and each edge represents a parent-child relationship between two nodes.
  */
 case class SparkPlanGraph(
-    nodes: Seq[SparkPlanGraphNode],
+    nodes: Seq[SparkPlanGraphDotNode],
     edges: Seq[SparkPlanGraphEdge],
     appId: String,
     sqlId: String,
@@ -170,9 +170,9 @@ case class SparkPlanGraph(
   /**
    * All the SparkPlanGraphNodes, including those inside of WholeStageCodegen.
    */
-  val allNodes: Seq[SparkPlanGraphNode] = {
+  val allNodes: Seq[SparkPlanGraphDotNode] = {
     nodes.flatMap {
-      case cluster: SparkPlanGraphCluster => cluster.nodes :+ cluster
+      case cluster: SparkPlanGraphDotCluster => cluster.nodes :+ cluster
       case node => Seq(node)
     }
   }
@@ -189,9 +189,9 @@ object SparkPlanGraph {
       physicalPlan: String,
       stageIdToStageMetrics: Map[Int, StageMetrics]): SparkPlanGraph = {
     val nodeIdGenerator = new AtomicLong(0)
-    val nodes = mutable.ArrayBuffer[SparkPlanGraphNode]()
+    val nodes = mutable.ArrayBuffer[SparkPlanGraphDotNode]()
     val edges = mutable.ArrayBuffer[SparkPlanGraphEdge]()
-    val exchanges = mutable.HashMap[SparkPlanInfoWithStage, SparkPlanGraphNode]()
+    val exchanges = mutable.HashMap[SparkPlanInfoWithStage, SparkPlanGraphDotNode]()
     buildSparkPlanGraphNode(planInfo, nodeIdGenerator, nodes, edges, null, null, null, exchanges,
       stageIdToStageMetrics)
     new SparkPlanGraph(nodes, edges, appId, sqlId, physicalPlan)
@@ -212,12 +212,12 @@ object SparkPlanGraph {
   private def buildSparkPlanGraphNode(
       planInfo: SparkPlanInfoWithStage,
       nodeIdGenerator: AtomicLong,
-      nodes: mutable.ArrayBuffer[SparkPlanGraphNode],
+      nodes: mutable.ArrayBuffer[SparkPlanGraphDotNode],
       edges: mutable.ArrayBuffer[SparkPlanGraphEdge],
-      parent: SparkPlanGraphNode,
-      codeGen: SparkPlanGraphCluster,
+      parent: SparkPlanGraphDotNode,
+      codeGen: SparkPlanGraphDotCluster,
       stage: StageGraphCluster,
-      exchanges: mutable.HashMap[SparkPlanInfoWithStage, SparkPlanGraphNode],
+      exchanges: mutable.HashMap[SparkPlanInfoWithStage, SparkPlanGraphDotNode],
       stageIdToStageMetrics: Map[Int, StageMetrics]): Unit = {
 
     def getOrMakeStage(planInfo: SparkPlanInfoWithStage): StageGraphCluster = {
@@ -239,11 +239,11 @@ object SparkPlanGraph {
     planInfo.nodeName match {
       case name if name.startsWith("WholeStageCodegen") =>
 
-        val codeGenCluster = new SparkPlanGraphCluster(
+        val codeGenCluster = new SparkPlanGraphDotCluster(
           nodeIdGenerator.getAndIncrement(),
           planInfo.nodeName,
           planInfo.simpleString,
-          mutable.ArrayBuffer[SparkPlanGraphNode](),
+          mutable.ArrayBuffer[SparkPlanGraphDotNode](),
           planInfo.metrics)
         val s = getOrMakeStage(planInfo)
         s.nodes += codeGenCluster
@@ -293,7 +293,7 @@ object SparkPlanGraph {
         edges += SparkPlanGraphEdge(node, parent)
       case name =>
         val metrics = planInfo.metrics
-        val node = new SparkPlanGraphNode(
+        val node = new SparkPlanGraphDotNode(
           nodeIdGenerator.getAndIncrement(), planInfo.nodeName,
           planInfo.simpleString, metrics, isGpuPlan(planInfo))
 
@@ -364,7 +364,7 @@ object SparkPlanGraph {
  * @param name the name of this SparkPlan node
  * @param metrics metrics that this SparkPlan node will track
  */
-class SparkPlanGraphNode(
+class SparkPlanGraphDotNode(
     val id: Long,
     val name: String,
     val desc: String,
@@ -404,13 +404,13 @@ class SparkPlanGraphNode(
 /**
  * A sub part of the plan. This may be used for WholeStageCodegen or for a Stage
  */
-class SparkPlanGraphCluster(
+class SparkPlanGraphDotCluster(
     id: Long,
     name: String,
     desc: String,
-    val nodes: mutable.ArrayBuffer[SparkPlanGraphNode],
+    val nodes: mutable.ArrayBuffer[SparkPlanGraphDotNode],
     metrics: Seq[SQLMetricInfo])
-    extends SparkPlanGraphNode(id, name, desc, metrics, isGpuNode = false) {
+    extends SparkPlanGraphDotNode(id, name, desc, metrics, isGpuNode = false) {
 
   override def makeDotNode(metricsValue: Map[Long, Long]): String = {
     val duration = metrics.filter(_.name.startsWith(WholeStageCodegenExec.PIPELINE_DURATION_METRIC))
@@ -438,7 +438,7 @@ class SparkPlanGraphCluster(
 class StageGraphCluster(
     id: Long,
     val stageIdToStageMetrics: Map[Int, StageMetrics])
-    extends SparkPlanGraphCluster(id, "STAGE", "STAGE", mutable.ArrayBuffer.empty, Seq.empty) {
+    extends SparkPlanGraphDotCluster(id, "STAGE", "STAGE", mutable.ArrayBuffer.empty, Seq.empty) {
   private var stageId = -1
 
   def setStage(stageId: Int): Unit = {
@@ -484,7 +484,7 @@ class StageGraphCluster(
  * Represent an edge in the SparkPlan tree. `fromId` is the child node id, and `toId` is the parent
  * node id.
  */
-case class SparkPlanGraphEdge(from: SparkPlanGraphNode, to: SparkPlanGraphNode) {
+case class SparkPlanGraphEdge(from: SparkPlanGraphDotNode, to: SparkPlanGraphDotNode) {
 
   def makeDotEdge: String = {
     val color = (from.isGpuNode, to.isGpuNode) match {
