@@ -460,6 +460,8 @@ class QualificationAppInfo(
       } else {
         logWarning(s"graph node ${node.name} desc: ${node.desc} id: ${node.id}")
       }
+
+      // TODO - likely can combine some code below with some of the above matching
       checkGraphNodeForReads(sqlID, node)
       if (isDataSetOrRDDPlan(node.desc)) {
         sqlIDToDataSetOrRDDCase += sqlID

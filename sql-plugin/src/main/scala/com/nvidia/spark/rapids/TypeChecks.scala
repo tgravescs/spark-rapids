@@ -2247,9 +2247,7 @@ object SupportedOpsForTools extends Logging {
         representative.foreach {
           case (context, data) =>
             val contextSpan = data.size
-            println("<td rowSpan=\"" + contextSpan + "\">" + s"$context</td>")
             data.keys.foreach { param =>
-              println(s"<td>$param</td>")
               val supportLevelOps = allSupportedTypes.toSeq.map { t =>
                 allData(t)(context)(param).text
               }
