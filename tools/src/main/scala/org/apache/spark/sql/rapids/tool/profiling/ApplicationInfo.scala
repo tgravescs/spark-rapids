@@ -280,7 +280,6 @@ class ApplicationInfo(
 
       // Maps stages to operators by checking for non-zero intersection
       // between nodeMetrics and stageAccumulateIDs
-      // TODO - would this be more efficient using accumIdToStageId if it had all stage ids?
       val nodeIdToStage = nodeIdToAccumulatorIds.map { case (nodeId, nodeAccums) =>
         val mappedStages = stageAccumulators.flatMap { case (stageId, stageAccums) =>
           if (nodeAccums.intersect(stageAccums).nonEmpty) {

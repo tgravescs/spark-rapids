@@ -48,6 +48,7 @@ class QualificationAppInfo(
   var appId: String = ""
   var isPluginEnabled = false
   var lastJobEndTime: Option[Long] = None
+  var aggJobTime: Option[Long] = None
   var lastSQLEndTime: Option[Long] = None
   val writeDataFormat: ArrayBuffer[String] = ArrayBuffer[String]()
 
@@ -58,6 +59,9 @@ class QualificationAppInfo(
   val sqlDurationTime: HashMap[Long, Long] = HashMap.empty[Long, Long]
 
   val sqlIDToTaskEndSum: HashMap[Long, StageTaskQualificationSummary] =
+    HashMap.empty[Long, StageTaskQualificationSummary]
+
+  val stageIdToTaskEndSum: HashMap[Long, StageTaskQualificationSummary] =
     HashMap.empty[Long, StageTaskQualificationSummary]
 
   val stageIdToSqlID: HashMap[Int, Long] = HashMap.empty[Int, Long]
@@ -145,6 +149,7 @@ class QualificationAppInfo(
     }.values.sum
   }
 
+
   // The total task time for all tasks that ran during SQL dataframe
   // operations.  if the SQL contains a dataset, it isn't counted.
   private def calculateTaskDataframeDuration: Long = {
@@ -152,6 +157,26 @@ class QualificationAppInfo(
       sqlIDToDataSetOrRDDCase.contains(sqlID) || sqlDurationTime.getOrElse(sqlID, -1) == -1
     }
     validSums.values.map(dur => dur.totalTaskDuration).sum
+  }
+
+  // Look at the total task times for all jobs/stages that aren't SQL or
+  // SQL but dataset or rdd
+  private def calculateNonSQLTaskDataframeDuration: Long = {
+    val allTaskTime = stageIdToTaskEndSum.values.map(_.totalTaskDuration).sum
+
+    val validSums = sqlIDToTaskEndSum.filter { case (sqlID, _) =>
+      sqlIDToDataSetOrRDDCase.contains(sqlID) || sqlDurationTime.getOrElse(sqlID, -1) == -1
+    }
+    val taskTimeDataSetOrRDD = validSums.values.map(dur => dur.totalTaskDuration).sum
+    // TODO make more efficient
+    allTaskTime - taskTimeDataSetOrRDD - calculateTaskDataframeDuration
+  }
+
+  // assume overhead time is app time minus the job time.
+  // TODO - What about shell where idle?
+  private def calculateOverHeadTime(startTime: Long): Long = {
+    val appTime = calculateAppDuration(startTime)
+    appTime.map(_ - aggJobTime.getOrElse(0)).getOrElse(0)
   }
 
   private def getSQLDurationProblematic: Long = {
@@ -208,27 +233,21 @@ class QualificationAppInfo(
    * @return Option of QualificationSummaryInfo, Some if we were able to process the application
    *         otherwise None.
    */
-  def aggregateStats(targetRatio: Double,
-      targetMultiplier: Double): Option[QualificationSummaryInfo] = {
+  def aggregateStats: Option[QualificationSummaryInfo] = {
     appInfo.map { info =>
       val appDuration = calculateAppDuration(info.startTime).getOrElse(0L)
       val sqlDataframeDur = calculateSqlDataframeDuration
+      // wall clock time
+      val nonSqlDataframedur = appDuration - sqlDataframeDur
       val executorCpuTimePercent = calculateCpuTimePercent
       val endDurationEstimated = this.appEndTime.isEmpty && appDuration > 0
       val sqlDurProblem = getSQLDurationProblematic
       val readScoreRatio = calculateReadScoreRatio
 
-      // in order to make using GPU cost effective, the overall app time
-      // needs to be less than this value
-      val targetAppDuration = (appDuration / targetRatio).toLong
-      val targetDurationColor = if (sqlDataframeDur <= targetAppDuration) {
-        "red"
-      } else if (sqlDataframeDur >= (appDuration / targetMultiplier)) {
-        "green"
-      } else {
-        "yellow"
-      }
       val sqlDataframeTaskDuration = calculateTaskDataframeDuration
+      val noSQLDataframeTaskDuration = calculateNonSQLTaskDataframeDuration
+      val overheadTime = calculateOverHeadTime(info.startTime)
+      val nonSQLDuration = noSQLDataframeTaskDuration + overheadTime
       val readScoreHumanPercent = 100 * readScoreRatio
       val readScoreHumanPercentRounded = f"${readScoreHumanPercent}%1.2f".toDouble
       val score = calculateScore(readScoreRatio, sqlDataframeTaskDuration)
@@ -244,12 +263,32 @@ class QualificationAppInfo(
       val (allComplexTypes, nestedComplexTypes) = reportComplexTypes
       val problems = getAllPotentialProblems(getPotentialProblemsForDf, nestedComplexTypes)
 
+      // TODO calculate the unsupported operator task duration, going to very hard
+      // gpuUnsupportedSQLTaskDuration = ???
+      val unsupportedDuration = 0L
+      val speedupDuration = sqlDataframeTaskDuration - unsupportedDuration
+
+      // TODO calculate speedup_factor - which is average of operator factors???
+      val speedupFactor = 0L
+      val estimatedDuration = (speedupDuration/speedupFactor) + unsupportedDuration + nonSQLDuration
+      val appTaskDuration = nonSQLDuration + sqlDataframeTaskDuration
+      val totalSpeedup = appTaskDuration / estimatedDuration
+      // recommendation
+      val speedupBucket = if (totalSpeedup > 3) {
+        "GREEN"
+      } else if (totalSpeedup > 1.25) {
+        "YELLOW"
+      } else {
+        "RED"
+      }
       new QualificationSummaryInfo(info.appName, appId, scoreRounded, problems,
-        sqlDataframeDur, sqlDataframeTaskDuration, appDuration, executorCpuTimePercent,
+        sqlDataframeDur, sqlDataframeTaskDuration, nonSQLDuration,
+        appDuration, executorCpuTimePercent,
         endDurationEstimated, sqlDurProblem, failedIds, readScorePercent,
         readScoreHumanPercentRounded, notSupportFormatAndTypesString,
         getAllReadFileFormats, writeFormat, allComplexTypes, nestedComplexTypes,
-        targetAppDuration, targetDurationColor)
+        estimatedDuration, unsupportedDuration, speedupDuration, speedupFactor,
+        totalSpeedup, speedupBucket)
     }
   }
 /*
@@ -473,6 +512,7 @@ case class QualificationSummaryInfo(
     potentialProblems: String,
     sqlDataFrameDuration: Long,
     sqlDataframeTaskDuration: Long,
+    nonSqlTaskDurationAndOverhead: Long,
     appDuration: Long,
     executorCpuTimePercent: Double,
     endDurationEstimated: Boolean,
@@ -485,8 +525,12 @@ case class QualificationSummaryInfo(
     writeDataFormat: String,
     complexTypes: String,
     nestedComplexTypes: String,
-    targetAppDuration: Long,
-    targetDurationColor: String)
+    estimatedDuration: Long,
+    unsupportedDuration: Long,
+    speedupDuration: Long,
+    speedupFactor: Double,
+    totalSpeedup: Long,
+    speedupBucket: String)
 
 object QualificationAppInfo extends Logging {
   def createApp(

@@ -85,8 +85,7 @@ class RunningQualificationApp(readScorePercent: Int = QualificationArgs.DEFAULT_
    * @return String containing the summary report.
    */
   def getSummary(delimiter: String = "|", prettyPrint: Boolean = true): String = {
-    // TODO - fix parameters
-    val appInfo = super.aggregateStats(2.5, 3)
+    val appInfo = super.aggregateStats
     appInfo match {
       case Some(info) =>
         val appIdMaxSize = QualOutputWriter.getAppIdSize(Seq(info))
@@ -111,7 +110,7 @@ class RunningQualificationApp(readScorePercent: Int = QualificationArgs.DEFAULT_
   def getDetailed(delimiter: String = "|", prettyPrint: Boolean = true,
       reportReadSchema: Boolean = false): String = {
     // TODO - fix
-    val appInfo = super.aggregateStats(2.5, 3)
+    val appInfo = super.aggregateStats
     appInfo match {
       case Some(info) =>
         val headersAndSizes =

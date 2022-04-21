@@ -34,8 +34,7 @@ import org.apache.spark.sql.rapids.tool.qualification._
 class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     timeout: Option[Long], nThreads: Int, order: String,
     pluginTypeChecker: Option[PluginTypeChecker], readScorePercent: Int,
-    reportReadSchema: Boolean, printStdout: Boolean,
-    targetRatio: Double, targetGreenRatio: Double) extends Logging {
+    reportReadSchema: Boolean, printStdout: Boolean) extends Logging {
 
   private val allApps = new ConcurrentLinkedQueue[QualificationSummaryInfo]()
   // default is 24 hours
@@ -72,14 +71,14 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     // the csv file we write the entire data in descending order
     val allAppsSum = allApps.asScala.toSeq
     val sortedDesc = allAppsSum.sortBy(sum => {
-        (-sum.targetAppDuration, -sum.score, -sum.sqlDataFrameDuration, -sum.appDuration)
+        (-sum.score, -sum.sqlDataFrameDuration, -sum.appDuration)
     })
     val qWriter = new QualOutputWriter(outputDir, reportReadSchema, printStdout)
     qWriter.writeCSV(sortedDesc)
 
     val sortedForReport = if (QualificationArgs.isOrderAsc(order)) {
       allAppsSum.sortBy(sum => {
-        (sum.targetAppDuration, sum.score, sum.sqlDataFrameDuration, sum.appDuration)
+        (sum.score, sum.sqlDataFrameDuration, sum.appDuration)
       })
     } else {
       sortedDesc
@@ -99,7 +98,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
         logWarning(s"No Application found that contain SQL for ${path.eventLog.toString}!")
         None
       } else {
-        val qualSumInfo = app.get.aggregateStats(targetRatio, targetGreenRatio)
+        val qualSumInfo = app.get.aggregateStats
         if (qualSumInfo.isDefined) {
           allApps.add(qualSumInfo.get)
           val endTime = System.currentTimeMillis()

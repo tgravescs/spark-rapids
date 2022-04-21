@@ -62,6 +62,15 @@ class QualificationEventProcessor(app: QualificationAppInfo)
       app: QualificationAppInfo,
       event: SparkListenerTaskEnd): Unit = {
     logDebug("Processing event: " + event.getClass)
+    // keep all stage task times to see for nonsql duration
+    val taskSum = app.stageIdToTaskEndSum.getOrElseUpdate(event.stageId, {
+      new StageTaskQualificationSummary(event.stageId, event.stageAttemptId, 0, 0, 0)
+    })
+    taskSum.executorRunTime += event.taskMetrics.executorRunTime
+    taskSum.executorCPUTime += NANOSECONDS.toMillis(event.taskMetrics.executorCpuTime)
+    taskSum.totalTaskDuration += event.taskInfo.duration
+
+    // TODO - change below to use stageIdToTaskEndSum
     // Adds in everything (including failures)
     app.stageIdToSqlID.get(event.stageId).foreach { sqlID =>
       val taskSum = app.sqlIDToTaskEndSum.getOrElseUpdate(sqlID, {
@@ -137,6 +146,7 @@ class QualificationEventProcessor(app: QualificationAppInfo)
       event: SparkListenerJobEnd): Unit = {
     logDebug("Processing event: " + event.getClass)
     app.lastJobEndTime = Some(event.time)
+    app.aggJobTime = Some(app.aggJobTime.getOrElse(0L) + event.time)
     if (event.jobResult != JobSucceeded) {
       val sqlID = app.jobIdToSqlID.get(event.jobId) match {
         case Some(id) =>

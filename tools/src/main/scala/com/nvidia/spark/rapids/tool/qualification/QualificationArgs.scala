@@ -127,14 +127,6 @@ Usage: java -cp rapids-4-spark-tools_2.12-<version>.jar:$SPARK_HOME/jars/*
         "Default is 24 hours (86400 seconds) and must be greater than 3 seconds. If it " +
         "times out, it will report what it was able to process up until the timeout.",
       default = Some(86400))
-  val targetRatio: ScallopOption[Double] =
-    opt[Double](required = false,
-      descr = "GPU/GPU cost ratio",
-      default = Some(2.5))
-  val targetGreenMultiplier: ScallopOption[Double] =
-    opt[Double](required = false,
-      descr = "SQL time multiplier to say we are Green for target ratio",
-      default = Some(3))
   val userName: ScallopOption[String] =
     opt[String](required = false,
       descr = "Applications which a particular user has submitted." )
@@ -150,16 +142,6 @@ Usage: java -cp rapids-4-spark-tools_2.12-<version>.jar:$SPARK_HOME/jars/*
         || crit.endsWith("-oldest") || crit.endsWith("-newest")) => Right(Unit)
     case _ => Left("Error, the filter criteria must end with -newest, -oldest, " +
         "-newest-filesystem, -oldest-filesystem, -newest-per-app-name or -oldest-per-app-name")
-  }
-
-  validate(targetRatio) {
-    case ratio if (ratio > 0) => Right(Unit)
-    case _ => Left("Error, targetRatio must be greater than 0")
-  }
-
-  validate(targetGreenMultiplier) {
-    case multiplier if (multiplier > 0) => Right(Unit)
-    case _ => Left("Error, targetGreenMultiplier must be greater than 0")
   }
 
   validate(timeout) {
