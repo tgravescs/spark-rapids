@@ -269,10 +269,12 @@ class QualificationAppInfo(
       val speedupDuration = sqlDataframeTaskDuration - unsupportedDuration
 
       // TODO calculate speedup_factor - which is average of operator factors???
-      val speedupFactor = 0.0
+      val speedupFactor = 1.0
       val estimatedDuration = (speedupDuration/speedupFactor) + unsupportedDuration + nonSQLDuration
       val appTaskDuration = nonSQLDuration + sqlDataframeTaskDuration
+      logWarning(s"appTaskDuration is: $appTaskDuration")
       val totalSpeedup = appTaskDuration / estimatedDuration
+      logWarning(s"total speedup : $totalSpeedup")
       // recommendation
       val speedupBucket = if (totalSpeedup > 3) {
         "GREEN"
