@@ -271,6 +271,9 @@ class QualificationAppInfo(
       // TODO calculate speedup_factor - which is average of operator factors???
       val speedupFactor = 1.0
       val estimatedDuration = (speedupDuration/speedupFactor) + unsupportedDuration + nonSQLDuration
+      logWarning(s"estimated duration is: $estimatedDuration")
+      logWarning(s"speedupDur/factor duration is: ${speedupDuration/speedupFactor}")
+
       val appTaskDuration = nonSQLDuration + sqlDataframeTaskDuration
       logWarning(s"appTaskDuration is: $appTaskDuration")
       val totalSpeedup = appTaskDuration / estimatedDuration
