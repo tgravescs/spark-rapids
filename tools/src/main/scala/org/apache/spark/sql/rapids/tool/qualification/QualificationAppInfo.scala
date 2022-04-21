@@ -52,6 +52,9 @@ class QualificationAppInfo(
   var lastSQLEndTime: Option[Long] = None
   val writeDataFormat: ArrayBuffer[String] = ArrayBuffer[String]()
 
+  // jobId to job info
+  val jobIdToInfo = new HashMap[Int, JobInfoClass]()
+
   var appInfo: Option[QualApplicationInfo] = None
   val sqlStart: HashMap[Long, QualSQLExecutionInfo] = HashMap[Long, QualSQLExecutionInfo]()
 
@@ -238,7 +241,6 @@ class QualificationAppInfo(
       val appDuration = calculateAppDuration(info.startTime).getOrElse(0L)
       val sqlDataframeDur = calculateSqlDataframeDuration
       // wall clock time
-      val nonSqlDataframedur = appDuration - sqlDataframeDur
       val executorCpuTimePercent = calculateCpuTimePercent
       val endDurationEstimated = this.appEndTime.isEmpty && appDuration > 0
       val sqlDurProblem = getSQLDurationProblematic
@@ -275,6 +277,7 @@ class QualificationAppInfo(
       logWarning(s"speedupDur/factor duration is: ${speedupDuration/speedupFactor}")
 
       val appTaskDuration = nonSQLDuration + sqlDataframeTaskDuration
+      logWarning(s"noon sql dur is: $nonSQLDuration sql dataframe task dur is $sqlDataframeTaskDuration")
       logWarning(s"appTaskDuration is: $appTaskDuration")
       val totalSpeedup = appTaskDuration / estimatedDuration
       logWarning(s"total speedup : $totalSpeedup")
