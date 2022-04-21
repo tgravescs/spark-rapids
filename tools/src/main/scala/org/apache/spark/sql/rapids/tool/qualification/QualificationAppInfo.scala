@@ -307,6 +307,8 @@ class QualificationAppInfo(
             val second = func.group(3)
             // check for variable
             if (first.contains("#") || second.contains("#")) {
+              logWarning(s"expr contains # $first or $second")
+
             } // else if ???
             val predStr = predicate match {
               case "=" => "EqualTo"
@@ -316,6 +318,7 @@ class QualificationAppInfo(
               case "<=" => "LessThanOrEqual"
               case ">=" => "GreaterThanOrEqual"
             }
+            logWarning(s"predicate string is $predStr")
             // TODO - lookup function name
           case None => logWarning("not sure what this is")
         }
