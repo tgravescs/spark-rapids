@@ -124,6 +124,9 @@ object QualOutputWriter {
   val APP_DUR_STR_SIZE: Int = APP_DUR_STR.size
   val SQL_DUR_STR_SIZE: Int = SQL_DUR_STR.size
   val PROBLEM_DUR_SIZE: Int = PROBLEM_DUR_STR.size
+  val SPEEDUP_BUCKET_STR_SIZE: Int = SPEEDUP_BUCKET_STR.size
+  val TOTAL_SPEEDUP_STR_SIZE: Int = TOTAL_SPEEDUP_STR.size
+
 
   def getAppIdSize(sums: Seq[QualificationSummaryInfo]): Int = {
     val sizes = sums.map(_.appId.size)
@@ -179,7 +182,9 @@ object QualOutputWriter {
       APP_ID_STR -> appIdMaxSize,
       APP_DUR_STR -> APP_DUR_STR_SIZE,
       SQL_DUR_STR -> SQL_DUR_STR_SIZE,
-      PROBLEM_DUR_STR -> PROBLEM_DUR_SIZE
+      PROBLEM_DUR_STR -> PROBLEM_DUR_SIZE,
+      TOTAL_SPEEDUP_STR -> TOTAL_SPEEDUP_STR_SIZE,
+      SPEEDUP_BUCKET_STR -> SPEEDUP_BUCKET_STR_SIZE
     )
   }
 
@@ -241,7 +246,9 @@ object QualOutputWriter {
       sumInfo.appId -> appIdMaxSize,
       sumInfo.appDuration.toString -> APP_DUR_STR_SIZE,
       sumInfo.sqlDataFrameDuration.toString -> SQL_DUR_STR_SIZE,
-      sumInfo.sqlDurationForProblematic.toString -> PROBLEM_DUR_SIZE
+      sumInfo.sqlDurationForProblematic.toString -> PROBLEM_DUR_SIZE,
+      sumInfo.totalSpeedup.toString -> TOTAL_SPEEDUP_STR_SIZE,
+      sumInfo.speedupBucket -> SPEEDUP_BUCKET_STR_SIZE
     )
     constructOutputRow(data, delimiter, prettyPrint)
   }
