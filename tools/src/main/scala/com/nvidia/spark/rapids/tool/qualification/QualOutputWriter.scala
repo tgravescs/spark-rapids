@@ -101,6 +101,7 @@ object QualOutputWriter {
   val APP_DUR_STR = "App Duration"
   val SQL_DUR_STR = "SQL DF Duration"
   val TASK_DUR_STR = "SQL Dataframe Task Duration"
+  val NONSQL_DUR_STR = "NONSQL Task Duration Plug Overhead"
   val SCORE_STR = "Score"
   val POT_PROBLEM_STR = "Potential Problems"
   val EXEC_CPU_PERCENT_STR = "Executor CPU Time Percent"
@@ -114,14 +115,15 @@ object QualOutputWriter {
   val COMPLEX_TYPES_STR = "Complex Types"
   val NESTED_TYPES_STR = "Nested Complex Types"
   val READ_SCHEMA_STR = "Read Schema"
-  val APP_TARGET_DUR_STR = "Target Duration"
-  val APP_TARGET_COLOR_STR = "Speedup Required"
+  val ESTIMATED_DURATION_STR = "Estimated Duration"
+  val UNSUPPORTED_DURATION_STR = "Unsupported Duration"
+  val SPEEDUP_DURATION_STR = "Speedup Duration"
+  val SPEEDUP_FACTOR_STR = "Speedup Factor"
+  val TOTAL_SPEEDUP_STR = "Total Speedup"
+  val SPEEDUP_BUCKET_STR = "Recommendation"
   val APP_DUR_STR_SIZE: Int = APP_DUR_STR.size
   val SQL_DUR_STR_SIZE: Int = SQL_DUR_STR.size
   val PROBLEM_DUR_SIZE: Int = PROBLEM_DUR_STR.size
-  val APP_TARGET_DUR_STR_SIZE: Int = APP_TARGET_DUR_STR.size
-  val APP_TARGET_COLOR_STR_SIZE: Int = APP_TARGET_COLOR_STR.size
-
 
   def getAppIdSize(sums: Seq[QualificationSummaryInfo]): Int = {
     val sizes = sums.map(_.appId.size)
@@ -176,8 +178,6 @@ object QualOutputWriter {
     LinkedHashMap[String, Int](
       APP_ID_STR -> appIdMaxSize,
       APP_DUR_STR -> APP_DUR_STR_SIZE,
-      APP_TARGET_DUR_STR -> APP_TARGET_DUR_STR_SIZE,
-      APP_TARGET_COLOR_STR -> APP_TARGET_COLOR_STR_SIZE,
       SQL_DUR_STR -> SQL_DUR_STR_SIZE,
       PROBLEM_DUR_STR -> PROBLEM_DUR_SIZE
     )
@@ -196,6 +196,7 @@ object QualOutputWriter {
       POT_PROBLEM_STR ->
         getMaxSizeForHeader(appInfos.map(_.potentialProblems.size), POT_PROBLEM_STR),
       SQL_DUR_STR -> SQL_DUR_STR.size,
+      NONSQL_DUR_STR -> NONSQL_DUR_STR.size,
       TASK_DUR_STR -> TASK_DUR_STR.size,
       APP_DUR_STR -> APP_DUR_STR.size,
       EXEC_CPU_PERCENT_STR -> EXEC_CPU_PERCENT_STR.size,
@@ -212,7 +213,13 @@ object QualOutputWriter {
       COMPLEX_TYPES_STR ->
         getMaxSizeForHeader(appInfos.map(_.complexTypes.size), COMPLEX_TYPES_STR),
       NESTED_TYPES_STR -> getMaxSizeForHeader(appInfos.map(_.nestedComplexTypes.size),
-        NESTED_TYPES_STR)
+        NESTED_TYPES_STR),
+      ESTIMATED_DURATION_STR -> ESTIMATED_DURATION_STR.size,
+      UNSUPPORTED_DURATION_STR -> UNSUPPORTED_DURATION_STR.size,
+      SPEEDUP_DURATION_STR -> SPEEDUP_DURATION_STR.size,
+      SPEEDUP_FACTOR_STR -> SPEEDUP_FACTOR_STR.size,
+      TOTAL_SPEEDUP_STR -> TOTAL_SPEEDUP_STR.size,
+      SPEEDUP_BUCKET_STR -> SPEEDUP_BUCKET_STR.size
     )
     if (reportReadSchema) {
       detailedHeadersAndFields +=
@@ -233,8 +240,6 @@ object QualOutputWriter {
     val data = ListBuffer[(String, Int)](
       sumInfo.appId -> appIdMaxSize,
       sumInfo.appDuration.toString -> APP_DUR_STR_SIZE,
-      sumInfo.targetAppDuration.toString -> APP_TARGET_DUR_STR_SIZE,
-      sumInfo.targetDurationColor -> APP_TARGET_COLOR_STR_SIZE,
       sumInfo.sqlDataFrameDuration.toString -> SQL_DUR_STR_SIZE,
       sumInfo.sqlDurationForProblematic.toString -> PROBLEM_DUR_SIZE
     )
@@ -268,6 +273,7 @@ object QualOutputWriter {
       potentialProbs -> headersAndSizes(POT_PROBLEM_STR),
       appInfo.sqlDataFrameDuration.toString -> headersAndSizes(SQL_DUR_STR),
       appInfo.sqlDataframeTaskDuration.toString -> headersAndSizes(TASK_DUR_STR),
+      appInfo.nonSqlTaskDurationAndOverhead.toString -> headersAndSizes(NONSQL_DUR_STR),
       appInfo.appDuration.toString -> headersAndSizes(APP_DUR_STR),
       appInfo.executorCpuTimePercent.toString -> headersAndSizes(EXEC_CPU_PERCENT_STR),
       appInfo.endDurationEstimated.toString -> headersAndSizes(APP_DUR_ESTIMATED_STR),
@@ -280,7 +286,14 @@ object QualOutputWriter {
       readFileFormatsNotSupported -> headersAndSizes(READ_FILE_FORMAT_TYPES_STR),
       dataWriteFormat -> headersAndSizes(WRITE_DATA_FORMAT_STR),
       complexTypes -> headersAndSizes(COMPLEX_TYPES_STR),
-      nestedComplexTypes -> headersAndSizes(NESTED_TYPES_STR)
+      nestedComplexTypes -> headersAndSizes(NESTED_TYPES_STR),
+      appInfo.estimatedDuration.toString -> headersAndSizes(ESTIMATED_DURATION_STR),
+      appInfo.unsupportedDuration.toString ->
+        headersAndSizes(UNSUPPORTED_DURATION_STR),
+      appInfo.speedupDuration.toString -> headersAndSizes(SPEEDUP_DURATION_STR),
+      appInfo.speedupFactor.toString -> headersAndSizes(SPEEDUP_FACTOR_STR),
+      appInfo.totalSpeedup.toString -> headersAndSizes(TOTAL_SPEEDUP_STR),
+      stringIfempty(appInfo.speedupBucket) -> headersAndSizes(SPEEDUP_BUCKET_STR)
     )
 
     if (reportReadSchema) {

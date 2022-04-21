@@ -176,7 +176,7 @@ class QualificationAppInfo(
   // TODO - What about shell where idle?
   private def calculateOverHeadTime(startTime: Long): Long = {
     val appTime = calculateAppDuration(startTime)
-    appTime.map(_ - aggJobTime.getOrElse(0)).getOrElse(0)
+    appTime.map(_ - aggJobTime.getOrElse(0L)).getOrElse(0L)
   }
 
   private def getSQLDurationProblematic: Long = {
@@ -269,7 +269,7 @@ class QualificationAppInfo(
       val speedupDuration = sqlDataframeTaskDuration - unsupportedDuration
 
       // TODO calculate speedup_factor - which is average of operator factors???
-      val speedupFactor = 0L
+      val speedupFactor = 0.0
       val estimatedDuration = (speedupDuration/speedupFactor) + unsupportedDuration + nonSQLDuration
       val appTaskDuration = nonSQLDuration + sqlDataframeTaskDuration
       val totalSpeedup = appTaskDuration / estimatedDuration
@@ -525,11 +525,11 @@ case class QualificationSummaryInfo(
     writeDataFormat: String,
     complexTypes: String,
     nestedComplexTypes: String,
-    estimatedDuration: Long,
+    estimatedDuration: Double,
     unsupportedDuration: Long,
     speedupDuration: Long,
     speedupFactor: Double,
-    totalSpeedup: Long,
+    totalSpeedup: Double,
     speedupBucket: String)
 
 object QualificationAppInfo extends Logging {
