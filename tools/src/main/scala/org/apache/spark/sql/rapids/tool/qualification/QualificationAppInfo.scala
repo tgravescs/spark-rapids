@@ -295,7 +295,8 @@ class QualificationAppInfo(
         // likely some conditional expression
         // TODO - add in artichmetic stuff (- / * )
         // TODO - what about years and literals?
-        val pattern = """(\w+) ([+=<>|]+) (\w+)""".r
+        // TODO do we need to match on more then words and #?
+        val pattern = """([\w#]+) ([+=<>|]+) ([\w#]+)""".r
         pattern.findFirstMatchIn(expr) match {
           case Some(func) =>
             logWarning(s" found expr: $func")
