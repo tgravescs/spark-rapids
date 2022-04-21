@@ -298,7 +298,7 @@ class QualificationAppInfo(
         val pattern = """(\w+) ([+=<>|]+) (\w+)""".r
         pattern.findFirstMatchIn(expr) match {
           case Some(func) =>
-            println(s" found expr: $func")
+            logWarning(s" found expr: $func")
             if (func.groupCount < 3) {
               logError("found expr but its not the entire thing, not sure what is going on")
             }
@@ -317,7 +317,7 @@ class QualificationAppInfo(
               case ">=" => "GreaterThanOrEqual"
             }
             // TODO - lookup function name
-          case None => println("not sure what this is")
+          case None => logWarning("not sure what this is")
         }
 
       } else {
@@ -325,13 +325,13 @@ class QualificationAppInfo(
         val pattern = """(\w+)\(.*\)""".r
         pattern.findFirstMatchIn(expr) match {
           case Some(func) =>
-            println(s" found func: $func")
+            logWarning(s" found func: $func")
             if (expr.length != func.group(0).length || func.groupCount == 0) {
               logError("found function but its not the entire thing, not sure what is going on")
             }
             val funcName = func.group(1)
             // TODO - lookup function name
-          case None => println("not sure what this is")
+          case None => logWarning("not sure what this is")
         }
 
       }
