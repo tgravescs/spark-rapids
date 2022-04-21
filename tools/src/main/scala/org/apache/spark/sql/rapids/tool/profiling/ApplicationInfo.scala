@@ -271,6 +271,7 @@ class ApplicationInfo(
    */
   def connectOperatorToStage(): Unit = {
     // TODO can we combine into processSQLPlanMetrics
+    val start = System.currentTimeMillis()
     for ((sqlId, planInfo) <- sqlPlan) {
       val planGraph = SparkPlanGraph(planInfo)
       val nodeIdToAccumulatorIds = planGraph.allNodes.map { node =>
@@ -293,6 +294,8 @@ class ApplicationInfo(
       logWarning("nodeIdToStage  is: " + nodeIdToStage.mkString(","))
       sqlPlanNodeIdToStageIds ++= nodeIdToStage
     }
+    val end = System.currentTimeMillis()
+    logWarning("connectOperatorToStage took: " + (end - start) + "ms")
   }
 
   /**
