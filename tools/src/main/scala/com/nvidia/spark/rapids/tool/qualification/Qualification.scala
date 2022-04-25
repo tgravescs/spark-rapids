@@ -99,6 +99,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
         None
       } else {
         val qualSumInfo = app.get.aggregateStats
+        app.get.processSQLPlanForNodeTiming
         if (qualSumInfo.isDefined) {
           allApps.add(qualSumInfo.get)
           val endTime = System.currentTimeMillis()

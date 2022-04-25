@@ -78,6 +78,7 @@ class QualificationAppInfo(
   var taskStageAccumMap: mutable.HashMap[Long, ArrayBuffer[TaskStageAccumCase]] =
     mutable.HashMap[Long, ArrayBuffer[TaskStageAccumCase]]()
   // val accumIdToStageId: mutable.HashMap[Long, Int] = new mutable.HashMap[Long, Int]()
+  var sqlPlan: mutable.HashMap[Long, SparkPlanInfo] = mutable.HashMap.empty[Long, SparkPlanInfo]
 
   private lazy val eventProcessor =  new QualificationEventProcessor(this)
 
@@ -450,41 +451,49 @@ class QualificationAppInfo(
     // assume its something we don't support
   }
 
+  private[qualification] def processSQLPlanForNodeTiming: Unit = {
+    sqlPlan.foreach { case (sqlID, planInfo) =>
+      val planGraph = SparkPlanGraph(planInfo)
+      val allnodes = planGraph.allNodes
+      for (node <- allnodes) {
+
+        if (node.isInstanceOf[SparkPlanGraphCluster]) {
+          val ch = node.asInstanceOf[SparkPlanGraphCluster].nodes
+          ch.foreach { c =>
+            wholeStage += WholeStageCodeGenResults(0, sqlID, node.id, node.name, c.name)
+          }
+          logWarning(s"graph node ${node.name} desc: ${node.desc} id: " +
+            s"${node.id} children graph cluster: ${ch.map(_.name).mkString(",")}")
+
+        } else {
+          logWarning(s"graph node ${node.name} desc: ${node.desc} id: ${node.id}")
+        }
+
+        node match {
+          case f if (f.name.contains("Filter")) =>
+            processFilterExec(f)
+          case w if (w.name.contains("WholeStageCodegen")) =>
+            // TODO - does metrics for time have previous ops?  per op thing
+            val accumId = w.metrics.find(_.name == "duration").map(_.accumulatorId)
+            // TODO - can't get metric values until after parsing plan done for task metrics
+            val taskForAccum = accumId.flatMap(id => taskStageAccumMap.get(id))
+              .getOrElse(ArrayBuffer.empty)
+            taskForAccum.foreach(a => logWarning(s"task accum value ${a.value}"))
+
+            logWarning(s"WholeStageCodegen time took: ${w.metrics.toString()}")
+          // processFilterExec(f)
+          case o =>
+            logWarning(s"node match other: ${o.name}")
+        }
+      }
+    }
+  }
+
   private[qualification] def processSQLPlan(sqlID: Long, planInfo: SparkPlanInfo): Unit = {
     checkMetadataForReadSchema(sqlID, planInfo)
     val planGraph = SparkPlanGraph(planInfo)
     val allnodes = planGraph.allNodes
     for (node <- allnodes) {
-
-      if (node.isInstanceOf[SparkPlanGraphCluster]) {
-        val ch = node.asInstanceOf[SparkPlanGraphCluster].nodes
-        ch.foreach { c =>
-          wholeStage += WholeStageCodeGenResults(0, sqlID, node.id, node.name, c.name)
-        }
-        logWarning(s"graph node ${node.name} desc: ${node.desc} id: " +
-          s"${node.id} children graph cluster: ${ch.map(_.name).mkString(",")}")
-
-      } else {
-        logWarning(s"graph node ${node.name} desc: ${node.desc} id: ${node.id}")
-      }
-
-      node match {
-        case f if (f.name.contains("Filter")) =>
-          processFilterExec(f)
-        case w if (w.name.contains("WholeStageCodegen")) =>
-          // TODO - does metrics for time have previous ops?  per op thing
-          val accumId = w.metrics.find(_.name == "duration").map(_.accumulatorId)
-          val taskForAccum = accumId.flatMap(id => taskStageAccumMap.get(id))
-            .getOrElse(ArrayBuffer.empty)
-          taskForAccum.foreach(a => logWarning(s"task accum value ${a.value}"))
-
-          logWarning(s"WholeStageCodegen time took: ${w.metrics.toString()}")
-          // processFilterExec(f)
-        case o =>
-          logWarning(s"node match other: ${o.name}")
-      }
-
-
       // TODO - likely can combine some code below with some of the above matching
       checkGraphNodeForReads(sqlID, node)
       if (isDataSetOrRDDPlan(node.desc)) {

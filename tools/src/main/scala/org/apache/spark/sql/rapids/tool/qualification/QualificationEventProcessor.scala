@@ -122,6 +122,7 @@ class QualificationEventProcessor(app: QualificationAppInfo)
     )
     app.sqlStart += (event.executionId -> sqlExecution)
     app.processSQLPlan(event.executionId, event.sparkPlanInfo)
+    app.sqlPlan += (event.executionId -> event.sparkPlanInfo)
     // -1 to indicate that it started but not complete
     app.sqlDurationTime += (event.executionId -> -1)
   }
