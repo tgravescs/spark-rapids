@@ -451,7 +451,7 @@ class QualificationAppInfo(
     // assume its something we don't support
   }
 
-  private[qualification] def processSQLPlanForNodeTiming: Unit = {
+  def processSQLPlanForNodeTiming: Unit = {
     sqlPlan.foreach { case (sqlID, planInfo) =>
       val planGraph = SparkPlanGraph(planInfo)
       val allnodes = planGraph.allNodes
