@@ -478,7 +478,13 @@ class QualificationAppInfo(
             // TODO - can't get metric values until after parsing plan done for task metrics
             val taskForAccum = accumId.flatMap(id => taskStageAccumMap.get(id))
               .getOrElse(ArrayBuffer.empty)
-            taskForAccum.foreach(a => logWarning(s"task accum value ${a.value}"))
+            val accumValues = taskForAccum.map(_.value.getOrElse(0L))
+            val max = if (accumValues.isEmpty) {
+              None
+            } else {
+              Some(accumValues.max)
+            }
+            logWarning(s"task accum max value ${max}")
 
             logWarning(s"WholeStageCodegen time took: ${w.metrics.toString()}")
           // processFilterExec(f)
