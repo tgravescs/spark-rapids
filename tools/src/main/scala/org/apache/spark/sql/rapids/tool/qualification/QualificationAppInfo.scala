@@ -464,9 +464,10 @@ class QualificationAppInfo(
       }
 
       node match {
-        case f if (f.name == "Filter") =>
+        case f if (f.name.contains("Filter")) =>
           processFilterExec(f)
-        case w if (w.name == "WholeStageCodegen") =>
+        case w if (w.name.contains("WholeStageCodegen")) =>
+          // TODO - does metrics for time have previous ops?  per op thing
           logWarning(s"WholeStageCodegen time took: ${w.metrics.toString()}")
           // processFilterExec(f)
         case o =>
