@@ -16,6 +16,7 @@
 
 package org.apache.spark.sql.rapids.tool.qualification
 
+import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import com.nvidia.spark.rapids.tool.EventLogInfo
@@ -73,6 +74,10 @@ class QualificationAppInfo(
 
   val notSupportFormatAndTypes: HashMap[String, Set[String]] = HashMap[String, Set[String]]()
   var wholeStage: ArrayBuffer[WholeStageCodeGenResults] = ArrayBuffer[WholeStageCodeGenResults]()
+  // accum id to task stage accum info
+  var taskStageAccumMap: mutable.HashMap[Long, ArrayBuffer[TaskStageAccumCase]] =
+    mutable.HashMap[Long, ArrayBuffer[TaskStageAccumCase]]()
+  // val accumIdToStageId: mutable.HashMap[Long, Int] = new mutable.HashMap[Long, Int]()
 
   private lazy val eventProcessor =  new QualificationEventProcessor(this)
 
@@ -468,6 +473,11 @@ class QualificationAppInfo(
           processFilterExec(f)
         case w if (w.name.contains("WholeStageCodegen")) =>
           // TODO - does metrics for time have previous ops?  per op thing
+          val accumId = w.metrics.find(_.name == "duration").map(_.accumulatorId)
+          val taskForAccum = accumId.flatMap(id => taskStageAccumMap.get(id))
+            .getOrElse(ArrayBuffer.empty)
+          taskForAccum.foreach(a => logWarning(s"task accum value ${a.value}"))
+
           logWarning(s"WholeStageCodegen time took: ${w.metrics.toString()}")
           // processFilterExec(f)
         case o =>
