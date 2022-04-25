@@ -83,8 +83,9 @@ object GpuTypeShims {
     throw new RuntimeException(s"Not support type $dt.")
 
   /**
-   * Whether the Shim supports day-time interval type
-   * Alias, Add, Subtract, Positive... operators do not support day-time interval type
+   * Whether the Shim supports day-time interval type for specific operator
+   * Alias, Add, Subtract, Positive... operators do not support day-time interval type on this Shim
+   * Note: Spark 3.2.x does support `DayTimeIntervalType`, this is for the GPU operators
    */
   def isSupportedDayTimeType(dt: DataType): Boolean = false
 
@@ -95,8 +96,33 @@ object GpuTypeShims {
   def isSupportedYearMonthType(dt: DataType): Boolean = false
 
   /**
-   * Get additional supported types for this Shim
+   * Get additional arithmetic supported types for this Shim
    */
   def additionalArithmeticSupportedTypes: TypeSig = TypeSig.none
+
+  /**
+   * Get additional predicate supported types for this Shim
+   */
+  def additionalPredicateSupportedTypes: TypeSig = TypeSig.none
+
+  /**
+   * Get additional Csv supported types for this Shim
+   */
+  def additionalCsvSupportedTypes: TypeSig = TypeSig.none
+
+  def typesDayTimeCanCastTo: TypeSig = TypeSig.none
+
+  def additionalTypesStringCanCastTo: TypeSig = TypeSig.none
+
+  /**
+   * Get additional Parquet supported types for this Shim
+   */
+  def additionalParquetSupportedTypes: TypeSig = TypeSig.none
+
+  /**
+   * Get additional common operators supported types for this Shim
+   * (filter, sample, project, alias, table scan ...... which GPU supports from 330)
+   */
+  def additionalCommonOperatorSupportedTypes: TypeSig = TypeSig.none
 
 }

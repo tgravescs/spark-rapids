@@ -20,7 +20,7 @@ import java.io.{File, FileOutputStream}
 import java.time.ZoneId
 
 import ai.rapids.cudf.DType
-import com.nvidia.spark.rapids.shims.TypeSigUtil
+import com.nvidia.spark.rapids.shims.{GpuTypeShims, TypeSigUtil}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, UnaryExpression, WindowSpecDefinition}
@@ -186,6 +186,17 @@ final class TypeSig private(
   }
 
   /**
+   * Add a literal restriction to the signature
+   * @param dataTypes the types that have to be literal. Will be added if they do not already exist.
+   * @return the new signature.
+   */
+  def withLit(dataTypes: TypeEnum.ValueSet): TypeSig = {
+    val it = initialTypes ++ dataTypes
+    val lt = litOnlyTypes ++ dataTypes
+    new TypeSig(it, maxAllowedDecimalPrecision, childTypes, lt, notes)
+  }
+
+  /**
    * All currently supported types can only be literal values.
    * @return the new signature.
    */
@@ -259,6 +270,17 @@ final class TypeSig private(
   def withPsNote(dataType: TypeEnum.Value, note: String): TypeSig =
     new TypeSig(initialTypes + dataType, maxAllowedDecimalPrecision, childTypes, litOnlyTypes,
       notes.+((dataType, note)))
+
+  /**
+   * Add a note about given types that marks them as partially supported.
+   * @param dataTypes the types this note is for.
+   * @param note the note itself
+   * @return the updated TypeSignature.
+   */
+  def withPsNote(dataTypes: Seq[TypeEnum.Value], note: String): TypeSig =
+    new TypeSig(
+      dataTypes.foldLeft(initialTypes)(_+_), maxAllowedDecimalPrecision, childTypes,
+      litOnlyTypes, dataTypes.foldLeft(notes)((notes, dataType) => notes.+((dataType, note))))
 
   private def isSupportedType(dataType: TypeEnum.Value): Boolean =
       initialTypes.contains(dataType)
@@ -535,7 +557,7 @@ object TypeSig {
    * Create a TypeSig that only supports literals of certain given types.
    */
   def lit(dataTypes: TypeEnum.ValueSet): TypeSig =
-    new TypeSig(dataTypes)
+    TypeSig.none.withLit(dataTypes)
 
   /**
    * Create a TypeSig that supports only literals of common primitive CUDF types.
@@ -1297,8 +1319,9 @@ class CastChecks extends ExprChecks {
   val sparkTimestampSig: TypeSig = cpuNumeric + BOOLEAN + TIMESTAMP + DATE + STRING
 
   val stringChecks: TypeSig = gpuNumeric + BOOLEAN + TIMESTAMP + DATE + STRING +
-    BINARY
-  val sparkStringSig: TypeSig = cpuNumeric + BOOLEAN + TIMESTAMP + DATE + CALENDAR + STRING + BINARY
+      BINARY + GpuTypeShims.additionalTypesStringCanCastTo
+  val sparkStringSig: TypeSig = cpuNumeric + BOOLEAN + TIMESTAMP + DATE + CALENDAR + STRING +
+      BINARY + GpuTypeShims.additionalTypesStringCanCastTo
 
   val binaryChecks: TypeSig = none
   val sparkBinarySig: TypeSig = STRING + BINARY
@@ -1334,7 +1357,7 @@ class CastChecks extends ExprChecks {
   val udtChecks: TypeSig = none
   val sparkUdtSig: TypeSig = STRING + UDT
 
-  val daytimeChecks: TypeSig = none
+  val daytimeChecks: TypeSig = GpuTypeShims.typesDayTimeCanCastTo
   val sparkDaytimeChecks: TypeSig = DAYTIME + STRING
 
   val yearmonthChecks: TypeSig = none
@@ -2132,7 +2155,7 @@ object SupportedOpsForTools extends Logging {
 
   // if a string contains what we are going to use for a delimiter, replace
   // it with something else
-  def replaceDelimiter(str: String, delimiter: String): String = {
+  private def replaceDelimiter(str: String, delimiter: String): String = {
     if (str != null && str.contains(delimiter)) {
       val replaceWith = if (delimiter.equals(",")) {
         ";"
@@ -2188,16 +2211,42 @@ object SupportedOpsForTools extends Logging {
     }
   }
 
-  private def outputSupportedExecs(): Unit = {
-    // Look at what we have for defaults for some configs because if the configs are off
-    // it likely means something isn't completely compatible.
-    // TODO ???
-    val conf = new RapidsConf(Map.empty[String, String])
-    val types = allSupportedTypes.toSeq
-    val header = Seq("Exec", "Notes", "Params") ++ types
+  private def operatorMappingWithScore(): Unit = {
+    val header = Seq("CPUOperator", "Score")
     println(header.mkString(","))
     GpuOverrides.execs.values.toSeq.sortBy(_.tag.toString).foreach { rule =>
       val checks = rule.getChecks
+      if (rule.isVisible && checks.forall(_.shown)) {
+        val cpuName = rule.tag.runtimeClass.getSimpleName
+        // We are assigning speed up of 2 to all the Execs supported by the plugin. This can be
+        // adjusted later.
+        val allCols = Seq(cpuName, "2")
+        println(s"${allCols.mkString(",")}")
+      }
+    }
+
+    GpuOverrides.expressions.values.toSeq.sortBy(_.tag.runtimeClass.getSimpleName).foreach { rule =>
+      val checks = rule.getChecks
+      if (rule.isVisible && checks.forall(_.shown)) {
+        val cpuName = rule.tag.runtimeClass.getSimpleName
+        // We are assigning speed up of 3 to all the Exprs supported by the plugin. This can be
+        // adjusted later.
+        val allCols = Seq(cpuName, "3")
+        println(s"${allCols.mkString(",")}")
+      }
+    }
+  }
+
+  private def outputSupportedExecs(): Unit = {
+    // TODO Look at what we have for defaults for some configs because if the configs are off
+    // it likely means something isn't completely compatible.
+    val conf = new RapidsConf(Map.empty[String, String])
+    val types = allSupportedTypes.toSeq
+    val header = Seq("Exec", "Supported", "Notes", "Params") ++ types
+    println(header.mkString(","))
+    GpuOverrides.execs.values.toSeq.sortBy(_.tag.toString).foreach { rule =>
+      val checks = rule.getChecks
+      val isConfigDisabled = rule.disabledMsg.isDefined
       if (rule.isVisible && checks.forall(_.shown)) {
         val execChecks = checks.get.asInstanceOf[ExecChecks]
         val allData = allSupportedTypes.map { t =>
@@ -2207,15 +2256,18 @@ object SupportedOpsForTools extends Logging {
         val notes = execChecks.supportNotes
         val inputs = allData.values.head.keys
 
-        val firstTwoCols = Seq(rule.tag.runtimeClass.getSimpleName, rule.notes().getOrElse("None"))
+        val firstCol = Seq(rule.tag.runtimeClass.getSimpleName)
+        val thirdCol = Seq(rule.notes().getOrElse("None"))
         inputs.foreach { input =>
           val named = notes.get(input)
-            .map(l => input + "(" + l.mkString(";") + ")")
-            .getOrElse(input)
+              .map(l => input + "(" + l.mkString(";") + ")")
+              .getOrElse(input)
           val supportLevelOps = allSupportedTypes.toSeq.map { t =>
             allData(t)(input).text
           }
-          val allCols = (firstTwoCols ++ Seq(named) ++ supportLevelOps)
+          val isSupportedExec = Seq(
+            if (supportLevelOps.forall(_.equals("NS")) || isConfigDisabled) "NS" else "S")
+          val allCols = (firstCol ++ isSupportedExec ++ thirdCol ++ Seq(named) ++ supportLevelOps)
           println(s"${allCols.map(replaceDelimiter(_, ",")).mkString(",")}")
         }
       }
@@ -2223,14 +2275,15 @@ object SupportedOpsForTools extends Logging {
   }
 
   private def outputSupportedExpressions(): Unit = {
-    // Look at what we have for defaults for some configs because if the configs are off
+    // TODO Look at what we have for defaults for some configs because if the configs are off
     // it likely means something isn't completely compatible.
     val conf = new RapidsConf(Map.empty[String, String])
     val types = allSupportedTypes.toSeq
-    val header = Seq("Expression", "SQL Func", "Notes", "Context", "Params") ++ types
+    val header = Seq("Expression", "Supported", "SQL Func", "Notes", "Context", "Params") ++ types
     println(header.mkString(","))
     GpuOverrides.expressions.values.toSeq.sortBy(_.tag.toString).foreach { rule =>
       val checks = rule.getChecks
+      val isConfigDisabled = rule.disabledMsg.isDefined
       if (rule.isVisible && checks.isDefined && checks.forall(_.shown)) {
         val sqlFunctions =
           ConfHelper.getSqlFunctionsForClass(rule.tag.runtimeClass).map(_.mkString(", "))
@@ -2240,18 +2293,19 @@ object SupportedOpsForTools extends Logging {
           (t, exprChecks.support(t))
         }.toMap
         val representative = allData.values.head
-        val staticCols = Seq(rule.tag.runtimeClass.getSimpleName,
-          sqlFunctions.getOrElse(" "),
-          rule.notes().getOrElse("None"))
+        val firstCol = Seq(rule.tag.runtimeClass.getSimpleName)
+        val staticCols = Seq(sqlFunctions.getOrElse(" "), rule.notes().getOrElse("None"))
 
         representative.foreach {
           case (context, data) =>
-            val contextSpan = data.size
             data.keys.foreach { param =>
               val supportLevelOps = allSupportedTypes.toSeq.map { t =>
                 allData(t)(context)(param).text
               }
-              val allCols = (staticCols ++ Seq(context.toString) ++ supportLevelOps)
+              val isSupportedExpr = Seq(
+                if (supportLevelOps.forall(_.equals("NS")) || isConfigDisabled) "NS" else "S")
+              val allCols = (firstCol ++ isSupportedExpr ++ staticCols ++ Seq(context.toString)
+                  ++ Seq(param) ++ supportLevelOps)
               println(s"${allCols.map(replaceDelimiter(_, ",")).mkString(",")}")
             }
         }
@@ -2261,9 +2315,12 @@ object SupportedOpsForTools extends Logging {
 
   def help(printType: String): Unit = {
     printType match {
-      case a if (a.equals("execs")) => outputSupportedExecs()
-      case expr if (expr.equals("expr")) => outputSupportedExpressions()
-      case _ => outputSupportIO()
+      case a if a.equals("execs") => outputSupportedExecs()
+      case expr if expr.equals("exprs") => outputSupportedExpressions()
+      case score if score.equals("operatorScore") => operatorMappingWithScore()
+      case io if io.equals("ioOnly") => outputSupportIO()
+      case _ => throw new IllegalArgumentException("SupportedOpsForTools: Invalid option. Valid" +
+          "options are `execs`, `exprs`, `operatorScore` and `ioOnly`")
     }
   }
 

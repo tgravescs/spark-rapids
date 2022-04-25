@@ -344,6 +344,7 @@ def test_hash_reduction_sum_count_action(data_gen):
 
 # Make sure that we can do computation in the group by columns
 @ignore_order
+@pytest.mark.xfail(reason="https://github.com/NVIDIA/spark-rapids/issues/5286")
 def test_computation_in_grpby_columns():
     conf = {'spark.rapids.sql.batchSizeBytes' : '250'}
     data_gen = [
@@ -1088,7 +1089,8 @@ def test_arithmetic_reductions(data_gen):
                          ids=idfn)
 def test_collect_list_reductions(data_gen):
     assert_gpu_and_cpu_are_equal_collect(
-        lambda spark: unary_op_df(spark, data_gen).selectExpr('collect_list(a)'),
+        # coalescing because collect_list is not deterministic
+        lambda spark: unary_op_df(spark, data_gen).coalesce(1).selectExpr('collect_list(a)'),
         conf=_no_nans_float_conf)
 
 _struct_only_nested_gens = [all_basic_struct_gen,
@@ -1631,7 +1633,7 @@ def test_count_fallback_when_ansi_enabled(data_gen):
 def test_no_fallback_when_ansi_enabled(data_gen):
     def do_it(spark):
         df = gen_df(spark, [('a', data_gen), ('b', data_gen)], length=100)
-        # coalescing because of first/last are not deterministic
+        # coalescing because first/last are not deterministic
         df = df.coalesce(1).orderBy("a", "b")
         return df.groupBy('a').agg(f.first("b"), f.last("b"), f.min("b"), f.max("b"))
 
