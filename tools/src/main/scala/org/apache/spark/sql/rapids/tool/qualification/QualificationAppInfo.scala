@@ -72,6 +72,7 @@ class QualificationAppInfo(
   val sqlIDtoJobFailures: HashMap[Long, ArrayBuffer[Int]] = HashMap.empty[Long, ArrayBuffer[Int]]
 
   val notSupportFormatAndTypes: HashMap[String, Set[String]] = HashMap[String, Set[String]]()
+  var wholeStage: ArrayBuffer[WholeStageCodeGenResults] = ArrayBuffer[WholeStageCodeGenResults]()
 
   private lazy val eventProcessor =  new QualificationEventProcessor(this)
 
@@ -277,7 +278,8 @@ class QualificationAppInfo(
       logWarning(s"speedupDur/factor duration is: ${speedupDuration/speedupFactor}")
 
       val appTaskDuration = nonSQLDuration + sqlDataframeTaskDuration
-      logWarning(s"noon sql dur is: $nonSQLDuration sql dataframe task dur is $sqlDataframeTaskDuration")
+      logWarning(s"noon sql dur is: $nonSQLDuration sql" +
+        s" dataframe task dur is $sqlDataframeTaskDuration")
       logWarning(s"appTaskDuration is: $appTaskDuration")
       val totalSpeedup = appTaskDuration / estimatedDuration
       logWarning(s"total speedup : $totalSpeedup")
@@ -448,18 +450,29 @@ class QualificationAppInfo(
     val planGraph = SparkPlanGraph(planInfo)
     val allnodes = planGraph.allNodes
     for (node <- allnodes) {
-      node match {
-        case f if (f.name == "Filter") => processFilterExec(f)
-        case _ =>
-      }
+
       if (node.isInstanceOf[SparkPlanGraphCluster]) {
         val ch = node.asInstanceOf[SparkPlanGraphCluster].nodes
+        ch.foreach { c =>
+          wholeStage += WholeStageCodeGenResults(0, sqlID, node.id, node.name, c.name)
+        }
         logWarning(s"graph node ${node.name} desc: ${node.desc} id: " +
           s"${node.id} children graph cluster: ${ch.map(_.name).mkString(",")}")
 
       } else {
         logWarning(s"graph node ${node.name} desc: ${node.desc} id: ${node.id}")
       }
+
+      node match {
+        case f if (f.name == "Filter") =>
+          processFilterExec(f)
+        case w if (w.name == "WholeStageCodegen") =>
+          logWarning(s"WholeStageCodegen time took: ${w.metrics.toString()}")
+          // processFilterExec(f)
+        case o =>
+          logWarning(s"node match other: ${o.name}")
+      }
+
 
       // TODO - likely can combine some code below with some of the above matching
       checkGraphNodeForReads(sqlID, node)
