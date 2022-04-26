@@ -236,11 +236,11 @@ class PluginTypeChecker extends Logging {
 
   def isExecSupported(exec: String): Boolean = {
     if (supportedExecs.contains(exec)) {
-      val execSupported = supportedExecs.get(exec)
+      val execSupported = supportedExecs.getOrElse(exec, "NS")
       if (execSupported == "S") {
         true
       } else {
-        logWarning("Support exec not supported, value: $execSupported")
+        logWarning(s"Support exec not supported, value: $execSupported")
         false
       }
     } else {

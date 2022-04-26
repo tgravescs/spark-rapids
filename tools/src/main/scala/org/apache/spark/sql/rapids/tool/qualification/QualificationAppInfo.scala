@@ -78,7 +78,7 @@ class QualificationAppInfo(
   var taskStageAccumMap: mutable.HashMap[Long, ArrayBuffer[TaskStageAccumCase]] =
     mutable.HashMap[Long, ArrayBuffer[TaskStageAccumCase]]()
   // val accumIdToStageId: mutable.HashMap[Long, Int] = new mutable.HashMap[Long, Int]()
-  var sqlPlan: mutable.HashMap[Long, SparkPlanInfo] = mutable.HashMap.empty[Long, SparkPlanInfo]
+  var sqlPlans: mutable.HashMap[Long, SparkPlanInfo] = mutable.HashMap.empty[Long, SparkPlanInfo]
 
   private lazy val eventProcessor =  new QualificationEventProcessor(this)
 
@@ -271,6 +271,13 @@ class QualificationAppInfo(
       val writeFormat = writeFormatNotSupported(writeDataFormat)
       val (allComplexTypes, nestedComplexTypes) = reportComplexTypes
       val problems = getAllPotentialProblems(getPotentialProblemsForDf, nestedComplexTypes)
+      val opInfos = processSQLPlanForNodeTiming
+      val perSQLId = opInfos.groupBy(_.sqlID)
+      perSQLId.foreach { x => logWarning(x.toString())}
+      val sqlIdSum = perSQLId.map { case (id, opInfos) =>
+        (id, opInfos.map(op => op.speedupFactor * op.durWithSpeedup.getOrElse(1)).sum)
+      }
+      // TODO - construct the final outputs - multiple things required now
 
       // TODO calculate the unsupported operator task duration, going to very hard
       // gpuUnsupportedSQLTaskDuration = ???
@@ -458,57 +465,75 @@ class QualificationAppInfo(
     // assume its something we don't support
   }
 
-  def processSQLPlanForNodeTiming: Unit = {
-    sqlPlan.foreach { case (sqlID, planInfo) =>
-      val planGraph = SparkPlanGraph(planInfo)
-      // val allnodes = planGraph.allNodes
-      // we want the other nodes to be inside of the wholeStageCodeGen so use nodes vs allNodes
-      for (node <- planGraph.nodes) {
-        if (node.isInstanceOf[SparkPlanGraphCluster]) {
-          val ch = node.asInstanceOf[SparkPlanGraphCluster].nodes
-          ch.foreach { c =>
-            wholeStage += WholeStageCodeGenResults(0, sqlID, node.id, node.name, c.name)
-          }
-          logWarning(s"graph node ${node.name} desc: ${node.desc} id: " +
-            s"${node.id} children graph cluster: ${ch.map(_.name).mkString(",")} ids:" +
-            s" ${ch.map(_.id).mkString(",")}")
+  private def average(arr: ArrayBuffer[Int]): Int = if (arr.isEmpty) 0 else arr.sum/arr.size
 
-        } else {
-          logWarning(s"graph node ${node.name} desc: ${node.desc} id: ${node.id}")
-        }
-
-        val isSupported = node match {
-          case w if (w.name.contains("WholeStageCodegen")) =>
-            // TODO - does metrics for time have previous ops?  per op thing
-            val accumId = w.metrics.find(_.name == "duration").map(_.accumulatorId)
-
-            // TODO - can't get metric values until after parsing plan done for task metrics
-            val taskForAccum = accumId.flatMap(id => taskStageAccumMap.get(id))
-              .getOrElse(ArrayBuffer.empty)
-            val accumValues = taskForAccum.map(_.value.getOrElse(0L))
-            val max = if (accumValues.isEmpty) {
-              None
-            } else {
-              Some(accumValues.max)
-            }
-            val ch = node.asInstanceOf[SparkPlanGraphCluster].nodes
-            logWarning(s"graph node ${node.name} desc: ${node.desc} id: " +
-              s"${node.id} children graph cluster: ${ch.map(_.name).mkString(",")} ids:" +
-              s" ${ch.map(_.id).mkString(",")}")
-            logWarning(s"task accum max value ${max}")
-            logWarning(s"WholeStageCodegen time took: ${w.metrics.toString()}")
-            1
-          case f if (f.name == "Filter") =>
-            // if Filter is part of wholeStage
-            logWarning(s"graph node ${node.name} desc: ${node.desc} id: ${node.id}")
-            val speedupFactor = processFilterExec(f)
-            speedupFactor
-          case o =>
-            logWarning(s"node match other: ${o.name}")
-            1
-        }
-      }
+  private def getDuration(accumId: Option[Long]): Option[Long] = {
+    val taskForAccum = accumId.flatMap(id => taskStageAccumMap.get(id))
+      .getOrElse(ArrayBuffer.empty)
+    val accumValues = taskForAccum.map(_.value.getOrElse(0L))
+    val maxDuration = if (accumValues.isEmpty) {
+      None
+    } else {
+      Some(accumValues.max)
     }
+    maxDuration
+  }
+
+  case class OpInfo(sqlID: Long, exec: String, expr: String, speedupFactor: Int,
+      durWithSpeedup: Option[Long], nodeId: Long, wholeStageId: Option[Long], isSupported: Boolean)
+
+  def processSQLPlanForNodeTiming: Seq[OpInfo] = {
+    pluginTypeChecker.map { checker =>
+      sqlPlans.flatMap { case (sqlID, planInfo) =>
+        val planGraph = SparkPlanGraph(planInfo)
+        // we want the sub-graph nodes to be inside of the wholeStageCodeGen so use nodes
+        // vs allNodes
+        val durAndSpeedup = planGraph.nodes.flatMap { node =>
+          node match {
+            case w if (w.name.contains("WholeStageCodegen")) =>
+              // TODO - does metrics for time have previous ops?  per op thing, likely does
+              //  but verify
+              val accumId = w.metrics.find(_.name == "duration").map(_.accumulatorId)
+              val maxDuration = getDuration(accumId)
+              val children = node.asInstanceOf[SparkPlanGraphCluster].nodes
+              logWarning(s"graph node ${node.name} desc: ${node.desc} id: " +
+                s"${node.id} children graph cluster: ${children.map(_.name).mkString(",")} ids:" +
+                s" ${children.map(_.id).mkString(",")}")
+              // TODO - most of the time children those don't have timings but check all
+              // TODO - add in expression checking
+              val childrenSpeedupFactors = children.map { c =>
+                // TODO - just fail if checker not here
+
+                if (checker.isExecSupported(c.name)) {
+                  val factor = checker.getExecSpeedupFactor(c.name)
+                  OpInfo(sqlID, w.name, "", factor, None, c.id, Some(w.id), true)
+                } else {
+                  OpInfo(sqlID, w.name, "", 1, None, c.id, Some(w.id), false)
+                }
+              }
+              // TODO - what do we want to do with this to apply to duration, average for now?
+              val avSpeedup = average(childrenSpeedupFactors.map(_.speedupFactor))
+              val anySupported = childrenSpeedupFactors.exists(_.isSupported == true)
+              val wholeStageSpeedup = OpInfo(sqlID, w.name, "", avSpeedup,
+                Some(maxDuration.map(avSpeedup * _).getOrElse(0)), w.id, None, anySupported)
+              childrenSpeedupFactors += wholeStageSpeedup
+            case f if (f.name == "Filter") =>
+              // if Filter is part of wholeStage
+              logWarning(s"graph node ${node.name} desc: ${node.desc} id: ${node.id}")
+              // Filter by itself has no timing
+              val speedupFactor = processFilterExec(f)
+              val supported = true
+              // TODO - need to multiply by duration
+              ArrayBuffer(OpInfo(sqlID, f.name, "", speedupFactor, None, f.id, None, supported))
+            case o =>
+              logWarning(s"other graph node ${node.name} desc: ${node.desc} id: ${node.id}")
+              val supported = false
+              ArrayBuffer(OpInfo(sqlID, o.name, "", 1, Some(0), o.id, None, supported))
+          }
+        }
+        durAndSpeedup
+      }.toSeq
+    }.getOrElse(Seq.empty)
   }
 
   private[qualification] def processSQLPlan(sqlID: Long, planInfo: SparkPlanInfo): Unit = {
