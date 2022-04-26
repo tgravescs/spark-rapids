@@ -149,10 +149,7 @@ class QualificationAppInfo(
   // for the SQL dataframe duration
   private def calculateSqlDataframeDuration: Long = {
     sqlDurationTime.foreach { case (k, v) =>
-      logWarning(s"k $k v: $v")
-    }
-    sqlIDToDataSetOrRDDCase.foreach { case k =>
-      logWarning(s"k $k")
+      logWarning(s"sql duration id $k time: $v")
     }
     sqlDurationTime.filterNot { case (sqlID, dur) =>
       sqlIDToDataSetOrRDDCase.contains(sqlID) || dur == -1

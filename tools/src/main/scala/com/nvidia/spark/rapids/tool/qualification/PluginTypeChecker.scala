@@ -235,8 +235,9 @@ class PluginTypeChecker extends Logging {
   }
 
   def isExecSupported(exec: String): Boolean = {
-    if (supportedExecs.contains(exec)) {
-      val execSupported = supportedExecs.getOrElse(exec, "NS")
+    val fullExecName = exec + "Exec"
+    if (supportedExecs.contains(fullExecName)) {
+      val execSupported = supportedExecs.getOrElse(fullExecName, "NS")
       if (execSupported == "S") {
         true
       } else {
@@ -244,7 +245,7 @@ class PluginTypeChecker extends Logging {
         false
       }
     } else {
-      logWarning(s"Exec $exec does not existing in supported execs file")
+      logWarning(s"Exec $fullExecName does not exist in supported execs file")
       false
     }
   }
