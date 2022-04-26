@@ -273,9 +273,9 @@ class QualificationAppInfo(
       val problems = getAllPotentialProblems(getPotentialProblemsForDf, nestedComplexTypes)
       val opInfos = processSQLPlanForNodeTiming
       val perSQLId = opInfos.groupBy(_.sqlID)
-      perSQLId.foreach { x => logWarning(x.toString())}
+      perSQLId.foreach { x => logWarning(s"sqlid: ${x._1}, ops : ${x._2.mkString("\n")}")}
       val sqlIdSum = perSQLId.map { case (id, opInfos) =>
-        (id, opInfos.map(op => op.speedupFactor * op.durWithSpeedup.getOrElse(1)).sum)
+        (id, opInfos.map(op => op.speedupFactor * (op.durWithSpeedup.getOrElse(1L))).sum)
       }
       // TODO - construct the final outputs - multiple things required now
 
@@ -506,15 +506,15 @@ class QualificationAppInfo(
 
                 if (checker.isExecSupported(c.name)) {
                   val factor = checker.getExecSpeedupFactor(c.name)
-                  OpInfo(sqlID, w.name, "", factor, None, c.id, Some(w.id), true)
+                  OpInfo(sqlID, w.name, c.name, factor, None, c.id, Some(w.id), true)
                 } else {
-                  OpInfo(sqlID, w.name, "", 1, None, c.id, Some(w.id), false)
+                  OpInfo(sqlID, w.name, c.name, 1, None, c.id, Some(w.id), false)
                 }
               }
               // TODO - what do we want to do with this to apply to duration, average for now?
               val avSpeedup = average(childrenSpeedupFactors.map(_.speedupFactor))
               val anySupported = childrenSpeedupFactors.exists(_.isSupported == true)
-              val wholeStageSpeedup = OpInfo(sqlID, w.name, "", avSpeedup,
+              val wholeStageSpeedup = OpInfo(sqlID, w.name, w.name, avSpeedup,
                 Some(maxDuration.map(avSpeedup * _).getOrElse(0)), w.id, None, anySupported)
               childrenSpeedupFactors += wholeStageSpeedup
             case f if (f.name == "Filter") =>
