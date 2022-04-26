@@ -235,6 +235,12 @@ class PluginTypeChecker extends Logging {
   }
 
   def isExecSupported(exec: String): Boolean = {
+    // special case ColumnarToRow and assume it will be removed or will we replace
+    // with GPUColumnarToRow. TODO - we can add more logic here to look at operator
+    //  before and after
+    if (exec == "ColumnarToRow") {
+      return true
+    }
     val fullExecName = exec + "Exec"
     if (supportedExecs.contains(fullExecName)) {
       val execSupported = supportedExecs.getOrElse(fullExecName, "NS")
