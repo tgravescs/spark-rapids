@@ -274,7 +274,8 @@ class QualificationAppInfo(
       val sqlIdSum = perSQLId.map { case (id, opInfos) =>
         (id, opInfos.map(op => op.speedupFactor * (op.durWithSpeedup.getOrElse(1L))).sum)
       }
-      // TODO - construct the final outputs - multiple things required now
+      // TODO - construct the final outputs - multiple things required now. Also need to
+      // calculate durations, if ops don't have them use stage durations or job durations
 
       // TODO calculate the unsupported operator task duration, going to very hard
       // gpuUnsupportedSQLTaskDuration = ???
@@ -476,9 +477,6 @@ class QualificationAppInfo(
     maxDuration
   }
 
-  case class OpInfo(sqlID: Long, exec: String, expr: String, speedupFactor: Int,
-      durWithSpeedup: Option[Long], nodeId: Long, wholeStageId: Option[Long], isSupported: Boolean)
-
   def processSQLPlanForNodeTiming: Seq[OpInfo] = {
     pluginTypeChecker.map { checker =>
       sqlPlans.flatMap { case (sqlID, planInfo) =>
@@ -493,14 +491,10 @@ class QualificationAppInfo(
               val accumId = w.metrics.find(_.name == "duration").map(_.accumulatorId)
               val maxDuration = getDuration(accumId)
               val children = node.asInstanceOf[SparkPlanGraphCluster].nodes
-              logWarning(s"graph node ${node.name} desc: ${node.desc} id: " +
-                s"${node.id} children graph cluster: ${children.map(_.name).mkString(",")} ids:" +
-                s" ${children.map(_.id).mkString(",")}")
+
               // TODO - most of the time children those don't have timings but check all
               // TODO - add in expression checking
               val childrenSpeedupFactors = children.map { c =>
-                // TODO - just fail if checker not here
-
                 if (checker.isExecSupported(c.name)) {
                   val factor = checker.getExecSpeedupFactor(c.name)
                   OpInfo(sqlID, w.name, c.name, factor, None, c.id, Some(w.id), true)
@@ -509,10 +503,11 @@ class QualificationAppInfo(
                 }
               }
               // TODO - what do we want to do with this to apply to duration, average for now?
-              val avSpeedup = average(childrenSpeedupFactors.map(_.speedupFactor))
+              val avSpeedupFactor = average(childrenSpeedupFactors.map(_.speedupFactor))
+              // if any of the execs in WholeStagecodeGen supported mark this row as supported
               val anySupported = childrenSpeedupFactors.exists(_.isSupported == true)
-              val wholeStageSpeedup = OpInfo(sqlID, w.name, w.name, avSpeedup,
-                Some(maxDuration.map(avSpeedup * _).getOrElse(0)), w.id, None, anySupported)
+              val wholeStageSpeedup = OpInfo(sqlID, w.name, w.name, avSpeedupFactor,
+                maxDuration, w.id, None, anySupported)
               childrenSpeedupFactors += wholeStageSpeedup
             case f if (f.name == "Filter") =>
               // if Filter is part of wholeStage
@@ -618,6 +613,16 @@ case class QualificationSummaryInfo(
     speedupFactor: Double,
     totalSpeedup: Double,
     speedupBucket: String)
+
+case class OpInfo(
+    sqlID: Long,
+    exec: String,
+    expr: String,
+    speedupFactor: Int,
+    duration: Option[Long],
+    nodeId: Long,
+    wholeStageId: Option[Long],
+    isSupported: Boolean)
 
 object QualificationAppInfo extends Logging {
   def createApp(
