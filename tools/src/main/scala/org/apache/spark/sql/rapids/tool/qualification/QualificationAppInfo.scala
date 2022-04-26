@@ -501,7 +501,7 @@ class QualificationAppInfo(
               val childrenSpeedupFactors = children.map { c =>
                 // TODO - just fail if checker not here
 
-                if (checker.(c.name)) {
+                if (checker.isExecSupported(c.name)) {
                   val factor = checker.getExecSpeedupFactor(c.name)
                   OpInfo(sqlID, w.name, c.name, factor, None, c.id, Some(w.id), true)
                 } else {
