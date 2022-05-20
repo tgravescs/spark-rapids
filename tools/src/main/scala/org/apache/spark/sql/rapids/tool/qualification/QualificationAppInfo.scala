@@ -39,7 +39,6 @@ class QualificationAppInfo(
   var appId: String = ""
   var lastJobEndTime: Option[Long] = None
   var lastSQLEndTime: Option[Long] = None
-  var longestSQLDuration: Long = 0
   val writeDataFormat: ArrayBuffer[String] = ArrayBuffer[String]()
 
   var appInfo: Option[QualApplicationInfo] = None
@@ -237,16 +236,13 @@ class QualificationAppInfo(
         val numExecs = execInfos.size.toDouble
         val numSupportedExecs = (numExecs - numUnsupportedExecs).toDouble
         val ratio = numSupportedExecs / numExecs
-        val hackEstimateWallclockSupported = (sqlWallClockDuration * ratio).toInt
-        if (hackEstimateWallclockSupported > longestSQLDuration) {
-          longestSQLDuration = hackEstimateWallclockSupported
-        }
+        val estimateWallclockSupported = (sqlWallClockDuration * ratio).toInt
         // TODO - do we need to estimate based on supported execs?
         // for now just take the time as is
         val execRunTime = sqlIDToTaskEndSum.get(sqlID).map(_.executorRunTime).getOrElse(0L)
         val execCPUTime = sqlIDToTaskEndSum.get(sqlID).map(_.executorCPUTime).getOrElse(0L)
 
-        SQLStageSummary(stageSum, sqlID, hackEstimateWallclockSupported,
+        SQLStageSummary(stageSum, sqlID, estimateWallclockSupported,
           execCPUTime, execRunTime)
       }
     }
@@ -303,10 +299,16 @@ class QualificationAppInfo(
       // wall clock time
       val executorCpuTimePercent = calculateCpuTimePercent(perSqlStageSummary)
 
-      // TODO - do we want to use this and rely on stages, but some SQL don't have stages
-      // so this is less than SQL DF real
-      val sqlDFWallClockDuration =
-        perSqlStageSummary.map(s => s.hackEstimateWallclockSupported).sum
+      val allSQLDurations = sqlIdToInfo.map { case (_, info) =>
+        info.duration.getOrElse(0L)
+      }
+      val sparkSQLDFWallClockDuration = allSQLDurations.sum
+      val longestSQLDuration = if (allSQLDurations.size > 0) {
+        allSQLDurations.max
+      } else {
+        0L
+      }
+
       val allStagesSummary = perSqlStageSummary.map(_.stageSum)
       val sqlDataframeTaskDuration = allStagesSummary.flatMap(_.map(s => s.stageTaskTime)).sum
       val unsupportedSQLTaskDuration = calculateSQLUnsupportedTaskDuration(allStagesSummary)
@@ -315,6 +317,8 @@ class QualificationAppInfo(
       val nonSQLDataframeTaskDuration =
         calculateNonSQLTaskDataframeDuration(sqlDataframeTaskDuration)
       val nonSQLTaskDuration = nonSQLDataframeTaskDuration + jobOverheadTime
+      // note that these ratios are based off the stage times which may be missing some stage
+      // overhead or execs that didn't have associated stages
       val supportedSQLTaskDuration = calculateSQLSupportedTaskDuration(allStagesSummary)
       val taskSpeedupFactor = calculateSpeedupFactor(allStagesSummary)
 
@@ -327,7 +331,7 @@ class QualificationAppInfo(
 
       val appName = appInfo.map(_.appName).getOrElse("")
       val estimatedInfo = QualificationAppInfo.calculateEstimatedInfoSummary(estimatedGPURatio,
-        sqlDFWallClockDuration, appDuration, taskSpeedupFactor, appName, appId,
+        sparkSQLDFWallClockDuration, appDuration, taskSpeedupFactor, appName, appId,
         sqlIdsWithFailures.nonEmpty)
 
       QualificationSummaryInfo(info.appName, appId, problems,
@@ -376,7 +380,7 @@ case class EstimatedSummaryInfo(
 case class SQLStageSummary(
     stageSum: Set[StageQualSummaryInfo],
     sqlID: Long,
-    hackEstimateWallclockSupported: Long,
+    estimateWallClockSupported: Long,
     execCPUTime: Long,
     execRunTime: Long)
 
