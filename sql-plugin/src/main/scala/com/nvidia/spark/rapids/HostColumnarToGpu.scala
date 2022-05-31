@@ -188,7 +188,7 @@ class HostToGpuCoalesceIterator(iter: Iterator[ColumnarBatch],
     opName) {
 
   // RequireSingleBatch goal is intentionally not supported in this iterator
-  assert(!goal.isInstanceOf[RequireSingleBatchLike])
+  assert(goal != RequireSingleBatch)
 
   var batchBuilder: GpuColumnVector.GpuColumnarBatchBuilderBase = _
   var totalRows = 0
