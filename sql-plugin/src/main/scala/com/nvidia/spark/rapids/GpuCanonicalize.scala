@@ -57,8 +57,7 @@ object GpuCanonicalize {
   def ignoreTimeZone(e: Expression): Expression = e match {
     case c: CastBase if c.timeZoneId.nonEmpty && !c.needsTimeZone =>
       c.withTimeZone(null)
-    case c: GpuCast if c.timeZoneId.nonEmpty =>
-      // TODO when we start to support time zones check for `&& !c.needsTimeZone`
+    case c: GpuCast if c.timeZoneId.nonEmpty && !c.needsTimeZone =>
       c.withTimeZone(null)
     case _ => e
   }
