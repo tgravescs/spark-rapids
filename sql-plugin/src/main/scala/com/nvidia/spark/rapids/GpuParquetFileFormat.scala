@@ -49,6 +49,16 @@ object GpuParquetFileFormat {
 
     val parquetOptions = new ParquetOptions(options, sqlConf)
 
+    val PARQUET_ENCRYPTION_CONFS = Seq("parquet.encryption.kms.client.class",
+      "parquet.encryption.kms.client.class", "parquet.crypto.factory.class")
+    PARQUET_ENCRYPTION_CONFS.foreach { encryptConf =>
+      if (spark.sparkContext.hadoopConfiguration.get(encryptConf) != null) {
+        meta.willNotWorkOnGpu("Encryption is not yet supported on GPU. If encrypted Parquet " +
+          "writes are not required unset the \"parquet.encryption.column.keys\" and " +
+          "\"parquet.encryption.footer.key\" in Parquet options")
+      }
+    }
+
     val columnEncryption = options.getOrElse("parquet.encryption.column.keys", "")
     val footerEncryption = options.getOrElse("parquet.encryption.footer.key", "")
 
