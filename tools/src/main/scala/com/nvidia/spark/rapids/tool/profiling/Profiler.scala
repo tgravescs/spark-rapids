@@ -284,6 +284,7 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
     val sparkProps = collect.getProperties(rapidsOnly = false)
     val rapidsJar = collect.getRapidsJARInfo
     val sqlMetrics = collect.getSQLPlanMetrics
+    val sqlIOMetrics = CollectInformation.getIOMetrics(collect.getSQLAccumulators)
     val wholeStage = collect.getWholeStageCodeGenMapping
     // for compare mode we just add in extra tables for matching across applications
     // the rest of the tables simply list all applications specified
@@ -341,7 +342,7 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
     (ApplicationSummaryInfo(appInfo, dsInfo, execInfo, jobInfo, rapidsProps, rapidsJar,
       sqlMetrics, jsMetAgg, sqlTaskAggMetrics, durAndCpuMet, skewInfo, failedTasks, failedStages,
       failedJobs, removedBMs, removedExecutors, unsupportedOps, sparkProps, sqlStageInfo,
-      wholeStage), compareRes)
+      wholeStage, sqlIOMetrics), compareRes)
   }
 
   def writeOutput(profileOutputWriter: ProfileOutputWriter,
@@ -398,7 +399,8 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
         appsSum.flatMap(_.unsupportedOps).sortBy(_.appIndex),
         combineProps(rapidsOnly=false, appsSum).sortBy(_.key),
         appsSum.flatMap(_.sqlStageInfo).sortBy(_.duration)(Ordering[Option[Long]].reverse),
-        appsSum.flatMap(_.wholeStage).sortBy(_.appIndex)
+        appsSum.flatMap(_.wholeStage).sortBy(_.appIndex),
+        appsSum.flatMap(_.sqlIOMetrics).sortBy(_.appIndex)
       )
       Seq(reduced)
     } else {
@@ -417,6 +419,8 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
         Some("Spark Properties"))
       profileOutputWriter.write("Rapids Accelerator Jar and cuDF Jar", app.rapidsJar,
         Some("Rapids 4 Spark Jars"))
+      profileOutputWriter.write("SQL IO Plan Metrics for Application", app.sqlIOMetrics,
+        Some("SQL IO Plan Metrics"))
       profileOutputWriter.write("SQL Plan Metrics for Application", app.sqlMetrics,
         Some("SQL Plan Metrics"))
       profileOutputWriter.write("WholeStageCodeGen Mapping", app.wholeStage,

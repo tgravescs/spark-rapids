@@ -16,10 +16,11 @@
 
 package com.nvidia.spark.rapids.tool.profiling
 
-import java.text.NumberFormat
 import java.util.{Arrays, Locale}
 
+import scala.collection.immutable
 import scala.collection.mutable.{ArrayBuffer, HashMap}
+import scala.concurrent.duration._
 
 import com.nvidia.spark.rapids.tool.ToolTextFileWriter
 
@@ -34,6 +35,8 @@ case class StageMetrics(numTasks: Int, duration: String)
  * Such as executors, parameters, etc.
  */
 class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
+
+  var sqlAccums: Option[Map[Int, Seq[SQLAccumProfileResults]]] = None
 
   def getAppInfo: Seq[AppInfoProfileResults] = {
     val allRows = apps.map { app =>
@@ -198,21 +201,28 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
 
   // Print SQL Plan Metrics
   def getSQLPlanMetrics: Seq[SQLAccumProfileResults] = {
-    val sqlAccums = CollectInformation.generateSQLAccums(apps)
-    if (sqlAccums.size > 0) {
-      sqlAccums.sortBy(cols => (cols.appIndex, cols.sqlID, cols.nodeID,
+    val acummsToReport = getSQLAccumulators.values.flatten.toSeq
+    if (acummsToReport.size > 0) {
+      acummsToReport.sortBy(cols => (cols.appIndex, cols.sqlID, cols.nodeID,
         cols.nodeName, cols.accumulatorId, cols.metricType))
     } else {
       Seq.empty
     }
   }
+
+  def getSQLAccumulators(): Map[Int, Seq[SQLAccumProfileResults]] = {
+    if (!sqlAccums.isDefined) {
+      sqlAccums = Some(CollectInformation.generateSQLAccums(apps))
+    }
+    sqlAccums.get
+  }
 }
 
 object CollectInformation extends Logging {
 
-  def generateSQLAccums(apps: Seq[ApplicationInfo]): Seq[SQLAccumProfileResults] = {
-    val allRows = apps.flatMap { app =>
-      app.allSQLMetrics.map { metric =>
+  def generateSQLAccums(apps: Seq[ApplicationInfo]): Map[Int, Seq[SQLAccumProfileResults]] = {
+    apps.map { app =>
+      val metricResults = app.allSQLMetrics.flatMap { metric =>
         val sqlId = metric.sqlID
         val jobsForSql = app.jobIdToInfo.filter { case (_, jc) =>
           jc.sqlID.getOrElse(-1) == sqlId
@@ -262,21 +272,53 @@ object CollectInformation extends Logging {
           Some(SQLAccumProfileResults(app.index, metric.sqlID,
             metric.nodeID, metric.nodeName, metric.accumulatorId,
             metric.name, max, metric.metricType, metric.stageIds.mkString(","),
-            toNumberFormat(max),
-            toNumberFormat(individualTaskMax.getOrElse(0)),
-            toNumberFormat(individualTaskMedian.getOrElse(0))))
+            msDurationToString(max.nanos.toMillis),
+            msDurationToString(individualTaskMax.getOrElse(0).nanos.toMillis),
+            msDurationToString(individualTaskMedian.getOrElse(0).nanos.toMillis)))
         } else {
           None
         }
       }
-    }
-    allRows.filter(_.isDefined).map(_.get)
+      (app.index, metricResults.toSeq)
+    }.toMap
   }
 
-  private val baseForAvgMetric: Int = 10
-  def toNumberFormat(value: Long): String = {
-    val numberFormat = NumberFormat.getNumberInstance(Locale.US)
-    numberFormat.format(value.toDouble / baseForAvgMetric)
+  /**
+   * Returns a human-readable string representing a duration such as "35ms"
+   */
+  def msDurationToString(ms: Long): String = {
+    val second = 1000
+    val minute = 60 * second
+    val hour = 60 * minute
+    val locale = Locale.US
+
+    ms match {
+      case t if t < second =>
+        "%d ms".formatLocal(locale, t)
+      case t if t < minute =>
+        "%.1f s".formatLocal(locale, t.toFloat / second)
+      case t if t < hour =>
+        "%.1f m".formatLocal(locale, t.toFloat / minute)
+      case t =>
+        "%.2f h".formatLocal(locale, t.toFloat / hour)
+    }
+  }
+
+  val ioMetrics = immutable.HashSet("buffer time", "scan time", "size of files read",
+    "GPU decode time", "number of files read", "static size of files read",
+    "static number of files read",
+    "shuffle write time", "fetch wait time", "job commit time", "GPU time",
+    "task commit time", "remote blocks read", "local blocks read", "remote bytes read",
+    "local bytes read", "concat batch time")
+  val ioExecs = immutable.HashSet("GpuShuffleCoalesce")
+  def getIOMetrics(metrics: Map[Int, Seq[SQLAccumProfileResults]]):
+    Map[Int, Seq[SQLAccumProfileResults]] = {
+    metrics.map { case (appId, accumResults) =>
+      val ioResults = accumResults.filter{ accum =>
+        ioMetrics.contains(accum.name) || ioExecs.contains(accum.nodeName)
+      }
+      (appId, ioResults)
+    }
   }
 
   def printSQLPlans(apps: Seq[ApplicationInfo], outputDir: String): Unit = {
