@@ -273,8 +273,8 @@ object CollectInformation extends Logging {
             metric.nodeID, metric.nodeName, metric.accumulatorId,
             metric.name, max, metric.metricType, metric.stageIds.mkString(","),
             msDurationToString(max.nanos.toMillis),
-            msDurationToString(individualTaskMax.getOrElse(0).nanos.toMillis),
-            msDurationToString(individualTaskMedian.getOrElse(0).nanos.toMillis)))
+            msDurationToString(individualTaskMax.getOrElse(0L).nanos.toMillis),
+            msDurationToString(individualTaskMedian.getOrElse(0L).nanos.toMillis)))
         } else {
           None
         }

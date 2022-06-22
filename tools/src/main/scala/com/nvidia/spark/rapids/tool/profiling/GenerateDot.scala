@@ -84,7 +84,7 @@ object GenerateDot {
   }
 
   def apply(app: ApplicationInfo, outputDirectory: String): Unit = {
-    val accums = CollectInformation.generateSQLAccums(Seq(app)).values.toSeq
+    val accums = CollectInformation.generateSQLAccums(Seq(app)).values.flatten.toSeq
     val accumSummary = accums.map { a =>
       Seq(a.sqlID, a.accumulatorId, a.max_value)
     }

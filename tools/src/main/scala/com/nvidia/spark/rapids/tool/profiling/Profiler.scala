@@ -342,7 +342,7 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
     (ApplicationSummaryInfo(appInfo, dsInfo, execInfo, jobInfo, rapidsProps, rapidsJar,
       sqlMetrics, jsMetAgg, sqlTaskAggMetrics, durAndCpuMet, skewInfo, failedTasks, failedStages,
       failedJobs, removedBMs, removedExecutors, unsupportedOps, sparkProps, sqlStageInfo,
-      wholeStage, sqlIOMetrics), compareRes)
+      wholeStage, sqlIOMetrics.values.flatten.toSeq), compareRes)
   }
 
   def writeOutput(profileOutputWriter: ProfileOutputWriter,
