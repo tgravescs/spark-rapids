@@ -16,6 +16,7 @@
 
 package com.nvidia.spark.rapids.tool.profiling
 
+import java.util.Arrays
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import com.nvidia.spark.rapids.tool.ToolTextFileWriter
@@ -212,23 +213,29 @@ object CollectInformation extends Logging {
       app.allSQLMetrics.map { metric =>
         val sqlId = metric.sqlID
         val jobsForSql = app.jobIdToInfo.filter { case (_, jc) =>
-          val jcid = jc.sqlID.getOrElse(-1)
           jc.sqlID.getOrElse(-1) == sqlId
         }
         val stageIdsForSQL = jobsForSql.flatMap(_._2.stageIds).toSeq
         val accumsOpt = app.taskStageAccumMap.get(metric.accumulatorId)
-        val taskMax = accumsOpt match {
+        val (maxValue, individualTaskMax, individualTaskMedian) = accumsOpt match {
           case Some(accums) =>
             val filtered = accums.filter { a =>
               stageIdsForSQL.contains(a.stageId)
             }
+            val updateValues = filtered.map(_.update.getOrElse(0L))
+            val (max, median) = if (updateValues.isEmpty) {
+              (None, None)
+            } else {
+              Arrays.sort(updateValues.toArray)
+              (Some(updateValues.max), Some(updateValues(updateValues.length / 2)))
+            }
             val accumValues = filtered.map(_.value.getOrElse(0L))
             if (accumValues.isEmpty) {
-              None
+              (None, max, median)
             } else {
-              Some(accumValues.max)
+              (Some(accumValues.max), max, median)
             }
-          case None => None
+          case None => (None, None, None)
         }
 
         // local mode driver gets updates
@@ -248,11 +255,12 @@ object CollectInformation extends Logging {
             None
         }
 
-        if ((taskMax.isDefined) || (driverMax.isDefined)) {
-          val max = Math.max(driverMax.getOrElse(0L), taskMax.getOrElse(0L))
+        if ((maxValue.isDefined) || (driverMax.isDefined)) {
+          val max = Math.max(driverMax.getOrElse(0L), maxValue.getOrElse(0L))
           Some(SQLAccumProfileResults(app.index, metric.sqlID,
             metric.nodeID, metric.nodeName, metric.accumulatorId,
-            metric.name, max, metric.metricType, metric.stageIds.mkString(",")))
+            metric.name, max, metric.metricType, metric.stageIds.mkString(","),
+            individualTaskMax.getOrElse(0), individualTaskMedian.getOrElse(0)))
         } else {
           None
         }
