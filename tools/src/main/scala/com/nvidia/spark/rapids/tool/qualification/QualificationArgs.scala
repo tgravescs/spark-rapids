@@ -131,6 +131,9 @@ Usage: java -cp rapids-4-spark-tools_2.12-<version>.jar:$SPARK_HOME/jars/*
       prefix = "no-",
       descrYes = "Generates an HTML Report. Enabled by default.",
       descrNo = "Disables generating the HTML report.")
+  val perSql : ScallopOption[Boolean] =
+    opt[Boolean](required = false,
+      descr = "Report at the individual SQL query level vs at the application level.")
 
   validate(order) {
     case o if (QualificationArgs.isOrderAsc(o) || QualificationArgs.isOrderDesc(o)) => Right(Unit)

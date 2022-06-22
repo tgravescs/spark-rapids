@@ -30,8 +30,8 @@ import org.apache.spark.sql.rapids.tool.ui.QualificationReportGenerator
 
 class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     timeout: Option[Long], nThreads: Int, order: String,
-    pluginTypeChecker: PluginTypeChecker,
-    reportReadSchema: Boolean, printStdout: Boolean, uiEnabled: Boolean) extends Logging {
+    pluginTypeChecker: PluginTypeChecker, reportReadSchema: Boolean,
+    printStdout: Boolean, uiEnabled: Boolean, reportSqlLevel: Boolean) extends Logging {
 
   private val allApps = new ConcurrentLinkedQueue[QualificationSummaryInfo]()
 
@@ -73,6 +73,10 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     qWriter.writeReport(allAppsSum, estimatedSorted, numRows)
     val sortedDetailed = sortForCSVDetailedReport(allAppsSum)
     qWriter.writeDetailedReport(sortedDetailed)
+    // TODO - when this option do we want to not report at app level?  probably
+    if (reportSqlLevel) {
+      qWriter.writePerSqlReport(allAppsSum, order)
+    }
     qWriter.writeExecReport(allAppsSum, order)
     qWriter.writeStageReport(allAppsSum, order)
     if (uiEnabled) {
