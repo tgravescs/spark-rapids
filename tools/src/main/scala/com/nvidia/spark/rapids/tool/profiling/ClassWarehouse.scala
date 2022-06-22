@@ -158,8 +158,8 @@ class SQLExecutionInfoClass(
 
 case class SQLAccumProfileResults(appIndex: Int, sqlID: Long, nodeID: Long,
     nodeName: String, accumulatorId: Long, name: String, max_value: Long,
-    metricType: String, stageIds: String, valueFormatted: String, taskMax: String,
-    taskMedian: String) extends ProfileResult {
+    metricType: String, stageIds: String, valueFormatted: String,
+    taskMax: String, taskMedian: String) extends ProfileResult {
   override val outputHeaders = Seq("appIndex", "sqlID", "nodeID", "nodeName", "accumulatorId",
     "name", "value", "metricType", "stageIds", "taskMax", "taskMedian", "value(ns)")
   override def convertToSeq: Seq[String] = {

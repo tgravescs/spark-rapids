@@ -273,6 +273,7 @@ object CollectInformation extends Logging {
     allRows.filter(_.isDefined).map(_.get)
   }
 
+  private val baseForAvgMetric: Int = 10
   def toNumberFormat(value: Long): String = {
     val numberFormat = NumberFormat.getNumberInstance(Locale.US)
     numberFormat.format(value.toDouble / baseForAvgMetric)
