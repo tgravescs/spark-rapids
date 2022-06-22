@@ -16,7 +16,9 @@
 
 package com.nvidia.spark.rapids.tool.profiling
 
-import java.util.Arrays
+import java.text.NumberFormat
+import java.util.{Arrays, Locale}
+
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import com.nvidia.spark.rapids.tool.ToolTextFileWriter
@@ -260,13 +262,20 @@ object CollectInformation extends Logging {
           Some(SQLAccumProfileResults(app.index, metric.sqlID,
             metric.nodeID, metric.nodeName, metric.accumulatorId,
             metric.name, max, metric.metricType, metric.stageIds.mkString(","),
-            individualTaskMax.getOrElse(0), individualTaskMedian.getOrElse(0)))
+            toNumberFormat(max),
+            toNumberFormat(individualTaskMax.getOrElse(0)),
+            toNumberFormat(individualTaskMedian.getOrElse(0))))
         } else {
           None
         }
       }
     }
     allRows.filter(_.isDefined).map(_.get)
+  }
+
+  def toNumberFormat(value: Long): String = {
+    val numberFormat = NumberFormat.getNumberInstance(Locale.US)
+    numberFormat.format(value.toDouble / baseForAvgMetric)
   }
 
   def printSQLPlans(apps: Seq[ApplicationInfo], outputDir: String): Unit = {
