@@ -16,6 +16,8 @@
 
 package com.nvidia.spark.rapids.tool.profiling
 
+import java.math.{MathContext, RoundingMode}
+import java.text.NumberFormat
 import java.util.{Arrays, Locale}
 
 import scala.collection.immutable
@@ -26,7 +28,9 @@ import com.nvidia.spark.rapids.tool.ToolTextFileWriter
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.resource.ResourceProfile
+import org.apache.spark.sql.execution.metric.SQLMetrics.{METRICS_NAME_SUFFIX, toNumberFormat}
 import org.apache.spark.sql.rapids.tool.profiling.ApplicationInfo
+import org.apache.spark.util.Utils
 
 case class StageMetrics(numTasks: Int, duration: String)
 
@@ -220,6 +224,10 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
 
 object CollectInformation extends Logging {
 
+  private val SIZE_METRIC = "size"
+  private val TIMING_METRIC = "timing"
+  private val NS_TIMING_METRIC = "nsTiming"
+
   def generateSQLAccums(apps: Seq[ApplicationInfo]): Map[Int, Seq[SQLAccumProfileResults]] = {
     apps.map { app =>
       val metricResults = app.allSQLMetrics.flatMap { metric =>
@@ -267,19 +275,30 @@ object CollectInformation extends Logging {
             None
         }
 
+        val strFormat: Long => String = if (metric.metricType == SIZE_METRIC) {
+          bytesToString
+        } else if (metric.metricType == TIMING_METRIC) {
+          msDurationToString
+        } else if (metric.metricType == NS_TIMING_METRIC) {
+          duration => msDurationToString(duration.nanos.toMillis)
+        } else {
+          // leave unformatted
+          metricVal => metricVal.toString
+        }
+
         if ((maxValue.isDefined) || (driverMax.isDefined)) {
           val max = Math.max(driverMax.getOrElse(0L), maxValue.getOrElse(0L))
           Some(SQLAccumProfileResults(app.index, metric.sqlID,
             metric.nodeID, metric.nodeName, metric.accumulatorId,
             metric.name, max, metric.metricType, metric.stageIds.mkString(","),
-            msDurationToString(max.nanos.toMillis),
-            msDurationToString(individualTaskMax.getOrElse(0L).nanos.toMillis),
-            msDurationToString(individualTaskMedian.getOrElse(0L).nanos.toMillis)))
+            strFormat(max),
+            strFormat(individualTaskMax.getOrElse(0L)),
+            strFormat(individualTaskMedian.getOrElse(0L))))
         } else {
           None
         }
       }
-      (app.index, metricResults.toSeq)
+      (app.index, metricResults)
     }.toMap
   }
 
@@ -304,18 +323,59 @@ object CollectInformation extends Logging {
     }
   }
 
+  /**
+   * Convert a quantity in bytes to a human-readable string such as "4.0 MiB".
+   */
+  def bytesToString(size: Long): String = bytesToString(BigInt(size))
+
+  def bytesToString(size: BigInt): String = {
+    val EiB = 1L << 60
+    val PiB = 1L << 50
+    val TiB = 1L << 40
+    val GiB = 1L << 30
+    val MiB = 1L << 20
+    val KiB = 1L << 10
+
+    if (size >= BigInt(1L << 11) * EiB) {
+      // The number is too large, show it in scientific notation.
+      BigDecimal(size, new MathContext(3, RoundingMode.HALF_UP)).toString() + " B"
+    } else {
+      val (value, unit) = {
+        if (size >= 2 * EiB) {
+          (BigDecimal(size) / EiB, "EiB")
+        } else if (size >= 2 * PiB) {
+          (BigDecimal(size) / PiB, "PiB")
+        } else if (size >= 2 * TiB) {
+          (BigDecimal(size) / TiB, "TiB")
+        } else if (size >= 2 * GiB) {
+          (BigDecimal(size) / GiB, "GiB")
+        } else if (size >= 2 * MiB) {
+          (BigDecimal(size) / MiB, "MiB")
+        } else if (size >= 2 * KiB) {
+          (BigDecimal(size) / KiB, "KiB")
+        } else {
+          (BigDecimal(size), "B")
+        }
+      }
+      "%.1f %s".formatLocal(Locale.US, value, unit)
+    }
+  }
+
+  // we don't really have metrics for how long shuffle read took
   val ioMetrics = immutable.HashSet("buffer time", "scan time", "size of files read",
     "GPU decode time", "number of files read", "static size of files read",
     "static number of files read",
     "shuffle write time", "fetch wait time", "job commit time", "GPU time",
     "task commit time", "remote blocks read", "local blocks read", "remote bytes read",
     "local bytes read", "concat batch time")
-  val ioExecs = immutable.HashSet("GpuShuffleCoalesce")
+  val pureIOMetrics = immutable.HashSet("buffer time",
+    "shuffle write time", "fetch wait time", "job commit time",
+    "task commit time")
   def getIOMetrics(metrics: Map[Int, Seq[SQLAccumProfileResults]]):
     Map[Int, Seq[SQLAccumProfileResults]] = {
     metrics.map { case (appId, accumResults) =>
       val ioResults = accumResults.filter{ accum =>
-        ioMetrics.contains(accum.name) || ioExecs.contains(accum.nodeName)
+        pureIOMetrics.contains(accum.name)
       }
       (appId, ioResults)
     }
