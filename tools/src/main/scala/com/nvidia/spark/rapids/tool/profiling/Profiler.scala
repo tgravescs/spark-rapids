@@ -285,6 +285,14 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
     val rapidsJar = collect.getRapidsJARInfo
     val sqlMetrics = collect.getSQLPlanMetrics
     val sqlIOMetrics = CollectInformation.getIOMetrics(collect.getSQLAccumulators)
+    sqlIOMetrics.foreach { case (app, metrics) =>
+      val sumOfIO = metrics.map(_.max_value).sum
+      logWarning(s"app index: $app sql IO summary: $sumOfIO")
+    }
+    apps.foreach { app =>
+      val totalTaskTime = app.taskEnd.map(_.duration).sum
+      logWarning(s"app index: ${app.index} total task time is: $totalTaskTime")
+    }
     val wholeStage = collect.getWholeStageCodeGenMapping
     // for compare mode we just add in extra tables for matching across applications
     // the rest of the tables simply list all applications specified
