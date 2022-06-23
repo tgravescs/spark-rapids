@@ -304,7 +304,7 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
             metric.max_value
           }
         }.sum
-        logWarning(s"app index: ${app} metrics: $name total $summary)
+        logWarning(s"app index: ${app} metrics: $name total $summary")
       }
     }
     apps.foreach { app =>

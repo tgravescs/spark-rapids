@@ -47,7 +47,8 @@ case class GpuShuffleCoalesceExec(child: SparkPlan, targetBatchByteSize: Long)
     OP_TIME -> createNanoTimingMetric(MODERATE_LEVEL, DESCRIPTION_OP_TIME),
     NUM_INPUT_ROWS -> createMetric(DEBUG_LEVEL, DESCRIPTION_NUM_INPUT_ROWS),
     NUM_INPUT_BATCHES -> createMetric(DEBUG_LEVEL, DESCRIPTION_NUM_INPUT_BATCHES),
-    CONCAT_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_CONCAT_TIME)
+    CONCAT_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_CONCAT_TIME),
+    SHUFFLE_READ_TIME -> createNanoTimingMetric(DEBUG_LEVEL, DESCRIPTION_SHUFFLE_READ_TIME)
   ) ++ semaphoreMetrics
 
   override def output: Seq[Attribute] = child.output
@@ -86,6 +87,7 @@ class HostShuffleCoalesceIterator(
   private[this] val concatTimeMetric = metricsMap(GpuMetric.CONCAT_TIME)
   private[this] val inputBatchesMetric = metricsMap(GpuMetric.NUM_INPUT_BATCHES)
   private[this] val inputRowsMetric = metricsMap(GpuMetric.NUM_INPUT_ROWS)
+  private[this] val shuffleReadtime = metricsMap(GpuMetric.SHUFFLE_READ_TIME)
   private[this] val serializedTables = new util.ArrayDeque[SerializedTableColumn]
   private[this] var numTablesInBatch: Int = 0
   private[this] var numRowsInBatch: Int = 0
@@ -160,7 +162,9 @@ class HostShuffleCoalesceIterator(
   }
 
   override def hasNext(): Boolean = {
-    bufferNextBatch()
+    withResource(new MetricRange(shuffleReadtime)) { _ =>
+      bufferNextBatch()
+    }
     numTablesInBatch > 0
   }
 
