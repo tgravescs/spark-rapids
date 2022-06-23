@@ -285,8 +285,15 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
     val rapidsJar = collect.getRapidsJARInfo
     val sqlMetrics = collect.getSQLPlanMetrics
     val sqlIOMetrics = CollectInformation.getIOMetrics(collect.getSQLAccumulators)
+    import scala.concurrent.duration._
     sqlIOMetrics.foreach { case (app, metrics) =>
-      val sumOfIO = metrics.map(_.max_value).sum
+      val sumOfIO = metrics.map { metric =>
+        if (metric.metricType == CollectInformation.NS_TIMING_METRIC) {
+          metric.max_value.nanos.toMillis
+        } else {
+          metric.max_value
+        }
+      }.sum
       logWarning(s"app index: $app sql IO summary: $sumOfIO")
     }
     apps.foreach { app =>

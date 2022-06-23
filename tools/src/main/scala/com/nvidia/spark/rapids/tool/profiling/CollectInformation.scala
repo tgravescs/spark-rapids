@@ -221,9 +221,9 @@ class CollectInformation(apps: Seq[ApplicationInfo]) extends Logging {
 
 object CollectInformation extends Logging {
 
-  private val SIZE_METRIC = "size"
-  private val TIMING_METRIC = "timing"
-  private val NS_TIMING_METRIC = "nsTiming"
+  val SIZE_METRIC = "size"
+  val TIMING_METRIC = "timing"
+  val NS_TIMING_METRIC = "nsTiming"
 
   def generateSQLAccums(apps: Seq[ApplicationInfo]): Map[Int, Seq[SQLAccumProfileResults]] = {
     apps.map { app =>
