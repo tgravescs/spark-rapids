@@ -366,7 +366,7 @@ object CollectInformation extends Logging {
     "task commit time", "remote blocks read", "local blocks read", "remote bytes read",
     "local bytes read", "concat batch time")
   val pureIOMetrics = immutable.HashSet("buffer time", "scan time", "GPU decode time",
-    "shuffle write time", "fetch wait time", "job commit time",
+    "shuffle write time", "fetch wait time", "job commit time", "GPU semaphore wait time",
     "task commit time")
   def getIOMetrics(metrics: Map[Int, Seq[SQLAccumProfileResults]]):
     Map[Int, Seq[SQLAccumProfileResults]] = {
