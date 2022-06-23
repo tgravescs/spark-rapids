@@ -17,7 +17,6 @@
 package com.nvidia.spark.rapids.tool.profiling
 
 import java.math.{MathContext, RoundingMode}
-import java.text.NumberFormat
 import java.util.{Arrays, Locale}
 
 import scala.collection.immutable
@@ -28,9 +27,7 @@ import com.nvidia.spark.rapids.tool.ToolTextFileWriter
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.resource.ResourceProfile
-import org.apache.spark.sql.execution.metric.SQLMetrics.{METRICS_NAME_SUFFIX, toNumberFormat}
 import org.apache.spark.sql.rapids.tool.profiling.ApplicationInfo
-import org.apache.spark.util.Utils
 
 case class StageMetrics(numTasks: Int, duration: String)
 
