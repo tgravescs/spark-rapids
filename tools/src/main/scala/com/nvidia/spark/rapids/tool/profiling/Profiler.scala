@@ -294,7 +294,18 @@ class Profiler(hadoopConf: Configuration, appArgs: ProfileArgs) extends Logging 
           metric.max_value
         }
       }.sum
-      logWarning(s"app index: $app sql IO summary: $sumOfIO")
+      logWarning(s"app index: ${app} sum IO is: $sumOfIO")
+
+      val perMetric = metrics.groupBy(_.name).foreach { case (name, metrics) =>
+        val summary = metrics.map { metric =>
+          if (metric.metricType == CollectInformation.NS_TIMING_METRIC) {
+            metric.max_value.nanos.toMillis
+          } else {
+            metric.max_value
+          }
+        }.sum
+        logWarning(s"app index: ${app} metrics: $name total $summary)
+      }
     }
     apps.foreach { app =>
       val totalTaskTime = app.taskEnd.map(_.duration).sum
