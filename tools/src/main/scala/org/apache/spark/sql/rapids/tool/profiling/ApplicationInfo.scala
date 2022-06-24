@@ -243,10 +243,13 @@ class ApplicationInfo(
 
   // Connects Operators to Stages using AccumulatorIDs
   def connectOperatorToStage(): Unit = {
+    logWarning(s"sql plan size: ${sqlPlan.size}")
     for ((sqlId, planInfo) <- sqlPlan) {
       val planGraph = SparkPlanGraph(planInfo)
       // Maps stages to operators by checking for non-zero intersection
       // between nodeMetrics and stageAccumulateIDs
+      logWarning(s"sql plan graph node size: ${planGraph.allNodes.size}")
+
       val nodeIdToStage = planGraph.allNodes.map { node =>
         val mappedStages = SQLPlanParser.getStagesInSQLNode(node, this)
         ((sqlId, node.id), mappedStages)
