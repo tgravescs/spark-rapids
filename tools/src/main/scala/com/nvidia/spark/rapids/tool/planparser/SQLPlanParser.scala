@@ -80,6 +80,7 @@ object SQLPlanParser extends Logging {
 
   def getStagesInSQLNode(node: SparkPlanGraphNode, app: AppBase): Seq[Int] = {
     val nodeAccums = node.metrics.map(_.accumulatorId)
+    logWarning(s"number of stage ids are: ${app.stageAccumulators.keys.size}")
     app.stageAccumulators.flatMap { case (stageId, stageAccums) =>
       logWarning(s"stage accum size: ${stageAccums.size}, node accums size: ${nodeAccums.size}")
       val startTime = System.nanoTime
