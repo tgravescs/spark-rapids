@@ -82,6 +82,10 @@ object SQLPlanParser extends Logging {
     val nodeAccums = node.metrics.map(_.accumulatorId)
     logWarning(s"number of stage ids are: ${app.stageAccumulators.keys.size}, " +
       s"node accums are: ${nodeAccums.size}")
+    val res = nodeAccums.flatMap { nodeAccumId =>
+      app.accumulatorToStage.get(nodeAccumId)
+    }
+    /*
     app.stageAccumulators.flatMap { case (stageId, stageAccums) =>
       // logWarning(s"stage accum size: ${stageAccums.size}, node accums size: ${nodeAccums.size}")
       val startTime = System.nanoTime
@@ -94,6 +98,9 @@ object SQLPlanParser extends Logging {
       // logWarning(s"time taken is ${timeTaken}ns")
       res
     }.toSeq
+
+     */
+    res
   }
 
   private val skipUDFCheckExecs = Seq("ArrowEvalPython", "AggregateInPandas",

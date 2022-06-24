@@ -399,6 +399,9 @@ abstract class EventProcessorBase[T <: AppBase](app: T) extends SparkListener wi
       stage.info.submissionTime)
     val stageAccumulatorIds = event.stageInfo.accumulables.values.map { m => m.id }.toSeq
     app.stageAccumulators.put(event.stageInfo.stageId, stageAccumulatorIds)
+    stageAccumulatorIds.foreach { accumId =>
+      app.accumulatorToStage.put(accumId, event.stageInfo.stageId)
+    }
   }
 
   override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
