@@ -80,27 +80,9 @@ object SQLPlanParser extends Logging {
 
   def getStagesInSQLNode(node: SparkPlanGraphNode, app: AppBase): Seq[Int] = {
     val nodeAccums = node.metrics.map(_.accumulatorId)
-    logWarning(s"number of stage ids are: ${app.stageAccumulators.keys.size}, " +
-      s"node accums are: ${nodeAccums.size}")
-    val res = nodeAccums.flatMap { nodeAccumId =>
+    nodeAccums.flatMap { nodeAccumId =>
       app.accumulatorToStage.get(nodeAccumId)
     }
-    /*
-    app.stageAccumulators.flatMap { case (stageId, stageAccums) =>
-      // logWarning(s"stage accum size: ${stageAccums.size}, node accums size: ${nodeAccums.size}")
-      val startTime = System.nanoTime
-      val res = if (nodeAccums.intersect(stageAccums).nonEmpty) {
-        Some(stageId)
-      } else {
-        None
-      }
-      val timeTaken = System.nanoTime - startTime
-      // logWarning(s"time taken is ${timeTaken}ns")
-      res
-    }.toSeq
-
-     */
-    res
   }
 
   private val skipUDFCheckExecs = Seq("ArrowEvalPython", "AggregateInPandas",
