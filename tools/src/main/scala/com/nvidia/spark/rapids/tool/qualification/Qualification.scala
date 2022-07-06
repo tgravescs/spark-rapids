@@ -74,7 +74,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     qWriter.writeDetailedReport(sortedDescDetailed)
     // TODO - when this option do we want to not report at app level?  probably
     if (reportSqlLevel) {
-      qWriter.writePerSqlReport(allAppsSum, order)
+      // qWriter.writePerSqlReport(allAppsSum, order)
     }
     qWriter.writeExecReport(allAppsSum, order)
     qWriter.writeStageReport(allAppsSum, order)

@@ -361,6 +361,30 @@ class QualificationAppInfo(
       val allSQLDurations = sqlIdToInfo.map { case (_, info) =>
         info.duration.getOrElse(0L)
       }
+
+      origPlanInfos.map { pInfo =>
+        sqlIdToInfo.get(pInfo.sqlID).map { info =>
+          val wallClockDur = info.duration.getOrElse(0L)
+          // get task duration ratio
+          val sqlStageSums = perSqlStageSummary.filter(_.sqlID == pInfo.sqlID)
+          val allStagesSummary = sqlStageSums.flatMap(_.stageSum)
+          val sqlDataframeTaskDuration = allStagesSummary.map(_.stageTaskTime).sum
+          val supportedSQLTaskDuration = calculateSQLSupportedTaskDuration(allStagesSummary)
+          val taskSpeedupFactor = calculateSpeedupFactor(allStagesSummary)
+
+          // get the ratio based on the Task durations that we will use for wall clock durations
+          val estimatedGPURatio = if (sqlDataframeTaskDuration > 0) {
+            supportedSQLTaskDuration.toDouble / sqlDataframeTaskDuration.toDouble
+          } else {
+            1
+          }
+          val estimatedInfo = QualificationAppInfo.calculateEstimatedInfoSummary(estimatedGPURatio,
+            wallClockDur, wallClockDur, taskSpeedupFactor, "test", appId,
+            sqlIDtoFailures.get(pInfo.sqlID).nonEmpty)
+          logInfo(s"the per sql estimated info for ${pInfo.sqlID} is $estimatedInfo")
+        }
+      }
+
       val sparkSQLDFWallClockDuration = allSQLDurations.sum
       val longestSQLDuration = if (allSQLDurations.size > 0) {
         allSQLDurations.max
@@ -439,6 +463,11 @@ case class EstimatedSummaryInfo(
     estimatedGpuSpeedup: Double, // app_duration / estimated_gpu_duration
     estimatedGpuTimeSaved: Double, // app_duration - estimated_gpu_duration
     recommendation: String)
+
+// Estimate based on wall clock times for each SQL query
+case class EstimatedPerSQLSummaryInfo(
+    sqlID: Long,
+    info: EstimatedSummaryInfo)
 
 case class SQLStageSummary(
     stageSum: Set[StageQualSummaryInfo],

@@ -68,6 +68,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean, printStdout
     }
   }
 
+  /*
   def writePerSqlReport(sums: Seq[QualificationSummaryInfo], order: String) : Unit = {
     val csvFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}_persql.csv",
       "Plan Exec Info")
@@ -86,6 +87,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean, printStdout
     }
   }
 
+   */
   def writeExecReport(sums: Seq[QualificationSummaryInfo], order: String) : Unit = {
     val csvFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}_execs.csv",
       "Plan Exec Info")
@@ -436,7 +438,39 @@ object QualOutputWriter {
     )
     detailedHeadersAndFields
   }
+/*
+  def constructPerSqlInfo(
+      sumInfo: QualificationSummaryInfo,
+      headersAndSizes: LinkedHashMap[String, Int],
+      delimiter: String = "|",
+      prettyPrint: Boolean): Seq[String] = {
+    val appId = sumInfo.appId
+    sumInfo.planInfo.map {p =>
+      p.execInfo.map { eInfo =>
+        eInfo.duration
+      }
+    }
 
+
+
+      val data = ListBuffer[(String, Int)](
+        sumInfo.appName -> headersAndSizes(APP_NAME_STR),
+        stringIfempty(appId) -> headersAndSizes(APP_ID_STR),
+        planInfo.sqlID -> headersAndSizes(SQL_ID_STR),
+
+        sumInfo.appDur.toString -> APP_DUR_STR_SIZE,
+        sumInfo.sqlDfDuration.toString -> SQL_DUR_STR_SIZE,
+        sumInfo.gpuOpportunity.toString -> GPU_OPPORTUNITY_STR_SIZE,
+        ToolUtils.formatDoublePrecision(sumInfo.estimatedGpuDur) -> ESTIMATED_GPU_DURATION.size,
+        ToolUtils.formatDoublePrecision(sumInfo.estimatedGpuSpeedup) -> ESTIMATED_GPU_SPEEDUP.size,
+        ToolUtils.formatDoublePrecision(sumInfo.estimatedGpuTimeSaved) ->
+          ESTIMATED_GPU_TIMESAVED.size,
+        sumInfo.recommendation -> SPEEDUP_BUCKET_STR_SIZE
+      )
+      constructOutputRow(data, delimiter, prettyPrint)
+    }
+  }
+*/
   def constructStagesInfo(
       sumInfo: QualificationSummaryInfo,
       headersAndSizes: LinkedHashMap[String, Int],
