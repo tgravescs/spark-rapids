@@ -69,16 +69,16 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean, printStdout
   }
 
   def writePerSqlReport(sums: Seq[QualificationSummaryInfo], order: String) : Unit = {
-    val csvFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}_execs.csv",
+    val csvFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}_persql.csv",
       "Plan Exec Info")
     try {
       val plans = sums.flatMap(_.planInfo)
       val allExecs = QualOutputWriter.getAllExecsFromPlan(plans)
       val headersAndSizes = QualOutputWriter
-        .getDetailedExecsHeaderStringsAndSizes(sums, allExecs.toSeq)
+        .getDetailedPerSqlHeaderStringsAndSizes(sums, allExecs.toSeq)
       csvFileWriter.write(QualOutputWriter.constructDetailedHeader(headersAndSizes, ",", false))
       sums.foreach { sumInfo =>
-        val rows = QualOutputWriter.constructExecsInfo(sumInfo, headersAndSizes, ",", false)
+        val rows = QualOutputWriter.constructPerSqlInfo(sumInfo, headersAndSizes, ",", false)
         rows.foreach(csvFileWriter.write(_))
       }
     } finally {
@@ -393,8 +393,6 @@ object QualOutputWriter {
       APP_NAME_STR -> getMaxSizeForHeader(appInfos.map(_.appName.size), APP_NAME_STR),
       APP_ID_STR -> QualOutputWriter.getAppIdSize(appInfos),
       SQL_ID_STR -> SQL_ID_STR.size,
-
-      APP_ID_STR -> appIdMaxSize,
       APP_DUR_STR -> APP_DUR_STR_SIZE,
       SQL_DUR_STR -> SQL_DUR_STR_SIZE,
       GPU_OPPORTUNITY_STR -> GPU_OPPORTUNITY_STR_SIZE,
@@ -402,18 +400,6 @@ object QualOutputWriter {
       ESTIMATED_GPU_SPEEDUP -> ESTIMATED_GPU_SPEEDUP.size,
       ESTIMATED_GPU_TIMESAVED -> ESTIMATED_GPU_TIMESAVED.size,
       SPEEDUP_BUCKET_STR -> SPEEDUP_BUCKET_STR_SIZE
-
-      EXEC_STR -> getMaxSizeForHeader(execInfos.map(_.exec.size), EXEC_STR),
-      EXPR_STR -> getMaxSizeForHeader(execInfos.map(_.expr.size), EXPR_STR),
-      SPEEDUP_FACTOR_STR -> SPEEDUP_FACTOR_STR.size,
-      EXEC_DURATION -> EXEC_DURATION.size,
-      EXEC_NODEID -> EXEC_NODEID.size,
-      EXEC_IS_SUPPORTED -> EXEC_IS_SUPPORTED.size,
-      EXEC_STAGES -> getMaxSizeForHeader(execInfos.map(_.stages.mkString(",").size), EXEC_STAGES),
-      EXEC_CHILDREN -> getMaxSizeForHeader(getChildrenSize(execInfos), EXEC_CHILDREN),
-      EXEC_CHILDREN_NODE_IDS -> getMaxSizeForHeader(getChildrenNodeIdsSize(execInfos),
-        EXEC_CHILDREN_NODE_IDS),
-      EXEC_SHOULD_REMOVE -> EXEC_SHOULD_REMOVE.size
     )
     detailedHeadersAndFields
   }
