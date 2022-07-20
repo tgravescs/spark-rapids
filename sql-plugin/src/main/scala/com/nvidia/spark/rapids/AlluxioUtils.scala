@@ -297,9 +297,10 @@ object AlluxioUtils extends Logging {
             org.apache.spark.sql.execution.datasources.PartitionPath(p.values, replacedPath)
           }
           val specAdjusted = PartitionSpec(spec.partitionColumns, partitionsReplaced)
+          val replacedPaths = fi.rootPaths.map {p => replaceFunc.get(p)}
           new InMemoryFileIndex(
             relation.sparkSession,
-            inputFiles,
+            replacedPaths,
             parameters,
             Option(relation.dataSchema),
             userSpecifiedPartitionSpec = Some(specAdjusted))
