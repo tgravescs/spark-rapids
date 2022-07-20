@@ -60,7 +60,7 @@ trait HostMemoryBuffersWithMetaDataBase {
 }
 
 // This is a common trait for all kind of file formats
-trait MultiFileReaderFunctions extends Arm {
+trait MultiFileReaderFunctions extends Arm with Logging {
 
   // Add partitioned columns into the batch
   protected def addPartitionValues(
@@ -68,8 +68,10 @@ trait MultiFileReaderFunctions extends Arm {
       inPartitionValues: InternalRow,
       partitionSchema: StructType): Option[ColumnarBatch] = {
     if (partitionSchema.nonEmpty) {
+      logWarning("TOM partition schema not empty: " + partitionSchema)
       batch.map { cb =>
         val partitionValues = inPartitionValues.toSeq(partitionSchema)
+        logWarning("partitions values are: " + partitionValues)
         val partitionScalars = ColumnarPartitionReaderWithPartitionValues
           .createPartitionValues(partitionValues, partitionSchema)
         withResource(partitionScalars) { scalars =>
