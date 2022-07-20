@@ -280,6 +280,7 @@ object AlluxioUtils extends Logging {
       val parameters: Map[String, String] = relation.options
 
       // infer PartitionSpec
+      /*
       val partitionSpec = GpuPartitioningUtils.inferPartitioning(
         relation.sparkSession,
         rootPaths,
@@ -287,8 +288,9 @@ object AlluxioUtils extends Logging {
         parameters,
         Option(relation.dataSchema),
         replaceFunc.get)
+      */
 
-        if (relation.location.isInstanceOf[PartitioningAwareFileIndex]) {
+      if (relation.location.isInstanceOf[PartitioningAwareFileIndex]) {
           logWarning("In PartitioningAwareFileIndex")
           val fi = relation.location.asInstanceOf[PartitioningAwareFileIndex]
           val spec = fi.partitionSpec()
@@ -322,7 +324,7 @@ object AlluxioUtils extends Logging {
             Option(relation.dataSchema),
             userSpecifiedPartitionSpec = Some(specAdjusted))
         } else {
-          logWarning("In else type: " + relation.location.getClass)
+          /*logWarning("In else type: " + relation.location.getClass)
           // generate a new InMemoryFileIndex holding paths with alluxio schema
           new InMemoryFileIndex(
             relation.sparkSession,
@@ -330,6 +332,8 @@ object AlluxioUtils extends Logging {
             parameters,
             Option(relation.dataSchema),
             userSpecifiedPartitionSpec = Some(partitionSpec))
+          */
+          relation.location
         }
 
     } else {
