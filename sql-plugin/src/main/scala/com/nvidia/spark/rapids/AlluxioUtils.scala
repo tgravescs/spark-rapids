@@ -99,7 +99,7 @@ object AlluxioUtils extends Logging {
   }
 
   private def getSchemeAndBucketFromPath(path: String) : (String, String) = {
-    i = path.split("//")
+    val i = path.split("//")
     val scheme = i(0)
     if (i.length <= 1) {
       throw new RuntimeException(s"path $path is not expected for Alluxio auto mount")
@@ -289,6 +289,7 @@ object AlluxioUtils extends Logging {
         replaceFunc.get)
 
         if (relation.location.isInstanceOf[PartitioningAwareFileIndex]) {
+          logWarning("In PartitioningAwareFileIndex")
           val fi = relation.location.asInstanceOf[PartitioningAwareFileIndex]
           val spec = fi.partitionSpec()
           val partitionsReplaced = spec.partitions.map { p =>
@@ -303,6 +304,7 @@ object AlluxioUtils extends Logging {
             Option(relation.dataSchema),
             userSpecifiedPartitionSpec = Some(specAdjusted))
         } else if (relation.location.isInstanceOf[CatalogFileIndex]) {
+          logWarning("In CatalogFileIndex")
           val fi = relation.location.asInstanceOf[CatalogFileIndex]
           val memFI = fi.filterPartitions(Nil)
           val spec = memFI.partitionSpec()
@@ -319,6 +321,7 @@ object AlluxioUtils extends Logging {
             Option(relation.dataSchema),
             userSpecifiedPartitionSpec = Some(specAdjusted))
         } else {
+          logWarning("In else type: " + relation.location.getClass)
           // generate a new InMemoryFileIndex holding paths with alluxio schema
           new InMemoryFileIndex(
             relation.sparkSession,
