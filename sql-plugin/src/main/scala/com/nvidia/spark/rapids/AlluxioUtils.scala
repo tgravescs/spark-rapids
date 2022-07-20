@@ -89,7 +89,6 @@ object AlluxioUtils extends Logging {
               mountedBuckets(bucket) = remote_path
               logInfo(s"Found mounted bucket $remote_path to /$bucket")
             }
-            }
           }
         } else {
           logWarning(s"Failed to run alluxio fs mount $ret")
