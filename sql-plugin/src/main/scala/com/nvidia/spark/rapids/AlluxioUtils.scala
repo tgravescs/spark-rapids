@@ -323,7 +323,8 @@ object AlluxioUtils extends Logging {
             Option(relation.dataSchema),
             userSpecifiedPartitionSpec = Some(specAdjusted))
         } else {
-          /*logWarning("In else type: " + relation.location.getClass)
+          logWarning("In else type: " + relation.location.getClass)
+          /*
           // generate a new InMemoryFileIndex holding paths with alluxio schema
           new InMemoryFileIndex(
             relation.sparkSession,
