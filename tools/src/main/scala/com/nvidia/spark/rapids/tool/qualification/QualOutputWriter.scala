@@ -204,6 +204,7 @@ case class FormattedQualificationSummaryInfo(
 object QualOutputWriter {
   val NON_SQL_TASK_DURATION_STR = "NonSQL Task Duration"
   val SQL_ID_STR = "SQL ID"
+  val SQL_DESC_STR = "SQL Description"
   val STAGE_ID_STR = "Stage ID"
   val APP_ID_STR = "App ID"
   val APP_NAME_STR = "App Name"
@@ -254,6 +255,11 @@ object QualOutputWriter {
   def getAppIdSize(sums: Seq[QualificationSummaryInfo]): Int = {
     val sizes = sums.map(_.appId.size)
     getMaxSizeForHeader(sizes, QualOutputWriter.APP_ID_STR)
+  }
+
+  def getSqlDescSize(sums: Seq[QualificationSummaryInfo]): Int = {
+    val sizes = sums.flatMap(_.perSQLEstimatedInfo).flatten.map(_.sqlDesc.size)
+    getMaxSizeForHeader(sizes, QualOutputWriter.SQL_DESC_STR)
   }
 
   private def getMaxSizeForHeader(sizes: Seq[Int], headerTxtStr: String): Int = {
@@ -403,6 +409,7 @@ object QualOutputWriter {
       APP_NAME_STR -> getMaxSizeForHeader(appInfos.map(_.appName.size), APP_NAME_STR),
       APP_ID_STR -> QualOutputWriter.getAppIdSize(appInfos),
       SQL_ID_STR -> SQL_ID_STR.size,
+      SQL_DESC_STR -> QualOutputWriter.getSqlDescSize(appInfos),
       APP_DUR_STR -> APP_DUR_STR_SIZE,
       SQL_DUR_STR -> SQL_DUR_STR_SIZE,
       GPU_OPPORTUNITY_STR -> GPU_OPPORTUNITY_STR_SIZE,
@@ -423,11 +430,14 @@ object QualOutputWriter {
     val data = ListBuffer[(String, Int)](
       sumInfo.info.appName -> headersAndSizes(APP_NAME_STR),
       sumInfo.info.appId -> appIdMaxSize,
+      sumInfo.sqlID.toString -> SQL_ID_STR.size,
+      sumInfo.sqlDesc -> headersAndSizes(SQL_DESC_STR),
       sumInfo.info.appDur.toString -> APP_DUR_STR_SIZE,
       sumInfo.info.sqlDfDuration.toString -> SQL_DUR_STR_SIZE,
       sumInfo.info.gpuOpportunity.toString -> GPU_OPPORTUNITY_STR_SIZE,
       ToolUtils.formatDoublePrecision(sumInfo.info.estimatedGpuDur) -> ESTIMATED_GPU_DURATION.size,
-      ToolUtils.formatDoublePrecision(sumInfo.info.estimatedGpuSpeedup) -> ESTIMATED_GPU_SPEEDUP.size,
+      ToolUtils.formatDoublePrecision(sumInfo.info.estimatedGpuSpeedup) ->
+        ESTIMATED_GPU_SPEEDUP.size,
       ToolUtils.formatDoublePrecision(sumInfo.info.estimatedGpuTimeSaved) ->
         ESTIMATED_GPU_TIMESAVED.size,
       sumInfo.info.recommendation -> SPEEDUP_BUCKET_STR_SIZE

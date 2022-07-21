@@ -346,7 +346,8 @@ class QualificationAppInfo(
       val problems = getAllPotentialProblems(getPotentialProblemsForDf, nestedComplexTypes)
 
       val origPlanInfos = sqlPlans.map { case (id, plan) =>
-        SQLPlanParser.parseSQLPlan(appId, plan, id, pluginTypeChecker, this)
+        val sqlDesc = sqlIdToInfo(id).description
+        SQLPlanParser.parseSQLPlan(appId, plan, id, sqlDesc, pluginTypeChecker, this)
       }.toSeq
 
       // filter out any execs that should be removed
@@ -385,7 +386,7 @@ class QualificationAppInfo(
               wallClockDur, wallClockDur, taskSpeedupFactor, "test", appId,
               sqlIDtoFailures.get(pInfo.sqlID).nonEmpty)
             logInfo(s"the per sql estimated info for ${pInfo.sqlID} is $estimatedInfo")
-            EstimatedPerSQLSummaryInfo(pInfo.sqlID, estimatedInfo)
+            EstimatedPerSQLSummaryInfo(pInfo.sqlID, pInfo.sqlDesc, estimatedInfo)
           }
         })
       } else {
@@ -474,6 +475,7 @@ case class EstimatedSummaryInfo(
 // Estimate based on wall clock times for each SQL query
 case class EstimatedPerSQLSummaryInfo(
     sqlID: Long,
+    sqlDesc: String,
     info: EstimatedSummaryInfo)
 
 case class SQLStageSummary(
