@@ -75,11 +75,12 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean, printStdout
       val plans = sums.flatMap(_.planInfo)
       val allExecs = QualOutputWriter.getAllExecsFromPlan(plans)
       val headersAndSizes = QualOutputWriter
-        .getDetailedPerSqlHeaderStringsAndSizes(sums, allExecs.toSeq)
+        .getDetailedPerSqlHeaderStringsAndSizes(sums)
       csvFileWriter.write(QualOutputWriter.constructDetailedHeader(headersAndSizes, ",", false))
       val appIdMaxSize = QualOutputWriter.getAppIdSize(sums)
       sums.foreach { sumInfo =>
-        val rows = QualOutputWriter.constructPerSqlInfo(sumInfo, headersAndSizes, appIdMaxSize, ",", false)
+        val rows = QualOutputWriter.constructPerSqlInfo(sumInfo, headersAndSizes,
+          appIdMaxSize, ",", false)
         rows.foreach(csvFileWriter.write(_))
       }
     } finally {
@@ -511,6 +512,7 @@ object QualOutputWriter {
           constructPerSqlSummaryInfo(info, headersAndSizes, appIdMaxSize, delimiter, prettyPrint)
         }
       case None => Seq.empty
+    }
   }
 
   def createFormattedQualSummaryInfo(
