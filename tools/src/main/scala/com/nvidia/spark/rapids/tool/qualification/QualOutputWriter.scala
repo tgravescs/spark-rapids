@@ -22,7 +22,7 @@ import com.nvidia.spark.rapids.tool.ToolTextFileWriter
 import com.nvidia.spark.rapids.tool.planparser.{ExecInfo, PlanInfo}
 
 import org.apache.spark.sql.rapids.tool.ToolUtils
-import org.apache.spark.sql.rapids.tool.qualification.{EstimatedSummaryInfo, QualificationAppInfo, QualificationSummaryInfo}
+import org.apache.spark.sql.rapids.tool.qualification.{EstimatedPerSQLSummaryInfo, EstimatedSummaryInfo, QualificationAppInfo, QualificationSummaryInfo}
 /**
  * This class handles the output files for qualification.
  * It can write both a raw csv file and then a text summary report.
@@ -68,7 +68,6 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean, printStdout
     }
   }
 
-  /*
   def writePerSqlReport(sums: Seq[QualificationSummaryInfo], order: String) : Unit = {
     val csvFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}_persql.csv",
       "Plan Exec Info")
@@ -78,8 +77,9 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean, printStdout
       val headersAndSizes = QualOutputWriter
         .getDetailedPerSqlHeaderStringsAndSizes(sums, allExecs.toSeq)
       csvFileWriter.write(QualOutputWriter.constructDetailedHeader(headersAndSizes, ",", false))
+      val appIdMaxSize = QualOutputWriter.getAppIdSize(sums)
       sums.foreach { sumInfo =>
-        val rows = QualOutputWriter.constructPerSqlInfo(sumInfo, headersAndSizes, ",", false)
+        val rows = QualOutputWriter.constructPerSqlInfo(sumInfo, headersAndSizes, appIdMaxSize, ",", false)
         rows.foreach(csvFileWriter.write(_))
       }
     } finally {
@@ -87,7 +87,6 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean, printStdout
     }
   }
 
-   */
   def writeExecReport(sums: Seq[QualificationSummaryInfo], order: String) : Unit = {
     val csvFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}_execs.csv",
       "Plan Exec Info")
@@ -368,6 +367,43 @@ object QualOutputWriter {
   private def getChildrenNodeIdsSize(execInfos: Seq[ExecInfo]): Seq[Int] = {
     execInfos.map(_.children.getOrElse(Seq.empty).map(_.nodeId).mkString(",").size)
   }
+  def getDetailedPerSqlHeaderStringsAndSizes(
+      appInfos: Seq[QualificationSummaryInfo]): LinkedHashMap[String, Int] = {
+    val detailedHeadersAndFields = LinkedHashMap[String, Int](
+      APP_NAME_STR -> getMaxSizeForHeader(appInfos.map(_.appName.size), APP_NAME_STR),
+      APP_ID_STR -> QualOutputWriter.getAppIdSize(appInfos),
+      SQL_ID_STR -> SQL_ID_STR.size,
+      APP_DUR_STR -> APP_DUR_STR_SIZE,
+      SQL_DUR_STR -> SQL_DUR_STR_SIZE,
+      GPU_OPPORTUNITY_STR -> GPU_OPPORTUNITY_STR_SIZE,
+      ESTIMATED_GPU_DURATION -> ESTIMATED_GPU_DURATION.size,
+      ESTIMATED_GPU_SPEEDUP -> ESTIMATED_GPU_SPEEDUP.size,
+      ESTIMATED_GPU_TIMESAVED -> ESTIMATED_GPU_TIMESAVED.size,
+      SPEEDUP_BUCKET_STR -> SPEEDUP_BUCKET_STR_SIZE
+    )
+    detailedHeadersAndFields
+  }
+
+  def constructPerSqlSummaryInfo(
+      sumInfo: EstimatedPerSQLSummaryInfo,
+      headersAndSizes: LinkedHashMap[String, Int],
+      appIdMaxSize: Int,
+      delimiter: String,
+      prettyPrint: Boolean): String = {
+    val data = ListBuffer[(String, Int)](
+      sumInfo.info.appName -> headersAndSizes(APP_NAME_STR),
+      sumInfo.info.appId -> appIdMaxSize,
+      sumInfo.info.appDur.toString -> APP_DUR_STR_SIZE,
+      sumInfo.info.sqlDfDuration.toString -> SQL_DUR_STR_SIZE,
+      sumInfo.info.gpuOpportunity.toString -> GPU_OPPORTUNITY_STR_SIZE,
+      ToolUtils.formatDoublePrecision(sumInfo.info.estimatedGpuDur) -> ESTIMATED_GPU_DURATION.size,
+      ToolUtils.formatDoublePrecision(sumInfo.info.estimatedGpuSpeedup) -> ESTIMATED_GPU_SPEEDUP.size,
+      ToolUtils.formatDoublePrecision(sumInfo.info.estimatedGpuTimeSaved) ->
+        ESTIMATED_GPU_TIMESAVED.size,
+      sumInfo.info.recommendation -> SPEEDUP_BUCKET_STR_SIZE
+    )
+    constructOutputRow(data, delimiter, prettyPrint)
+  }
 
   def getDetailedExecsHeaderStringsAndSizes(appInfos: Seq[QualificationSummaryInfo],
       execInfos: Seq[ExecInfo]): LinkedHashMap[String, Int] = {
@@ -385,23 +421,6 @@ object QualOutputWriter {
       EXEC_CHILDREN_NODE_IDS -> getMaxSizeForHeader(getChildrenNodeIdsSize(execInfos),
         EXEC_CHILDREN_NODE_IDS),
       EXEC_SHOULD_REMOVE -> EXEC_SHOULD_REMOVE.size
-    )
-    detailedHeadersAndFields
-  }
-
-  def getDetailedPerSqlHeaderStringsAndSizes(appInfos: Seq[QualificationSummaryInfo],
-      execInfos: Seq[ExecInfo]): LinkedHashMap[String, Int] = {
-    val detailedHeadersAndFields = LinkedHashMap[String, Int](
-      APP_NAME_STR -> getMaxSizeForHeader(appInfos.map(_.appName.size), APP_NAME_STR),
-      APP_ID_STR -> QualOutputWriter.getAppIdSize(appInfos),
-      SQL_ID_STR -> SQL_ID_STR.size,
-      APP_DUR_STR -> APP_DUR_STR_SIZE,
-      SQL_DUR_STR -> SQL_DUR_STR_SIZE,
-      GPU_OPPORTUNITY_STR -> GPU_OPPORTUNITY_STR_SIZE,
-      ESTIMATED_GPU_DURATION -> ESTIMATED_GPU_DURATION.size,
-      ESTIMATED_GPU_SPEEDUP -> ESTIMATED_GPU_SPEEDUP.size,
-      ESTIMATED_GPU_TIMESAVED -> ESTIMATED_GPU_TIMESAVED.size,
-      SPEEDUP_BUCKET_STR -> SPEEDUP_BUCKET_STR_SIZE
     )
     detailedHeadersAndFields
   }
@@ -438,39 +457,7 @@ object QualOutputWriter {
     )
     detailedHeadersAndFields
   }
-/*
-  def constructPerSqlInfo(
-      sumInfo: QualificationSummaryInfo,
-      headersAndSizes: LinkedHashMap[String, Int],
-      delimiter: String = "|",
-      prettyPrint: Boolean): Seq[String] = {
-    val appId = sumInfo.appId
-    sumInfo.planInfo.map {p =>
-      p.execInfo.map { eInfo =>
-        eInfo.duration
-      }
-    }
 
-
-
-      val data = ListBuffer[(String, Int)](
-        sumInfo.appName -> headersAndSizes(APP_NAME_STR),
-        stringIfempty(appId) -> headersAndSizes(APP_ID_STR),
-        planInfo.sqlID -> headersAndSizes(SQL_ID_STR),
-
-        sumInfo.appDur.toString -> APP_DUR_STR_SIZE,
-        sumInfo.sqlDfDuration.toString -> SQL_DUR_STR_SIZE,
-        sumInfo.gpuOpportunity.toString -> GPU_OPPORTUNITY_STR_SIZE,
-        ToolUtils.formatDoublePrecision(sumInfo.estimatedGpuDur) -> ESTIMATED_GPU_DURATION.size,
-        ToolUtils.formatDoublePrecision(sumInfo.estimatedGpuSpeedup) -> ESTIMATED_GPU_SPEEDUP.size,
-        ToolUtils.formatDoublePrecision(sumInfo.estimatedGpuTimeSaved) ->
-          ESTIMATED_GPU_TIMESAVED.size,
-        sumInfo.recommendation -> SPEEDUP_BUCKET_STR_SIZE
-      )
-      constructOutputRow(data, delimiter, prettyPrint)
-    }
-  }
-*/
   def constructStagesInfo(
       sumInfo: QualificationSummaryInfo,
       headersAndSizes: LinkedHashMap[String, Int],
@@ -510,6 +497,20 @@ object QualOutputWriter {
         .getOrElse(Seq.empty)
       children :+ constructExecInfoBuffer(info, appId, delimiter, prettyPrint, headersAndSizes)
     }
+  }
+
+  def constructPerSqlInfo(
+      sumInfo: QualificationSummaryInfo,
+      headersAndSizes: LinkedHashMap[String, Int],
+      appIdMaxSize: Int,
+      delimiter: String = "|",
+      prettyPrint: Boolean): Seq[String] = {
+    sumInfo.perSQLEstimatedInfo match {
+      case Some(infos) =>
+        infos.map { info =>
+          constructPerSqlSummaryInfo(info, headersAndSizes, appIdMaxSize, delimiter, prettyPrint)
+        }
+      case None => Seq.empty
   }
 
   def createFormattedQualSummaryInfo(

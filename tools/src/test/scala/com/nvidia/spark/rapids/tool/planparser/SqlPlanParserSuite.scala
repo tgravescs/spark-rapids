@@ -81,8 +81,9 @@ class SQLPlanParserSuite extends FunSuite with BeforeAndAfterEach with Logging {
       None, None, List(eventLog), hadoopConf)
     val pluginTypeChecker = new PluginTypeChecker()
     assert(allEventLogs.size == 1)
+    // TODO - add reportSqlLevel
     val appOption = QualificationAppInfo.createApp(allEventLogs.head, hadoopConf,
-      pluginTypeChecker)
+      pluginTypeChecker, false)
     assert(appOption.nonEmpty)
     appOption.get
   }

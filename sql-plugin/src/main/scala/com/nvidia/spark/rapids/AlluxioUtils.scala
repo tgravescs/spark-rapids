@@ -19,7 +19,7 @@ package com.nvidia.spark.rapids
 import org.apache.hadoop.fs.Path
 
 import org.apache.spark.sql.catalyst.expressions.{Expression, PlanExpression}
-import org.apache.spark.sql.execution.datasources.{FileIndex, HadoopFsRelation, InMemoryFileIndex}
+import org.apache.spark.sql.execution.datasources.{CatalogFileIndex, FileIndex, HadoopFsRelation, InMemoryFileIndex, PartitionSpec, PartitioningAwareFileIndex}
 import org.apache.spark.sql.execution.datasources.rapids.GpuPartitioningUtils
 
 object AlluxioUtils {
@@ -93,13 +93,50 @@ object AlluxioUtils {
           Option(relation.dataSchema),
           replaceFunc)
 
-        // generate a new InMemoryFileIndex holding paths with alluxio schema
-        new InMemoryFileIndex(
-          relation.sparkSession,
-          inputFiles,
-          parameters,
-          Option(relation.dataSchema),
-          userSpecifiedPartitionSpec = Some(partitionSpec))
+
+        if (relation.location.isInstanceOf[PartitioningAwareFileIndex]) {
+          val fi = relation.location.asInstanceOf[PartitioningAwareFileIndex]
+          val spec = fi.partitionSpec()
+          val partitionsReplaced = spec.partitions.map { p =>
+            val replacedPath = replaceFunc(p.path)
+            org.apache.spark.sql.execution.datasources.PartitionPath(p.values, replacedPath)
+          }
+          val specAdjusted = PartitionSpec(spec.partitionColumns, partitionsReplaced)
+          val replacedPaths = fi.rootPaths.map {p => replaceFunc(p)}
+
+          new InMemoryFileIndex(
+            relation.sparkSession,
+            replacedPaths,
+            parameters,
+            Option(relation.dataSchema),
+            userSpecifiedPartitionSpec = Some(specAdjusted))
+        } else if (relation.location.isInstanceOf[CatalogFileIndex]) {
+          val fi = relation.location.asInstanceOf[CatalogFileIndex]
+          val memFI = fi.filterPartitions(Nil)
+          val spec = memFI.partitionSpec()
+          val partitionsReplaced = spec.partitions.map { p =>
+            val replacedPath = replaceFunc(p.path)
+            org.apache.spark.sql.execution.datasources.PartitionPath(p.values, replacedPath)
+          }
+          val replacedPaths = memFI.rootPaths.map {p => replaceFunc(p)}
+          val specAdjusted = PartitionSpec(spec.partitionColumns, partitionsReplaced)
+          new InMemoryFileIndex(
+            relation.sparkSession,
+            replacedPaths,
+            parameters,
+            Option(relation.dataSchema),
+            userSpecifiedPartitionSpec = Some(specAdjusted))
+        } else {
+          val fi = relation.location
+          val pSchema = fi.partitionSchema
+          // generate a new InMemoryFileIndex holding paths with alluxio schema
+          new InMemoryFileIndex(
+            relation.sparkSession,
+            inputFiles,
+            parameters,
+            Option(relation.dataSchema),
+            userSpecifiedPartitionSpec = Some(partitionSpec))
+        }
       }).getOrElse(relation.location)
 
     } else {

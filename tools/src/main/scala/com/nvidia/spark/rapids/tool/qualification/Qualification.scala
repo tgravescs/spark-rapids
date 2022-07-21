@@ -80,7 +80,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     qWriter.writeDetailedReport(sortedDescDetailed)
     // TODO - when this option do we want to not report at app level?  probably
     if (reportSqlLevel) {
-      // qWriter.writePerSqlReport(allAppsSum, order)
+      qWriter.writePerSqlReport(allAppsSum, order)
     }
     qWriter.writeExecReport(allAppsSum, order)
     qWriter.writeStageReport(allAppsSum, order)
@@ -116,7 +116,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
       hadoopConf: Configuration): Unit = {
     try {
       val startTime = System.currentTimeMillis()
-      val app = QualificationAppInfo.createApp(path, hadoopConf, pluginTypeChecker)
+      val app = QualificationAppInfo.createApp(path, hadoopConf, pluginTypeChecker, reportSqlLevel)
       if (!app.isDefined) {
         progressBar.foreach(_.reportUnkownStatusProcess())
         logWarning(s"No Application found that contain SQL for ${path.eventLog.toString}!")

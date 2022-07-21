@@ -33,7 +33,8 @@ import org.apache.spark.sql.rapids.tool.{AppBase, GpuEventLogException, ToolUtil
 class QualificationAppInfo(
     eventLogInfo: Option[EventLogInfo],
     hadoopConf: Option[Configuration] = None,
-    pluginTypeChecker: PluginTypeChecker)
+    pluginTypeChecker: PluginTypeChecker,
+    reportSqlLevel: Boolean)
   extends AppBase(eventLogInfo, hadoopConf) with Logging {
 
   var appId: String = ""
@@ -362,27 +363,34 @@ class QualificationAppInfo(
         info.duration.getOrElse(0L)
       }
 
-      origPlanInfos.map { pInfo =>
-        sqlIdToInfo.get(pInfo.sqlID).map { info =>
-          val wallClockDur = info.duration.getOrElse(0L)
-          // get task duration ratio
-          val sqlStageSums = perSqlStageSummary.filter(_.sqlID == pInfo.sqlID)
-          val allStagesSummary = sqlStageSums.flatMap(_.stageSum)
-          val sqlDataframeTaskDuration = allStagesSummary.map(_.stageTaskTime).sum
-          val supportedSQLTaskDuration = calculateSQLSupportedTaskDuration(allStagesSummary)
-          val taskSpeedupFactor = calculateSpeedupFactor(allStagesSummary)
+      val perSqlInfos = if (reportSqlLevel) {
+        val sqlInfos = origPlanInfos.flatMap { pInfo =>
+          sqlIdToInfo.get(pInfo.sqlID).map { info =>
+            val wallClockDur = info.duration.getOrElse(0L)
+            // get task duration ratio
+            val sqlStageSums = perSqlStageSummary.filter(_.sqlID == pInfo.sqlID)
+            val allStagesSummary = sqlStageSums.flatMap(_.stageSum)
+            val sqlDataframeTaskDuration = allStagesSummary.map(_.stageTaskTime).sum
+            val supportedSQLTaskDuration = calculateSQLSupportedTaskDuration(allStagesSummary)
+            val taskSpeedupFactor = calculateSpeedupFactor(allStagesSummary)
 
-          // get the ratio based on the Task durations that we will use for wall clock durations
-          val estimatedGPURatio = if (sqlDataframeTaskDuration > 0) {
-            supportedSQLTaskDuration.toDouble / sqlDataframeTaskDuration.toDouble
-          } else {
-            1
+            // get the ratio based on the Task durations that we will use for wall clock durations
+            val estimatedGPURatio = if (sqlDataframeTaskDuration > 0) {
+              supportedSQLTaskDuration.toDouble / sqlDataframeTaskDuration.toDouble
+            } else {
+              1
+            }
+            val estimatedInfo =
+              QualificationAppInfo.calculateEstimatedInfoSummary(estimatedGPURatio,
+              wallClockDur, wallClockDur, taskSpeedupFactor, "test", appId,
+              sqlIDtoFailures.get(pInfo.sqlID).nonEmpty)
+            logInfo(s"the per sql estimated info for ${pInfo.sqlID} is $estimatedInfo")
+            EstimatedPerSQLSummaryInfo(pInfo.sqlID, estimatedInfo)
           }
-          val estimatedInfo = QualificationAppInfo.calculateEstimatedInfoSummary(estimatedGPURatio,
-            wallClockDur, wallClockDur, taskSpeedupFactor, "test", appId,
-            sqlIDtoFailures.get(pInfo.sqlID).nonEmpty)
-          logInfo(s"the per sql estimated info for ${pInfo.sqlID} is $estimatedInfo")
         }
+        Some(sqlInfos)
+      } else {
+        None
       }
 
       val sparkSQLDFWallClockDuration = allSQLDurations.sum
@@ -422,7 +430,7 @@ class QualificationAppInfo(
         allComplexTypes, nestedComplexTypes, longestSQLDuration, sqlDataframeTaskDuration,
         nonSQLTaskDuration, unsupportedSQLTaskDuration, supportedSQLTaskDuration,
         taskSpeedupFactor, info.sparkUser, info.startTime, origPlanInfos,
-        perSqlStageSummary.map(_.stageSum).flatten, estimatedInfo)
+        perSqlStageSummary.map(_.stageSum).flatten, estimatedInfo, perSqlInfos)
     }
   }
 
@@ -524,7 +532,8 @@ case class QualificationSummaryInfo(
     startTime: Long,
     planInfo: Seq[PlanInfo],
     stageInfo: Seq[StageQualSummaryInfo],
-    estimatedInfo: EstimatedSummaryInfo)
+    estimatedInfo: EstimatedSummaryInfo,
+    perSQLEstimatedInfo: Option[Seq[EstimatedPerSQLSummaryInfo]])
 
 case class StageQualSummaryInfo(
     stageId: Int,
@@ -589,9 +598,11 @@ object QualificationAppInfo extends Logging {
   def createApp(
       path: EventLogInfo,
       hadoopConf: Configuration,
-      pluginTypeChecker: PluginTypeChecker): Option[QualificationAppInfo] = {
+      pluginTypeChecker: PluginTypeChecker,
+      reportSqlLevel: Boolean): Option[QualificationAppInfo] = {
     val app = try {
-        val app = new QualificationAppInfo(Some(path), Some(hadoopConf), pluginTypeChecker)
+        val app = new QualificationAppInfo(Some(path), Some(hadoopConf), pluginTypeChecker,
+          reportSqlLevel)
         logInfo(s"${path.eventLog.toString} has App: ${app.appId}")
         Some(app)
       } catch {
