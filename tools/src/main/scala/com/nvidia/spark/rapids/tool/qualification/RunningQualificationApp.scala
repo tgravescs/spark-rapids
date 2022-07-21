@@ -49,7 +49,8 @@ import org.apache.spark.sql.rapids.tool.qualification._
  * }}}
  *
  */
-class RunningQualificationApp() extends QualificationAppInfo(None, None, new PluginTypeChecker()) {
+class RunningQualificationApp() extends QualificationAppInfo(None, None,
+  new PluginTypeChecker(), false) {
 
   // since application is running, try to initialize current state
   private def initApp(): Unit = {
