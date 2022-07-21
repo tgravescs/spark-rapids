@@ -364,7 +364,7 @@ class QualificationAppInfo(
       }
 
       val perSqlInfos = if (reportSqlLevel) {
-        val sqlInfos = origPlanInfos.flatMap { pInfo =>
+        Some(origPlanInfos.flatMap { pInfo =>
           sqlIdToInfo.get(pInfo.sqlID).map { info =>
             val wallClockDur = info.duration.getOrElse(0L)
             // get task duration ratio
@@ -387,8 +387,7 @@ class QualificationAppInfo(
             logInfo(s"the per sql estimated info for ${pInfo.sqlID} is $estimatedInfo")
             EstimatedPerSQLSummaryInfo(pInfo.sqlID, estimatedInfo)
           }
-        }
-        Some(sqlInfos)
+        })
       } else {
         None
       }

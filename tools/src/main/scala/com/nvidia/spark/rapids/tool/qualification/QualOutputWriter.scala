@@ -87,6 +87,34 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean, printStdout
       csvFileWriter.close()
     }
   }
+  private def writePerSqlTextSummary(writer: ToolTextFileWriter,
+      sums: Seq[QualificationSummaryInfo],
+      numOutputRows: Int): Unit = {
+    val appIdMaxSize = QualOutputWriter.getAppIdSize(sums)
+    val headersAndSizes = QualOutputWriter
+      .getDetailedPerSqlHeaderStringsAndSizes(sums)
+    val entireHeader = QualOutputWriter.constructOutputRowFromMap(headersAndSizes, "|", true)
+    val sep = "=" * (entireHeader.size - 1)
+    writer.write(s"$sep\n")
+    writer.write(entireHeader)
+    writer.write(s"$sep\n")
+    // write to stdout as well
+    if (printStdout) {
+      print(s"$sep\n")
+      print(entireHeader)
+      print(s"$sep\n")
+    }
+    val estSumPerSql = sums.flatMap(_.perSQLEstimatedInfo).flatten
+    val finalSums = estSumPerSql.take(numOutputRows)
+    finalSums.foreach { estInfo =>
+      val wStr = QualOutputWriter.constructPerSqlSummaryInfo(estInfo, headersAndSizes,
+        appIdMaxSize, "|", true)
+      writer.write(wStr)
+      if (printStdout) print(wStr)
+    }
+    writer.write(s"$sep\n")
+    if (printStdout) print(s"$sep\n")
+  }
 
   def writeExecReport(sums: Seq[QualificationSummaryInfo], order: String) : Unit = {
     val csvFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}_execs.csv",
@@ -113,6 +141,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean, printStdout
       "Summary report")
     try {
       writeTextSummary(textFileWriter, sums, estSums, numOutputRows)
+      writePerSqlTextSummary(textFileWriter, sums, numOutputRows)
     } finally {
       textFileWriter.close()
     }
