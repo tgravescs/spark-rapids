@@ -364,6 +364,7 @@ class QualificationAppInfo(
         info.duration.getOrElse(0L)
       }
 
+      val appName = appInfo.map(_.appName).getOrElse("")
       val perSqlInfos = if (reportSqlLevel) {
         Some(origPlanInfos.flatMap { pInfo =>
           sqlIdToInfo.get(pInfo.sqlID).map { info =>
@@ -383,7 +384,7 @@ class QualificationAppInfo(
             }
             val estimatedInfo =
               QualificationAppInfo.calculateEstimatedInfoSummary(estimatedGPURatio,
-              wallClockDur, wallClockDur, taskSpeedupFactor, "test", appId,
+              wallClockDur, wallClockDur, taskSpeedupFactor, appName, appId,
               sqlIDtoFailures.get(pInfo.sqlID).nonEmpty)
             logInfo(s"the per sql estimated info for ${pInfo.sqlID} is $estimatedInfo")
             EstimatedPerSQLSummaryInfo(pInfo.sqlID, pInfo.sqlDesc, estimatedInfo)
@@ -419,7 +420,6 @@ class QualificationAppInfo(
         1
       }
 
-      val appName = appInfo.map(_.appName).getOrElse("")
       val estimatedInfo = QualificationAppInfo.calculateEstimatedInfoSummary(estimatedGPURatio,
         sparkSQLDFWallClockDuration, appDuration, taskSpeedupFactor, appName, appId,
         sqlIdsWithFailures.nonEmpty)
