@@ -580,7 +580,11 @@ object QualificationAppInfo extends Logging {
     val estimated_wall_clock_dur_not_on_gpu = appDuration - speedupOpportunityWallClock
     val estimated_gpu_duration =
       (speedupOpportunityWallClock / speedupFactor) + estimated_wall_clock_dur_not_on_gpu
-    val estimated_gpu_speedup = appDuration / estimated_gpu_duration
+    val estimated_gpu_speedup = if (appDuration == 0 || estimated_gpu_duration == 0) {
+      appDuration / estimated_gpu_duration
+    } else {
+      0
+    }
     val estimated_gpu_timesaved = appDuration - estimated_gpu_duration
     val recommendation = getRecommendation(estimated_gpu_speedup, hasFailures)
 
