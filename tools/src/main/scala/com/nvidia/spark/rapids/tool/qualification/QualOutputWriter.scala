@@ -30,8 +30,10 @@ import org.apache.spark.sql.rapids.tool.qualification.{EstimatedPerSQLSummaryInf
  * @param outputDir The directory to output the files to
  * @param reportReadSchema Whether to include the read data source schema in csv output
  * @param printStdout Indicates if the summary report should be printed to stdout as well
+ * @param prettyPrintOrder The order in which to print the Text output
  */
-class QualOutputWriter(outputDir: String, reportReadSchema: Boolean, printStdout: Boolean) {
+class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
+    printStdout: Boolean, prettyPrintOrder: String) {
 
   // a file extension will be added to this later
   private val logFileName = "rapids_4_spark_qualification_output"
@@ -106,7 +108,16 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean, printStdout
     }
     val estSumPerSql = sums.flatMap(_.perSQLEstimatedInfo).flatten
     val finalSums = estSumPerSql.take(numOutputRows)
-    finalSums.foreach { estInfo =>
+    val sortedAsc = finalSums.sortBy(sum => {
+      (sum.info.recommendation, sum.info.estimatedGpuSpeedup,
+        sum.info.estimatedGpuTimeSaved, sum.info.appDur, sum.info.appId)
+    })
+    val sorted = if (QualificationArgs.isOrderAsc(prettyPrintOrder)) {
+      sortedAsc
+    } else {
+      sortedAsc.reverse
+    }
+    sorted.foreach { estInfo =>
       val wStr = QualOutputWriter.constructPerSqlSummaryInfo(estInfo, headersAndSizes,
         appIdMaxSize, "|", true)
       writer.write(wStr)

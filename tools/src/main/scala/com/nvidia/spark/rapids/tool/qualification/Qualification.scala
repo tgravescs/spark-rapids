@@ -72,7 +72,8 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     }
     progressBar.foreach(_.finishAll())
     val allAppsSum = allApps.asScala.toSeq
-    val qWriter = new QualOutputWriter(getReportOutputPath, reportReadSchema, printStdout)
+    val qWriter = new QualOutputWriter(getReportOutputPath, reportReadSchema, printStdout,
+      order)
     // sort order and limit only applies to the report summary text file,
     // the csv file we write the entire data in descending order
     val sortedDescDetailed = sortDescForDetailedReport(allAppsSum)
