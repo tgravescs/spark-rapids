@@ -290,20 +290,53 @@ object AlluxioUtils extends Logging {
         replaceFunc.get)
 
       logWarning("TOM partition spec inferred: " + partitionSpec)
-      if (relation.location.isInstanceOf[CatalogFileIndex]) {
-        val fi = relation.location.asInstanceOf[CatalogFileIndex]
-        val memFI = fi.filterPartitions(Nil)
-        val spec = memFI.partitionSpec()
-        logWarning("TOM catalogfileindex spec: " + spec)
-      }
-
-      // generate a new InMemoryFileIndex holding paths with alluxio schema
-      new InMemoryFileIndex(
-        relation.sparkSession,
-        inputFiles,
-        parameters,
-        Option(relation.dataSchema),
-        userSpecifiedPartitionSpec = Some(partitionSpec))
+      if (relation.location.isInstanceOf[PartitioningAwareFileIndex]) {
+          logWarning("In PartitioningAwareFileIndex")
+          val fi = relation.location.asInstanceOf[PartitioningAwareFileIndex]
+          val spec = fi.partitionSpec()
+          val partitionsReplaced = spec.partitions.map { p =>
+            val replacedPath = replaceFunc.get(p.path)
+            org.apache.spark.sql.execution.datasources.PartitionPath(p.values, replacedPath)
+          }
+          val specAdjusted = PartitionSpec(spec.partitionColumns, partitionsReplaced)
+          val replacedPaths = fi.rootPaths.map {p => replaceFunc.get(p)}
+          new InMemoryFileIndex(
+            relation.sparkSession,
+            replacedPaths,
+            parameters,
+            Option(relation.dataSchema),
+            userSpecifiedPartitionSpec = Some(specAdjusted))
+        } else if (relation.location.isInstanceOf[CatalogFileIndex]) {
+          logWarning("In CatalogFileIndex")
+          val fi = relation.location.asInstanceOf[CatalogFileIndex]
+          val memFI = fi.filterPartitions(Nil)
+          val spec = memFI.partitionSpec()
+          logWarning("TOM catalogfileindex spec: " + spec)
+          val partitionsReplaced = spec.partitions.map { p =>
+            val replacedPath = replaceFunc.get(p.path)
+            org.apache.spark.sql.execution.datasources.PartitionPath(p.values, replacedPath)
+          }
+          val replacedPaths = memFI.rootPaths.map {p => replaceFunc.get(p)}
+          val specAdjusted = PartitionSpec(spec.partitionColumns, partitionsReplaced)
+          new InMemoryFileIndex(
+            relation.sparkSession,
+            replacedPaths,
+            parameters,
+            Option(relation.dataSchema),
+            userSpecifiedPartitionSpec = Some(specAdjusted))
+        } else {
+          logWarning("In else type: " + relation.location.getClass)
+          logWarning("partition schema is: " + relation.location.partitionSchema)
+          logWarning("files is : " + relation.location.listFiles.mkString(","))
+          logWarning("rootPaths is : " + relation.location.rootPaths.mkString(","))
+          // generate a new InMemoryFileIndex holding paths with alluxio schema
+          new InMemoryFileIndex(
+            relation.sparkSession,
+            inputFiles,
+            parameters,
+            Option(relation.dataSchema),
+            userSpecifiedPartitionSpec = Some(partitionSpec))
+        }
     } else {
       relation.location
     }
