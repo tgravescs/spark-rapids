@@ -28,6 +28,7 @@ import scala.util.control.NonFatal
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{InternalRow, SQLConfHelper}
 import org.apache.spark.sql.catalyst.analysis.TypeCoercion
@@ -45,7 +46,7 @@ import org.apache.spark.unsafe.types.UTF8String
 
 
 
-object GpuPartitioningUtils extends SQLConfHelper {
+object GpuPartitioningUtils extends SQLConfHelper with Logging {
 
   case class TypedPartValue(value: String, dataType: DataType)
 
@@ -78,6 +79,7 @@ object GpuPartitioningUtils extends SQLConfHelper {
     val recursiveFileLookup = parameters.getOrElse("recursiveFileLookup", "false").toBoolean
 
     if (recursiveFileLookup) {
+      logWarning("TOM recursive file lookup")
       PartitionSpec.emptySpec
     } else {
       val caseInsensitiveOptions = CaseInsensitiveMap(parameters)
@@ -95,6 +97,7 @@ object GpuPartitioningUtils extends SQLConfHelper {
       val basePaths = getBasePaths(sparkSession.sessionState.newHadoopConfWithOptions(parameters),
         basePathOption, rootPaths, leafFiles)
 
+      logWarning("TOM parsePartitions: " + leafDirs)
       parsePartitions(
         leafDirs,
         typeInference = sparkSession.sessionState.conf.partitionColumnTypeInferenceEnabled,
@@ -171,7 +174,9 @@ object GpuPartitioningUtils extends SQLConfHelper {
   def castPartValueToDesiredType(
       desiredType: DataType,
       value: String,
-      zoneId: ZoneId): Any = desiredType match {
+      zoneId: ZoneId): Any = {
+    logWarning("TOM cast, desiredType is: " + desiredType)
+    desiredType match {
     case _ if value == DEFAULT_PARTITION_NAME => null
     case NullType => null
     case StringType => UTF8String.fromString(unescapePathName(value))
@@ -193,6 +198,7 @@ object GpuPartitioningUtils extends SQLConfHelper {
     case BinaryType => value.getBytes()
     case BooleanType => value.toBoolean
     case dt => throw QueryExecutionErrors.typeUnsupportedError(dt)
+    }
   }
 
   /**
@@ -299,6 +305,7 @@ object GpuPartitioningUtils extends SQLConfHelper {
           "please load them separately and then union them.")
 
       val resolvedPartitionValues = resolvePartitions(pathsWithPartitionValues, caseSensitive)
+      logWarning("TOM resolved partition values: " + resolvedPartitionValues.mkString(","))
 
       // Creates the StructType which represents the partition columns.
       val fields = {
@@ -362,7 +369,7 @@ object GpuPartitioningUtils extends SQLConfHelper {
       zoneId: ZoneId,
       dateFormatter: DateFormatter,
       timestampFormatter: TimestampFormatter): (Option[PartitionValues], Option[Path]) = {
-    val columns = ArrayBuffer.empty[(String, TypedPartValue)]
+          val columns = ArrayBuffer.empty[(String, TypedPartValue)]
     // Old Hadoop versions don't have `Path.isRoot`
     var finished = path.getParent == null
     // currentPath is the current path that we will use to parse partition column value.
@@ -433,8 +440,10 @@ object GpuPartitioningUtils extends SQLConfHelper {
       val dataType = if (userSpecifiedDataTypes.contains(columnName)) {
         // SPARK-26188: if user provides corresponding column schema, get the column value without
         //              inference, and then cast it as user specified data type.
+        logWarning("TOM data type specified")
         userSpecifiedDataTypes(columnName)
       } else {
+        logWarning("TOM data type inferred")
         inferPartitionColumnValue(
           rawColumnValue,
           typeInference,
@@ -442,6 +451,7 @@ object GpuPartitioningUtils extends SQLConfHelper {
           dateFormatter,
           timestampFormatter)
       }
+      logWarning("TOM data type is: " + dataType)
       Some(columnName -> TypedPartValue(rawColumnValue, dataType))
     }
   }
@@ -550,9 +560,10 @@ object GpuPartitioningUtils extends SQLConfHelper {
       require(timestampValue != null)
       timestampType
     }
-
+    logWarning("Tom before type inference")
     if (typeInference) {
       // First tries integral types
+    logWarning("Tom before type in inference")
       Try({ Integer.parseInt(raw); IntegerType })
         .orElse(Try { JLong.parseLong(raw); LongType })
         .orElse(decimalTry)
@@ -566,6 +577,7 @@ object GpuPartitioningUtils extends SQLConfHelper {
           if (raw == DEFAULT_PARTITION_NAME) NullType else StringType
         }
     } else {
+       logWarning("Tom before type else inference default")
       if (raw == DEFAULT_PARTITION_NAME) NullType else StringType
     }
   }
@@ -585,6 +597,10 @@ object GpuPartitioningUtils extends SQLConfHelper {
       } else {
         pathsWithPartitionValues.map(_._2.columnNames.map(_.toLowerCase()))
       }
+      logWarning("part Col names: " + partColNames)
+      pathsWithPartitionValues.foreach { case (p, pv) =>
+        logWarning("parts with values: " + p + " values: " + pv)
+      }
       assert(
         partColNames.distinct.size == 1,
         listConflictingPartitionColumns(pathsWithPartitionValues))
@@ -595,6 +611,9 @@ object GpuPartitioningUtils extends SQLConfHelper {
       val resolvedValues = (0 until columnCount).map { i =>
         resolveTypeConflicts(values.map(_.typedValues(i)))
       }
+      val foo = resolvedValues.flatten.mkString(",")
+      logWarning("resolved values is: " + foo)
+
 
       // Fills resolved literals back to each partition
       values.zipWithIndex.map { case (d, index) =>

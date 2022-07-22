@@ -26,7 +26,7 @@ import org.apache.hadoop.fs.Path
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Expression, PlanExpression}
-import org.apache.spark.sql.execution.datasources.{FileIndex, HadoopFsRelation, InMemoryFileIndex}
+import org.apache.spark.sql.execution.datasources.{CatalogFileIndex, FileIndex, HadoopFsRelation, InMemoryFileIndex}
 import org.apache.spark.sql.execution.datasources.rapids.GpuPartitioningUtils
 
 object AlluxioUtils extends Logging {
@@ -288,6 +288,14 @@ object AlluxioUtils extends Logging {
         parameters,
         Option(relation.dataSchema),
         replaceFunc.get)
+
+      logWarning("TOM partition spec inferred: " + partitionSpec)
+      if (relation.location.isInstanceOf[CatalogFileIndex]) {
+        val fi = relation.location.asInstanceOf[CatalogFileIndex]
+        val memFI = fi.filterPartitions(Nil)
+        val spec = memFI.partitionSpec()
+        logWarning("TOM catalogfileindex spec: " + spec)
+      }
 
       // generate a new InMemoryFileIndex holding paths with alluxio schema
       new InMemoryFileIndex(
