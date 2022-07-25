@@ -101,7 +101,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
     writer.write(s"$sep\n")
     // write to stdout as well
     if (printStdout) {
-      print("PER SQL SUMMARY")
+      print("PER SQL SUMMARY:\n")
       print(s"$sep\n")
       print(entireHeader)
       print(s"$sep\n")
@@ -179,7 +179,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
     writer.write(s"$sep\n")
     // write to stdout as well
     if (printStdout) {
-      print("APPLICATION SUMMARY")
+      print("APPLICATION SUMMARY:\n")
       print(s"$sep\n")
       print(entireHeader)
       print(s"$sep\n")
