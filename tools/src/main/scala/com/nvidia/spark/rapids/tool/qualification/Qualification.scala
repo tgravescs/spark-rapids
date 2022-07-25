@@ -32,7 +32,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     timeout: Option[Long], nThreads: Int, order: String,
     pluginTypeChecker: PluginTypeChecker, reportReadSchema: Boolean,
     printStdout: Boolean, uiEnabled: Boolean, enablePB: Boolean,
-    reportSqlLevel: Boolean) extends Logging {
+    reportSqlLevel: Boolean, maxSQLDescLength: Int) extends Logging {
 
   private val allApps = new ConcurrentLinkedQueue[QualificationSummaryInfo]()
 
@@ -80,7 +80,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     qWriter.writeReport(allAppsSum, sortForExecutiveSummary(sortedDescDetailed, order), numRows)
     qWriter.writeDetailedReport(sortedDescDetailed)
     if (reportSqlLevel) {
-      qWriter.writePerSqlTextReport(allAppsSum, numRows)
+      qWriter.writePerSqlTextReport(allAppsSum, numRows, maxSQLDescLength)
       qWriter.writePerSqlCSVReport(allAppsSum, order)
     }
     qWriter.writeExecReport(allAppsSum, order)

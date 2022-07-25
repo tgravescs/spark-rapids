@@ -91,7 +91,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
 
   private def writePerSqlTextSummary(writer: ToolTextFileWriter,
       sums: Seq[QualificationSummaryInfo],
-      numOutputRows: Int): Unit = {
+      numOutputRows: Int, maxSQLDescLength: Int): Unit = {
     val appIdMaxSize = QualOutputWriter.getAppIdSize(sums)
     val headersAndSizes = QualOutputWriter.getDetailedPerSqlHeaderStringsAndSizes(sums)
     val entireHeader = QualOutputWriter.constructOutputRowFromMap(headersAndSizes, "|", true)
@@ -119,7 +119,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
     }
     sorted.foreach { estInfo =>
       val wStr = QualOutputWriter.constructPerSqlSummaryInfo(estInfo, headersAndSizes,
-        appIdMaxSize, "|", true)
+        appIdMaxSize, "|", true, maxSQLDescLength)
       writer.write(wStr)
       if (printStdout) print(wStr)
     }
@@ -127,11 +127,11 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
     if (printStdout) print(s"$sep\n")
   }
 
-  def writePerSqlTextReport(sums: Seq[QualificationSummaryInfo], numOutputRows: Int) : Unit = {
+  def writePerSqlTextReport(sums: Seq[QualificationSummaryInfo], numOutputRows: Int, maxSQLDescLength: Int) : Unit = {
     val textFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}_persql.log",
       "Per SQL Summary Report")
     try {
-      writePerSqlTextSummary(textFileWriter, sums, numOutputRows)
+      writePerSqlTextSummary(textFileWriter, sums, numOutputRows, maxSQLDescLength)
     } finally {
       textFileWriter.close()
     }
@@ -446,12 +446,14 @@ object QualOutputWriter {
       headersAndSizes: LinkedHashMap[String, Int],
       appIdMaxSize: Int,
       delimiter: String,
-      prettyPrint: Boolean): String = {
+      prettyPrint: Boolean,
+      maxSQLDescLength: Int = 100): String = {
     val data = ListBuffer[(String, Int)](
       sumInfo.info.appName -> headersAndSizes(APP_NAME_STR),
       sumInfo.info.appId -> appIdMaxSize,
       sumInfo.sqlID.toString -> SQL_ID_STR.size,
-      ToolUtils.escapeMetaCharacters(sumInfo.sqlDesc).trim() -> headersAndSizes(SQL_DESC_STR),
+      ToolUtils.escapeMetaCharacters(sumInfo.sqlDesc).trim().substring(0, maxSQLDescLength) ->
+        headersAndSizes(SQL_DESC_STR),
       sumInfo.info.sqlDfDuration.toString -> SQL_DUR_STR_SIZE,
       sumInfo.info.gpuOpportunity.toString -> GPU_OPPORTUNITY_STR_SIZE,
       ToolUtils.formatDoublePrecision(sumInfo.info.estimatedGpuDur) -> ESTIMATED_GPU_DURATION.size,

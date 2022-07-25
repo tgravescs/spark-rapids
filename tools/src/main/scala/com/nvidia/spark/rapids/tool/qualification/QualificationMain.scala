@@ -49,6 +49,7 @@ object QualificationMain extends Logging {
     val matchEventLogs = appArgs.matchEventLogs
     val outputDirectory = appArgs.outputDirectory().stripSuffix("/")
     val numOutputRows = appArgs.numOutputRows.getOrElse(1000)
+    val maxSQLDescLength = appArgs.maxSQLDescLength.getOrElse(100)
 
     val nThreads = appArgs.numThreads.getOrElse(
       Math.ceil(Runtime.getRuntime.availableProcessors() / 4f).toInt)
@@ -90,7 +91,7 @@ object QualificationMain extends Logging {
 
     val qual = new Qualification(outputDirectory, numOutputRows, hadoopConf, timeout,
       nThreads, order, pluginTypeChecker, reportReadSchema, printStdout, uiEnabled,
-      enablePB, reportSqlLevel)
+      enablePB, reportSqlLevel, maxSQLDescLength)
     val res = qual.qualifyApps(filteredLogs)
     (0, res)
   }
