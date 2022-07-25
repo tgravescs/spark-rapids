@@ -449,7 +449,8 @@ class QualificationSuite extends FunSuite with BeforeAndAfterEach with Logging {
 
   test("test nds q86 with failure test") {
     val logFiles = Array(s"$logDir/nds_q86_fail_test")
-    runQualificationTest(logFiles, "nds_q86_fail_test_expectation.csv")
+    runQualificationTest(logFiles, "nds_q86_fail_test_expectation.csv",
+      expectPerSqlFileName = Some("nds_q86_fail_test_expectation_persql"))
   }
 
   test("test event log write format") {
