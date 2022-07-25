@@ -70,14 +70,13 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
     }
   }
 
-  def writePerSqlReport(sums: Seq[QualificationSummaryInfo], order: String) : Unit = {
+  def writePerSqlCSVReport(sums: Seq[QualificationSummaryInfo], order: String) : Unit = {
     val csvFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}_persql.csv",
-      "Plan Exec Info")
+      "Per SQL CSV Report")
     try {
       val plans = sums.flatMap(_.planInfo)
       val allExecs = QualOutputWriter.getAllExecsFromPlan(plans)
-      val headersAndSizes = QualOutputWriter
-        .getDetailedPerSqlHeaderStringsAndSizes(sums)
+      val headersAndSizes = QualOutputWriter.getDetailedPerSqlHeaderStringsAndSizes(sums)
       csvFileWriter.write(QualOutputWriter.constructDetailedHeader(headersAndSizes, ",", false))
       val appIdMaxSize = QualOutputWriter.getAppIdSize(sums)
       sums.foreach { sumInfo =>
@@ -89,12 +88,12 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
       csvFileWriter.close()
     }
   }
+
   private def writePerSqlTextSummary(writer: ToolTextFileWriter,
       sums: Seq[QualificationSummaryInfo],
       numOutputRows: Int): Unit = {
     val appIdMaxSize = QualOutputWriter.getAppIdSize(sums)
-    val headersAndSizes = QualOutputWriter
-      .getDetailedPerSqlHeaderStringsAndSizes(sums)
+    val headersAndSizes = QualOutputWriter.getDetailedPerSqlHeaderStringsAndSizes(sums)
     val entireHeader = QualOutputWriter.constructOutputRowFromMap(headersAndSizes, "|", true)
     val sep = "=" * (entireHeader.size - 1)
     writer.write(s"$sep\n")
@@ -127,9 +126,9 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
     if (printStdout) print(s"$sep\n")
   }
 
-  def writePerSqlReport(sums: Seq[QualificationSummaryInfo], numOutputRows: Int) : Unit = {
+  def writePerSqlTextReport(sums: Seq[QualificationSummaryInfo], numOutputRows: Int) : Unit = {
     val textFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}_persql.log",
-      "Per SQL Summary report")
+      "Per SQL Summary Report")
     try {
       writePerSqlTextSummary(textFileWriter, sums, numOutputRows)
     } finally {
@@ -159,7 +158,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
   def writeReport(sums: Seq[QualificationSummaryInfo], estSums: Seq[EstimatedSummaryInfo],
       numOutputRows: Int) : Unit = {
     val textFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}.log",
-      "Summary report")
+      "Summary Report")
     try {
       writeTextSummary(textFileWriter, sums, estSums, numOutputRows)
     } finally {

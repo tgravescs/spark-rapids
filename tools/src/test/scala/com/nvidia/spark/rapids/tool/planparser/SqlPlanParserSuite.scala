@@ -81,9 +81,8 @@ class SQLPlanParserSuite extends FunSuite with BeforeAndAfterEach with Logging {
       None, None, List(eventLog), hadoopConf)
     val pluginTypeChecker = new PluginTypeChecker()
     assert(allEventLogs.size == 1)
-    // TODO - add reportSqlLevel
     val appOption = QualificationAppInfo.createApp(allEventLogs.head, hadoopConf,
-      pluginTypeChecker, false)
+      pluginTypeChecker, reportSqlLevel = false)
     assert(appOption.nonEmpty)
     appOption.get
   }
@@ -605,7 +604,10 @@ class SQLPlanParserSuite extends FunSuite with BeforeAndAfterEach with Logging {
         val app = createAppFromEventlog(eventLog)
         assert(app.sqlPlans.size == 2)
         val parsedPlans = app.sqlPlans.map { case (sqlID, plan) =>
-          SQLPlanParser.parseSQLPlan(app.appId, plan, sqlID, "", pluginTypeChecker, app)
+          SQLPlanParser.parseSQLPlan(app.appId, plan, sqlID, "test desc", pluginTypeChecker, app)
+        }
+        parsedPlans.foreach { pInfo =>
+          assert(pInfo.sqlDesc == "test desc")
         }
         val allExecInfo = getAllExecsFromPlan(parsedPlans.toSeq)
         val wholeStages = allExecInfo.filter(_.exec.contains("WholeStageCodegen"))
