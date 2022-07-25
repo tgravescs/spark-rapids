@@ -96,12 +96,12 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
     val headersAndSizes = QualOutputWriter.getDetailedPerSqlHeaderStringsAndSizes(sums)
     val entireHeader = QualOutputWriter.constructOutputRowFromMap(headersAndSizes, "|", true)
     val sep = "=" * (entireHeader.size - 1)
-    writer.write("PER SQL SUMMARY")
     writer.write(s"$sep\n")
     writer.write(entireHeader)
     writer.write(s"$sep\n")
     // write to stdout as well
     if (printStdout) {
+      print("PER SQL SUMMARY")
       print(s"$sep\n")
       print(entireHeader)
       print(s"$sep\n")
@@ -174,12 +174,12 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
     val headersAndSizes = QualOutputWriter.getSummaryHeaderStringsAndSizes(sums, appIdMaxSize)
     val entireHeader = QualOutputWriter.constructOutputRowFromMap(headersAndSizes, "|", true)
     val sep = "=" * (entireHeader.size - 1)
-    writer.write("APPLICATION SUMMARY")
     writer.write(s"$sep\n")
     writer.write(entireHeader)
     writer.write(s"$sep\n")
     // write to stdout as well
     if (printStdout) {
+      print("APPLICATION SUMMARY")
       print(s"$sep\n")
       print(entireHeader)
       print(s"$sep\n")
