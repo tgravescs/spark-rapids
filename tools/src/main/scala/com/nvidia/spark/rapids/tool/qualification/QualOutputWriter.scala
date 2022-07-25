@@ -451,7 +451,7 @@ object QualOutputWriter {
       sumInfo.info.appName -> headersAndSizes(APP_NAME_STR),
       sumInfo.info.appId -> appIdMaxSize,
       sumInfo.sqlID.toString -> SQL_ID_STR.size,
-      sumInfo.sqlDesc -> headersAndSizes(SQL_DESC_STR),
+      ToolUtils.escapeMetaCharacters(sumInfo.sqlDesc).trim() -> headersAndSizes(SQL_DESC_STR),
       sumInfo.info.sqlDfDuration.toString -> SQL_DUR_STR_SIZE,
       sumInfo.info.gpuOpportunity.toString -> GPU_OPPORTUNITY_STR_SIZE,
       ToolUtils.formatDoublePrecision(sumInfo.info.estimatedGpuDur) -> ESTIMATED_GPU_DURATION.size,
