@@ -430,7 +430,8 @@ class QualificationSuite extends FunSuite with BeforeAndAfterEach with Logging {
 
   test("test nds q86 test") {
     val logFiles = Array(s"$logDir/nds_q86_test")
-    runQualificationTest(logFiles, "nds_q86_test_expectation.csv")
+    runQualificationTest(logFiles, "nds_q86_test_expectation.csv",
+      expectPerSqlFileName = Some("nds_q86_test_expectation_persql.csv"))
   }
 
   // event log rolling creates files under a directory
