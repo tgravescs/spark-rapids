@@ -404,7 +404,8 @@ class QualificationSuite extends FunSuite with BeforeAndAfterEach with Logging {
       s"$logDir/udf_dataset_eventlog",
       s"$logDir/udf_func_eventlog"
     )
-    runQualificationTest(logFiles, "qual_test_simple_expectation.csv")
+    runQualificationTest(logFiles, "qual_test_simple_expectation.csv",
+      expectPerSqlFileName = Some("qual_test_simple_expectation_persql.csv"))
   }
 
   test("test missing sql end") {
