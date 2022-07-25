@@ -76,7 +76,8 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
     try {
       val plans = sums.flatMap(_.planInfo)
       val allExecs = QualOutputWriter.getAllExecsFromPlan(plans)
-      val headersAndSizes = QualOutputWriter.getDetailedPerSqlHeaderStringsAndSizes(sums)
+      val headersAndSizes = QualOutputWriter.getDetailedPerSqlHeaderStringsAndSizes(sums,
+        maxSQLDescLength)
       csvFileWriter.write(QualOutputWriter.constructDetailedHeader(headersAndSizes, ",", false))
       val appIdMaxSize = QualOutputWriter.getAppIdSize(sums)
       sums.foreach { sumInfo =>
@@ -280,7 +281,9 @@ object QualOutputWriter {
   }
 
   def getSqlDescSize(sums: Seq[QualificationSummaryInfo], maxSQLDescLength: Int): Int = {
-    val sizes = sums.flatMap(_.perSQLEstimatedInfo).flatten.map(_.sqlDesc.size)
+    val sizes = sums.flatMap(_.perSQLEstimatedInfo).flatten.map{ info =>
+      formatSQLDescription(info.sqlDesc, maxSQLDescLength).size
+    }
     val maxSizeOfDesc = getMaxSizeForHeader(sizes, QualOutputWriter.SQL_DESC_STR)
     Math.min(maxSQLDescLength, maxSizeOfDesc)
   }
