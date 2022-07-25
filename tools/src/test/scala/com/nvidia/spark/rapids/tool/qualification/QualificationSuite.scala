@@ -174,9 +174,9 @@ class QualificationSuite extends FunSuite with BeforeAndAfterEach with Logging {
         if (expectPerSqlFileName.isDefined) {
           val resultExpectation = new File(expRoot, expectPerSqlFileName.get)
           val dfPerSqlExpect = readPerSqlFile(resultExpectation)
-          val actualExpectation = new File(outpath.getAbsolutePath,
-            "rapids_4_spark_qualification_output_persql.csv")
-          val dfPerSqlActual = readPerSqlFile(actualExpectation)
+          val actualExpectation = s"$outpath/rapids_4_spark_qualification_output/" +
+            s"rapids_4_spark_qualification_output_persql.csv"
+          val dfPerSqlActual = readPerSqlFile(new File(actualExpectation))
           ToolTestUtils.compareDataFrames(dfPerSqlActual, dfPerSqlExpect)
         }
       }
