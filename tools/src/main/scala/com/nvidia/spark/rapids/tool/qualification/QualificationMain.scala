@@ -49,7 +49,7 @@ object QualificationMain extends Logging {
     val matchEventLogs = appArgs.matchEventLogs
     val outputDirectory = appArgs.outputDirectory().stripSuffix("/")
     val numOutputRows = appArgs.numOutputRows.getOrElse(1000)
-    val maxSQLDescLength = appArgs.maxSQLDescLength.getOrElse(100)
+    val maxSQLDescLength = appArgs.maxSqlDescLength.getOrElse(100)
 
     val nThreads = appArgs.numThreads.getOrElse(
       Math.ceil(Runtime.getRuntime.availableProcessors() / 4f).toInt)

@@ -575,7 +575,7 @@ object QualOutputWriter {
     sumInfo.perSQLEstimatedInfo match {
       case Some(infos) =>
         infos.map { info =>
-          constructPerSqlSummaryInfo(info, headersAndSizes, appIdMaxSize, delimiter, prettyPrint)
+          constructPerSqlSummaryInfo(info, headersAndSizes, appIdMaxSize, delimiter, prettyPrint, maxSQLDescLength)
         }
       case None => Seq.empty
     }
