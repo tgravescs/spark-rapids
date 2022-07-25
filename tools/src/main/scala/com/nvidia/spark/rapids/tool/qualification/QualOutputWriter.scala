@@ -127,7 +127,8 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
     if (printStdout) print(s"$sep\n")
   }
 
-  def writePerSqlTextReport(sums: Seq[QualificationSummaryInfo], numOutputRows: Int, maxSQLDescLength: Int) : Unit = {
+  def writePerSqlTextReport(sums: Seq[QualificationSummaryInfo], numOutputRows: Int,
+      maxSQLDescLength: Int) : Unit = {
     val textFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}_persql.log",
       "Per SQL Summary Report")
     try {
@@ -441,19 +442,23 @@ object QualOutputWriter {
     detailedHeadersAndFields
   }
 
+  private def formatSQLDescription(sqlDesc: String, maxSQLDescLength: Int): String = {
+    val escapedStr = ToolUtils.escapeMetaCharacters(sqlDesc).trim()
+    escapedStr.substring(0, Math.min(maxSQLDescLength, escapedStr.length))
+  }
+
   def constructPerSqlSummaryInfo(
       sumInfo: EstimatedPerSQLSummaryInfo,
       headersAndSizes: LinkedHashMap[String, Int],
       appIdMaxSize: Int,
       delimiter: String,
       prettyPrint: Boolean,
-      maxSQLDescLength: Int = 100): String = {
+      maxSQLDescLength: Int): String = {
     val data = ListBuffer[(String, Int)](
       sumInfo.info.appName -> headersAndSizes(APP_NAME_STR),
       sumInfo.info.appId -> appIdMaxSize,
       sumInfo.sqlID.toString -> SQL_ID_STR.size,
-      ToolUtils.escapeMetaCharacters(sumInfo.sqlDesc).trim().substring(0, maxSQLDescLength) ->
-        headersAndSizes(SQL_DESC_STR),
+      formatSQLDescription(sumInfo.sqlDesc, maxSQLDescLength) -> headersAndSizes(SQL_DESC_STR),
       sumInfo.info.sqlDfDuration.toString -> SQL_DUR_STR_SIZE,
       sumInfo.info.gpuOpportunity.toString -> GPU_OPPORTUNITY_STR_SIZE,
       ToolUtils.formatDoublePrecision(sumInfo.info.estimatedGpuDur) -> ESTIMATED_GPU_DURATION.size,
