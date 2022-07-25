@@ -81,7 +81,7 @@ class Qualification(outputDir: String, numRows: Int, hadoopConf: Configuration,
     qWriter.writeDetailedReport(sortedDescDetailed)
     if (reportSqlLevel) {
       qWriter.writePerSqlTextReport(allAppsSum, numRows, maxSQLDescLength)
-      qWriter.writePerSqlCSVReport(allAppsSum, order)
+      qWriter.writePerSqlCSVReport(allAppsSum, maxSQLDescLength)
     }
     qWriter.writeExecReport(allAppsSum, order)
     qWriter.writeStageReport(allAppsSum, order)

@@ -70,7 +70,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
     }
   }
 
-  def writePerSqlCSVReport(sums: Seq[QualificationSummaryInfo], order: String) : Unit = {
+  def writePerSqlCSVReport(sums: Seq[QualificationSummaryInfo], maxSQLDescLength: Int) : Unit = {
     val csvFileWriter = new ToolTextFileWriter(outputDir, s"${logFileName}_persql.csv",
       "Per SQL CSV Report")
     try {
@@ -81,7 +81,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
       val appIdMaxSize = QualOutputWriter.getAppIdSize(sums)
       sums.foreach { sumInfo =>
         val rows = QualOutputWriter.constructPerSqlInfo(sumInfo, headersAndSizes,
-          appIdMaxSize, ",", false)
+          appIdMaxSize, ",", false, maxSQLDescLength)
         rows.foreach(csvFileWriter.write(_))
       }
     } finally {
@@ -570,7 +570,8 @@ object QualOutputWriter {
       headersAndSizes: LinkedHashMap[String, Int],
       appIdMaxSize: Int,
       delimiter: String = "|",
-      prettyPrint: Boolean): Seq[String] = {
+      prettyPrint: Boolean,
+      maxSQLDescLength: Int): Seq[String] = {
     sumInfo.perSQLEstimatedInfo match {
       case Some(infos) =>
         infos.map { info =>
