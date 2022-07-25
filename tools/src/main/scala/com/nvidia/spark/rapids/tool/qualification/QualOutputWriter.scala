@@ -93,7 +93,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
       sums: Seq[QualificationSummaryInfo],
       numOutputRows: Int, maxSQLDescLength: Int): Unit = {
     val appIdMaxSize = QualOutputWriter.getAppIdSize(sums)
-    val headersAndSizes = QualOutputWriter.getDetailedPerSqlHeaderStringsAndSizes(sums)
+    val headersAndSizes = QualOutputWriter.getDetailedPerSqlHeaderStringsAndSizes(sums, maxSQLDescLength)
     val entireHeader = QualOutputWriter.constructOutputRowFromMap(headersAndSizes, "|", true)
     val sep = "=" * (entireHeader.size - 1)
     writer.write(s"$sep\n")
@@ -279,9 +279,10 @@ object QualOutputWriter {
     getMaxSizeForHeader(sizes, QualOutputWriter.APP_ID_STR)
   }
 
-  def getSqlDescSize(sums: Seq[QualificationSummaryInfo]): Int = {
+  def getSqlDescSize(sums: Seq[QualificationSummaryInfo], maxSQLDescLength: Int): Int = {
     val sizes = sums.flatMap(_.perSQLEstimatedInfo).flatten.map(_.sqlDesc.size)
-    getMaxSizeForHeader(sizes, QualOutputWriter.SQL_DESC_STR)
+    val maxSizeOfDesc = getMaxSizeForHeader(sizes, QualOutputWriter.SQL_DESC_STR)
+    Math.min(maxSQLDescLength, maxSizeOfDesc)
   }
 
   private def getMaxSizeForHeader(sizes: Seq[Int], headerTxtStr: String): Int = {
@@ -426,12 +427,13 @@ object QualOutputWriter {
     execInfos.map(_.children.getOrElse(Seq.empty).map(_.nodeId).mkString(",").size)
   }
   def getDetailedPerSqlHeaderStringsAndSizes(
-      appInfos: Seq[QualificationSummaryInfo]): LinkedHashMap[String, Int] = {
+      appInfos: Seq[QualificationSummaryInfo],
+      maxSQLDescLength: Int): LinkedHashMap[String, Int] = {
     val detailedHeadersAndFields = LinkedHashMap[String, Int](
       APP_NAME_STR -> getMaxSizeForHeader(appInfos.map(_.appName.size), APP_NAME_STR),
       APP_ID_STR -> QualOutputWriter.getAppIdSize(appInfos),
       SQL_ID_STR -> SQL_ID_STR.size,
-      SQL_DESC_STR -> QualOutputWriter.getSqlDescSize(appInfos),
+      SQL_DESC_STR -> QualOutputWriter.getSqlDescSize(appInfos, maxSQLDescLength),
       SQL_DUR_STR -> SQL_DUR_STR_SIZE,
       GPU_OPPORTUNITY_STR -> GPU_OPPORTUNITY_STR_SIZE,
       ESTIMATED_GPU_DURATION -> ESTIMATED_GPU_DURATION.size,
@@ -575,7 +577,8 @@ object QualOutputWriter {
     sumInfo.perSQLEstimatedInfo match {
       case Some(infos) =>
         infos.map { info =>
-          constructPerSqlSummaryInfo(info, headersAndSizes, appIdMaxSize, delimiter, prettyPrint, maxSQLDescLength)
+          constructPerSqlSummaryInfo(info, headersAndSizes, appIdMaxSize, delimiter, prettyPrint,
+            maxSQLDescLength)
         }
       case None => Seq.empty
     }
