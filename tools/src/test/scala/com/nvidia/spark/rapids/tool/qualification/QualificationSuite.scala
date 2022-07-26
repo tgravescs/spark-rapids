@@ -306,7 +306,7 @@ class QualificationSuite extends FunSuite with BeforeAndAfterEach with Logging {
         s"rapids_4_spark_qualification_output_persql.log"
       val persqlInputSource = Source.fromFile(persqlFileName)
       try {
-        val lines = inputSource.getLines
+        val lines = persqlInputSource.getLines
         // 4 lines of header and footer, limit is 2
         assert(lines.size == (4 + 2))
       } finally {
