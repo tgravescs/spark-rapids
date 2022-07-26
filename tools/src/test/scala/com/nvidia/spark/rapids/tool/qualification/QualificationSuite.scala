@@ -231,7 +231,8 @@ class QualificationSuite extends FunSuite with BeforeAndAfterEach with Logging {
         "--output-directory",
         outpath.getAbsolutePath(),
         "--order",
-        "desc")
+        "desc",
+        "--per-sql")
 
       val appArgs = new QualificationArgs(allArgs ++ logFiles)
       val (exit, appSum) = QualificationMain.mainInternal(appArgs)
@@ -252,6 +253,21 @@ class QualificationSuite extends FunSuite with BeforeAndAfterEach with Logging {
       } finally {
         inputSource.close()
       }
+      val persqlFileName = s"$outpath/rapids_4_spark_qualification_output/" +
+        s"rapids_4_spark_qualification_output_persql.log"
+      val persqlInputSource = Source.fromFile(persqlFileName)
+      try {
+        val lines = persqlInputSource.getLines.toArray
+        // 4 lines of header and footer
+        assert(lines.size == (4 + 4))
+        // skip the 3 header lines
+        val firstRow = lines(3)
+        // this should be app + sqlID 0
+        assert(firstRow.contains("local-1651187225439|     0|"))
+        assert(firstRow.contains("show at <console>:26"))
+      } finally {
+        persqlInputSource.close()
+      }
     }
   }
 
@@ -269,7 +285,8 @@ class QualificationSuite extends FunSuite with BeforeAndAfterEach with Logging {
         "--order",
         "desc",
         "-n",
-        "2")
+        "2",
+        "--per-sql")
 
       val appArgs = new QualificationArgs(allArgs ++ logFiles)
       val (exit, _) = QualificationMain.mainInternal(appArgs)
@@ -284,6 +301,16 @@ class QualificationSuite extends FunSuite with BeforeAndAfterEach with Logging {
         assert(lines.size == (4 + 2))
       } finally {
         inputSource.close()
+      }
+      val persqlFileName = s"$outpath/rapids_4_spark_qualification_output/" +
+        s"rapids_4_spark_qualification_output_persql.log"
+      val persqlInputSource = Source.fromFile(persqlFileName)
+      try {
+        val lines = inputSource.getLines
+        // 4 lines of header and footer, limit is 2
+        assert(lines.size == (4 + 2))
+      } finally {
+        persqlInputSource.close()
       }
     }
   }
