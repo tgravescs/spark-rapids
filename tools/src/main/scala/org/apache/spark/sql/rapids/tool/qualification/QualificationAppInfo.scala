@@ -372,7 +372,7 @@ class QualificationAppInfo(
             // get task duration ratio
             val sqlStageSums = perSqlStageSummary.filter(_.sqlID == pInfo.sqlID)
             val estimatedInfo = getPerSQLWallClockSummary(sqlStageSums, wallClockDur,
-              wallClockDur, sqlIDtoFailures.get(pInfo.sqlID).nonEmpty, appName)
+              sqlIDtoFailures.get(pInfo.sqlID).nonEmpty, appName)
             EstimatedPerSQLSummaryInfo(pInfo.sqlID, pInfo.sqlDesc, estimatedInfo)
           }
         })
@@ -422,7 +422,7 @@ class QualificationAppInfo(
   }
 
   def getPerSQLWallClockSummary(sqlStageSums: Seq[SQLStageSummary], sqlDataFrameDuration: Long,
-      appDuration: Long, hasFailures: Boolean, appName: String): EstimatedSummaryInfo = {
+      hasFailures: Boolean, appName: String): EstimatedSummaryInfo = {
     val allStagesSummary = sqlStageSums.flatMap(_.stageSum)
     val sqlDataframeTaskDuration = allStagesSummary.map(_.stageTaskTime).sum
     val supportedSQLTaskDuration = calculateSQLSupportedTaskDuration(allStagesSummary)
@@ -434,9 +434,11 @@ class QualificationAppInfo(
     } else {
       1
     }
+    // reusing the same function here (calculateEstimatedInfoSummary) as the app level,
+    // there is no app duration so just set it to sqlDataFrameDuration
     QualificationAppInfo.calculateEstimatedInfoSummary(estimatedGPURatio,
-      sqlDataFrameDuration, appDuration, taskSpeedupFactor, appName, appId,
-      hasFailures)
+      sqlDataFrameDuration, sqlDataFrameDuration, taskSpeedupFactor, appName,
+      appId, hasFailures)
   }
 
   private[qualification] def processSQLPlan(sqlID: Long, planInfo: SparkPlanInfo): Unit = {
