@@ -94,7 +94,8 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
       sums: Seq[QualificationSummaryInfo],
       numOutputRows: Int, maxSQLDescLength: Int): Unit = {
     val appIdMaxSize = QualOutputWriter.getAppIdSize(sums)
-    val headersAndSizes = QualOutputWriter.getDetailedPerSqlHeaderStringsAndSizes(sums, maxSQLDescLength)
+    val headersAndSizes =
+      QualOutputWriter.getDetailedPerSqlHeaderStringsAndSizes(sums, maxSQLDescLength)
     val entireHeader = QualOutputWriter.constructOutputRowFromMap(headersAndSizes, "|", true)
     val sep = "=" * (entireHeader.size - 1)
     writer.write(s"$sep\n")
