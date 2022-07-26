@@ -259,12 +259,12 @@ class QualificationSuite extends FunSuite with BeforeAndAfterEach with Logging {
       try {
         val lines = persqlInputSource.getLines.toArray
         // 4 lines of header and footer
-        assert(lines.size == (4 + 4))
+        assert(lines.size == (4 + 17))
         // skip the 3 header lines
         val firstRow = lines(3)
-        // this should be app + sqlID 0
-        assert(firstRow.contains("local-1651187225439|     0|"))
-        assert(firstRow.contains("show at <console>:26"))
+        // this should be app + sqlID
+        assert(firstRow.contains("local-1622043423018|     1"))
+        assert(firstRow.contains("count at QualificationInfoUtils.scala:94"))
       } finally {
         persqlInputSource.close()
       }

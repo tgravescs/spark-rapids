@@ -109,8 +109,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
       print(s"$sep\n")
     }
     val estSumPerSql = sums.flatMap(_.perSQLEstimatedInfo).flatten
-    val finalSums = estSumPerSql.take(numOutputRows)
-    val sortedAsc = finalSums.sortBy(sum => {
+    val sortedAsc = estSumPerSql.sortBy(sum => {
       (sum.info.recommendation, sum.info.estimatedGpuSpeedup,
         sum.info.estimatedGpuTimeSaved, sum.info.appDur, sum.info.appId)
     })
@@ -119,6 +118,7 @@ class QualOutputWriter(outputDir: String, reportReadSchema: Boolean,
     } else {
       sortedAsc.reverse
     }
+    val finalSums = sorted.take(numOutputRows)
     sorted.foreach { estInfo =>
       val wStr = QualOutputWriter.constructPerSqlSummaryInfo(estInfo, headersAndSizes,
         appIdMaxSize, "|", true, maxSQLDescLength)
