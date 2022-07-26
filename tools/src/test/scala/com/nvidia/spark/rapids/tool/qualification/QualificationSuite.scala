@@ -308,7 +308,7 @@ class QualificationSuite extends FunSuite with BeforeAndAfterEach with Logging {
       try {
         val lines = persqlInputSource.getLines
         // 4 lines of header and footer, limit is 2
-        assert(lines.size == (4 + 2))
+        assert(lines.size == (4 + 17))
       } finally {
         persqlInputSource.close()
       }
