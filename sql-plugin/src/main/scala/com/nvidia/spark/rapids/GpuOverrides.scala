@@ -4311,76 +4311,59 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
     }
   }
 
-  /** Determine whether query is running against Delta Lake _delta_log JSON files */
+  /**
+   *  Determine whether query is running against Delta Lake _delta_log JSON files or
+   *  if Delta is doing stats collection that ends up hardcoding the use of AQE,
+   *  even though the AQE setting is disabled. To protect against the latter, we
+   *  check for a ScalaUDF using a tahoe.Snapshot function and if we ever see
+   *  an AdaptiveSparkPlan on a Spark version we don't expect, fallback to the
+   *  CPU for those plans.
+   */
   def isDeltaLakeMetadataQuery(plan: SparkPlan): Boolean = {
     val deltaLogScans = PlanUtils.findOperators(plan, {
       case f: FileSourceScanExec =>
         // example filename: "file:/tmp/delta-table/_delta_log/00000000000000000000.json"
-        val res = f.relation.inputFiles.exists(name =>
+        val found = f.relation.inputFiles.exists(name =>
           name.contains("/_delta_log/") && name.endsWith(".json"))
-        if (res == true) {
-          logWarning("fallback for filesource scan scan delta log: " + f)
+        if (found) {
+          logDebug(s"fallback for FileSourceScanExec delta log: $f")
         }
-        res
+        found
       case rdd: RDDScanExec =>
         // example rdd name: "Delta Table State #1 - file:///tmp/delta-table/_delta_log"
-        val res = rdd.inputRDD != null &&
+        val found = rdd.inputRDD != null &&
           rdd.inputRDD.name != null &&
           rdd.inputRDD.name.startsWith("Delta Table State") &&
           rdd.inputRDD.name.endsWith("/_delta_log")
-        if (res == true) {
-          logWarning("fallback for rdd scan delta log: " + rdd)
+        if (found) {
+          logDebug(s"Fallback for RDDScanExec delta log: $rdd")
         }
-        res
-     case qe: AdaptiveSparkPlanExec =>
-        logWarning("adaptive found: " + qe)
+        found
+      case aqe: AdaptiveSparkPlanExec if !AQEUtils.isAdaptiveExecutionSupportedInSparkVersion =>
+        logDebug(s"AdaptiveSparkPlanExec found on unsupported Spark Version: $aqe")
         true
-     case project: ProjectExec =>
-        logWarning("project found: " + project)
-        val res = project.expressions.flatMap { e =>
-          logWarning("expression is: " + e)
-          findExpressions(e, {
-            case e: ScalaUDF =>
-              logWarning("scala udf found: " + e)
-              logWarning("scala udf class: " + e.function.getClass)
-              logWarning("scala udf class: " + e.function.getClass.getCanonicalName.toString)
-              val res = e.function.getClass.getCanonicalName.toString.contains("tahoe.Snapshot") || e.function.toString.contains("tahoe.Snapshot")
-              logWarning(" class named matched: " + res)
-              if (res == true) {
-                logWarning(" tahos snapshot found: " + e)
+      case project: ProjectExec =>
+        val foundExprs = project.expressions.flatMap { e =>
+          PlanUtils.findExpressions(e, {
+            case udf: ScalaUDF =>
+              val contains = udf.function.getClass.getCanonicalName.contains("tahoe.Snapshot")
+              if (contains) {
+                logWarning(s"Found ScalaUDF with tahoe.Snapshot: $udf," +
+                  s" function class name is: ${udf.function.getClass.getCanonicalName}")
               }
-              res
+              contains
             case _ => false
           })
         }
-        logWarning("project exec results: " + res.nonEmpty)
-        res.nonEmpty
+        if (foundExprs.nonEmpty) {
+          logDebug(s"Project with Snapshot ScalaUDF: $project")
+        }
+        foundExprs.nonEmpty
       case _ =>
         false
     })
     deltaLogScans.nonEmpty
   }
-
-
-  def findExpressions(exp: Expression, predicate: Expression => Boolean): Seq[Expression] = {
-    def recurse(
-        exp: Expression,
-        predicate: Expression => Boolean,
-        accum: ListBuffer[Expression]): Seq[Expression] = {
-      exp match {
-        case _ if predicate(exp) =>
-          logWarning("find expression predicate matches: " + exp)
-          accum += exp
-          exp.children.flatMap(p => recurse(p, predicate, accum)).headOption
-        case other =>
-          logWarning("trying other children: " + other.children)
-          other.children.flatMap(p => recurse(p, predicate, accum)).headOption
-      }
-      accum
-    }
-    recurse(exp, predicate, new ListBuffer[Expression]())
-  }
-
 
   private def applyOverrides(plan: SparkPlan, conf: RapidsConf): SparkPlan = {
     val wrap = GpuOverrides.wrapAndTagPlan(plan, conf)
