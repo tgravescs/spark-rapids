@@ -42,7 +42,7 @@ object AlluxioUtils extends Logging {
           throw new FileNotFoundException(
             s"Alluxio path $alluxio_path does not exist, maybe forgot to mount it")
         }
-        logInfo(s"Alluxio path $alluxio_path is mounted")
+        // logInfo(s"Alluxio path $alluxio_path is mounted")
         checkedAlluxioPath.add(alluxio_path)
       } else {
         logDebug(s"Alluxio path $alluxio_path already mounted")
@@ -106,7 +106,7 @@ object AlluxioUtils extends Logging {
               // record it as a mounted point
               if (items(0).contains("://")) {
                 mountedBuckets(items(2)) = items(0)
-                logInfo(s"Found mounted bucket ${items(0)} to ${items(2)}")
+                // logInfo(s"Found mounted bucket ${items(0)} to ${items(2)}")
               }
             }
           }
@@ -176,7 +176,7 @@ object AlluxioUtils extends Logging {
         logInfo(s"Mounted bucket $remote_path to $local_bucket in Alluxio $output")
         mountedBuckets(local_bucket) = remote_path
       } else if (mountedBuckets(local_bucket).equals(remote_path)) {
-        logInfo(s"Already mounted bucket $remote_path to $local_bucket in Alluxio")
+        // logInfo(s"Already mounted bucket $remote_path to $local_bucket in Alluxio")
       } else {
         throw new RuntimeException(s"Found a same bucket name in $remote_path " +
           s"and ${mountedBuckets(local_bucket)}")
@@ -242,7 +242,7 @@ object AlluxioUtils extends Logging {
         // replace s3://foo/.. to alluxio://alluxioMasterHost/foo/...
         val newPath = new Path(pathStr.replaceFirst(
           scheme + ":/", "alluxio://" + alluxioMasterHost.get))
-        logInfo(s"Replace $pathStr to ${newPath.toString}")
+        logDebug(s"Replace $pathStr to ${newPath.toString}")
         newPath
       } else {
         f
@@ -326,7 +326,7 @@ object AlluxioUtils extends Logging {
           val memFI = cfi.filterPartitions(Nil)
           createNewFileIndexWithPathsReplaced(memFI.partitionSpec(), memFI.rootPaths)
         case _ => {
-          logDebug(s"Handling file index type: ${relation.location.getClass}")
+          logInfo(s"Handling file index type: ${relation.location.getClass}")
 
           // With the base Spark FileIndex type we don't know how to modify it to
           // just replace the paths so we have to try to recompute.
