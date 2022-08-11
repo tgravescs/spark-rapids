@@ -25,6 +25,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression, ExprId}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
+import org.apache.spark.sql.catalyst.plans.logical.Statistics
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.vectorized.ColumnarBatch
@@ -213,6 +214,8 @@ trait GpuExec extends SparkPlan with Arm {
   def sparkSession: SparkSession = {
     SparkShimImpl.sessionFromPlan(this)
   }
+
+  override def computeStats(): Statistics =  Statistics(sizeInBytes = 0)
 
   /**
    * Return the expressions for this plan node that should be GPU expressions.
