@@ -610,8 +610,9 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
       file: PartitionedFile,
       conf : Configuration,
       filters: Array[Filter],
-      readDataSchema: StructType): ParquetFileInfoWithBlockMeta = {
-    withResource(new NvtxRange("filterBlocks", NvtxColor.PURPLE)) { _ =>
+      readDataSchema: StructType,
+      metrics:  Map[String, GpuMetric]): ParquetFileInfoWithBlockMeta = {
+    withResource(new NvtxWithMetrics("filterBlocks", NvtxColor.PURPLE, metrics("filterTime"))) { _ =>
       val filePath = new Path(new URI(file.filePath))
       // Make sure we aren't trying to read encrypted files. For now, remove the related
       // parquet confs from the hadoop configuration and try to catch the resulting
@@ -958,7 +959,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       files: Array[PartitionedFile],
       conf: Configuration): PartitionReader[ColumnarBatch] = {
     val filterFunc = (file: PartitionedFile) => {
-      filterHandler.filterBlocks(footerReadType, file, conf, filters, readDataSchema)
+      filterHandler.filterBlocks(footerReadType, file, conf, filters, readDataSchema, metrics)
     }
     new MultiFileCloudParquetPartitionReader(conf, files, filterFunc, isCaseSensitive,
       debugDumpPrefix, maxReadBatchSizeRows, maxReadBatchSizeBytes,
@@ -979,7 +980,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     val clippedBlocks = ArrayBuffer[ParquetSingleDataBlockMeta]()
     files.map { file =>
       val singleFileInfo = try {
-        filterHandler.filterBlocks(footerReadType, file, conf, filters, readDataSchema)
+        filterHandler.filterBlocks(footerReadType, file, conf, filters, readDataSchema, metrics)
       } catch {
         case e: FileNotFoundException if ignoreMissingFiles =>
           logWarning(s"Skipped missing file: ${file.filePath}", e)
@@ -1059,7 +1060,7 @@ case class GpuParquetPartitionReaderFactory(
       file: PartitionedFile): PartitionReader[ColumnarBatch] = {
     val conf = broadcastedConf.value.value
     val singleFileInfo = filterHandler.filterBlocks(footerReadType, file, conf, filters,
-      readDataSchema)
+      readDataSchema, metrics)
     new ParquetPartitionReader(conf, file, singleFileInfo.filePath, singleFileInfo.blocks,
       singleFileInfo.schema, isCaseSensitive, readDataSchema,
       debugDumpPrefix, maxReadBatchSizeRows,
