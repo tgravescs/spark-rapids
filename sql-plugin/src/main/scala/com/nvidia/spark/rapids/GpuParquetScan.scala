@@ -463,7 +463,7 @@ class HMBInputFile(buffer: HostMemoryBuffer) extends InputFile {
   override def newStream(): SeekableInputStream = new HMBSeekableInputStream(buffer, getLength)
 }
 
-private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) extends Arm {
+private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) extends Arm with Logging {
   private val isCaseSensitive = sqlConf.caseSensitiveAnalysis
   private val enableParquetFilterPushDown: Boolean = sqlConf.parquetFilterPushDown
   private val pushDownDate = sqlConf.parquetFilterPushDownDate
@@ -613,6 +613,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
       readDataSchema: StructType,
       metrics:  Map[String, GpuMetric]): ParquetFileInfoWithBlockMeta = {
     withResource(new NvtxWithMetrics("filterBlocks", NvtxColor.PURPLE, metrics("filterTime"))) { _ =>
+      val context = org.apache.spark.TaskContext.get()
       val filePath = new Path(new URI(file.filePath))
       // Make sure we aren't trying to read encrypted files. For now, remove the related
       // parquet confs from the hadoop configuration and try to catch the resulting
@@ -625,6 +626,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
       val footer = try {
          footerReader match {
           case ParquetFooterReaderType.NATIVE =>
+            logWarning("Tom using native parquet footer")
             val serialized = withResource(readAndFilterFooter(file, conf,
               readDataSchema, filePath)) { tableFooter =>
                 if (tableFooter.getNumColumns <= 0) {
@@ -648,6 +650,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
               }
             }
           case _ =>
+            logWarning("Tom using Simple parquet footer")
             readAndSimpleFilterFooter(file, conf, filePath)
         }
       } catch {
@@ -657,6 +660,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
             s"reader via ${RapidsConf.ENABLE_PARQUET_READ.key}.", e)
       }
 
+      logWarning(s"read footer for ${context.taskAttemptId()} stage ${context.stageId()}")
       val fileSchema = footer.getFileMetaData.getSchema
 
       // check spark.sql.parquet.fieldId.read.ignoreMissing
@@ -671,6 +675,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
       } else {
         None
       }
+      logWarning(s"got pushed filters for ${context.taskAttemptId()} stage ${context.stageId()}")
 
       val hasInt96Timestamps = isParquetTimeInInt96(fileSchema)
 
@@ -695,6 +700,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
       } else {
         footer.getBlocks
       }
+      logWarning(s"got blocks for ${context.taskAttemptId()} stage ${context.stageId()}")
 
       val (clipped, clippedSchema) =
         withResource(new NvtxRange("clipSchema", NvtxColor.DARK_GREEN)) { _ =>
@@ -708,6 +714,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
           (clipped, clippedSchema)
         }
 
+      logWarning(s"got clipped schema for ${context.taskAttemptId()} stage ${context.stageId()}")
       ParquetFileInfoWithBlockMeta(filePath, clipped, file.partitionValues,
         clippedSchema, readDataSchema, isCorrectedInt96RebaseForThisFile,
         isCorrectedRebaseForThisFile, hasInt96Timestamps)
