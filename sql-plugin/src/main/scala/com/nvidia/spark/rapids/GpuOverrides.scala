@@ -4453,9 +4453,9 @@ case class GpuOverrides() extends Rule[SparkPlan] with Logging {
         true
       case f: FileSourceScanExec =>
         // example filename: "file:/tmp/delta-table/_delta_log/00000000000000000000.json"
-          // name.contains("/_delta_log/") && (name.endsWith(".json") || name.contains("checkpoint.parquet"))
+           // name.contains("/_delta_log/") && name.endsWith(".json")
         val found = f.relation.inputFiles.exists { name =>
-           name.contains("/_delta_log/") && name.endsWith(".json")
+          name.contains("/_delta_log/") && (name.endsWith(".json") || name.contains("checkpoint.parquet"))
         }
         if (found) {
           logDebug(s"Fallback for FileSourceScanExec delta log: $f")

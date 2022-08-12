@@ -325,8 +325,18 @@ object AlluxioUtils extends Logging {
           logDebug("Handling CatalogFileIndex")
           val memFI = cfi.filterPartitions(Nil)
           createNewFileIndexWithPathsReplaced(memFI.partitionSpec(), memFI.rootPaths)
-        case _ => {
+        case d => {
           logInfo(s"Handling file index type: ${relation.location.getClass}")
+
+          // if (d.isInstanceOf[com.databricks.sql.transaction.tahoe.DeltaLogFileIndex]){
+          if (d.isInstanceOf[com.databricks.sql.transaction.tahoe.stats.PreparedDeltaFileIndex]) {
+            val tfi = d.asInstanceOf[com.databricks.sql.transaction.tahoe.stats.PreparedDeltaFileIndex]
+            logWarning("root patsh are: " + tfi.rootPaths)
+            // logWarning("list files is: " + tfi.listFiles)
+            logWarning("input files is: " + tfi.inputFiles)
+            logWarning("parition schema is is: " + tfi.partitionSchema)
+            // logWarning("format is: " + tfi.format)
+          }
 
           // With the base Spark FileIndex type we don't know how to modify it to
           // just replace the paths so we have to try to recompute.
