@@ -20,9 +20,9 @@ import java.util.concurrent.TimeUnit.NANOSECONDS
 
 import scala.collection.mutable.HashMap
 
-import com.nvidia.spark.rapids.{GpuExec, GpuMetric, GpuOrcMultiFilePartitionReaderFactory, GpuParquetMultiFilePartitionReaderFactory, GpuReadCSVFileFormat, GpuReadFileFormatWithMetrics, GpuReadOrcFileFormat, GpuReadParquetFileFormat, RapidsConf, SparkPlanMeta}
+import com.nvidia.spark.rapids.{AlluxioUtils, GpuExec, GpuMetric, GpuOrcMultiFilePartitionReaderFactory, GpuParquetMultiFilePartitionReaderFactory, GpuReadCSVFileFormat, GpuReadFileFormatWithMetrics, GpuReadOrcFileFormat, GpuReadParquetFileFormat, RapidsConf, SparkPlanMeta}
 import com.nvidia.spark.rapids.shims.{GpuDataSourceRDD, SparkShimImpl}
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileStatus, Path}
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
@@ -112,9 +112,18 @@ case class GpuFileSourceScanExec(
   @transient lazy val selectedPartitions: Array[PartitionDirectory] = {
     val optimizerMetadataTimeNs = relation.location.metadataOpsTimeNs.getOrElse(0L)
     val startTime = System.nanoTime()
-    val ret =
+    val origRet =
       relation.location.listFiles(
         partitionFilters.filterNot(isDynamicPruningFilter), dataFilters)
+    logWarning("in selected partitions list files returned: " + origRet.mkString(","))
+    val ret = origRet.map { pd =>
+      val fileStatus = AlluxioUtils.replacePathIfNeededPathOnly(rapidsConf, pd.files,
+        relation.sparkSession.sparkContext.hadoopConfiguration,
+        relation.sparkSession.sparkContext.conf)
+      new PartitionDirectory(pd.values, fileStatus)
+    }
+    logWarning("in selected partitions after replace alluxio: " + ret.mkString(","))
+
     setFilesNumAndSizeMetric(ret, true)
     val timeTakenMs = NANOSECONDS.toMillis(
       (System.nanoTime() - startTime) + optimizerMetadataTimeNs)
