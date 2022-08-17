@@ -124,12 +124,12 @@ case class GpuFileSourceScanExec(
         origRet
       case _ => {
         origRet.map { pd =>
-          val fileStatus = AlluxioUtils.replacePathIfNeededPathOnly(rapidsConf, pd.files,
+          AlluxioUtils.replacePathIfNeededPathOnly(rapidsConf, pd,
             relation.sparkSession.sparkContext.hadoopConfiguration,
             relation.sparkSession.sparkContext.conf)
-          PartitionDirectory(pd.values, fileStatus)
         }
       }
+    }
 
     logWarning("in selected partitions after replace alluxio: " + ret.mkString(","))
 

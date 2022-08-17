@@ -23,13 +23,13 @@ import scala.io.{BufferedSource, Source}
 import scala.sys.process.{Process, ProcessLogger}
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hadoop.fs.{FileStatus, LocatedFileStatus, Path}
 
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Expression, PlanExpression}
-import org.apache.spark.sql.execution.datasources.{CatalogFileIndex, FileIndex, HadoopFsRelation, InMemoryFileIndex, PartitionSpec, PartitioningAwareFileIndex}
+import org.apache.spark.sql.execution.datasources.{CatalogFileIndex, FileIndex, HadoopFsRelation, InMemoryFileIndex, PartitionDirectory, PartitionSpec, PartitioningAwareFileIndex}
 import org.apache.spark.sql.execution.datasources.rapids.GpuPartitioningUtils
 
 object AlluxioUtils extends Logging {
@@ -302,9 +302,9 @@ object AlluxioUtils extends Logging {
 
   def replacePathIfNeededPathOnly(
       conf: RapidsConf,
-      paths: Seq[FileStatus],
+      pd: PartitionDirectory,
       hadoopConf: Configuration,
-      sparkConf: SparkConf): Seq[FileStatus] = {
+      sparkConf: SparkConf): PartitionDirectory = {
 
     val alluxioPathsReplace: Option[Seq[String]] = conf.getAlluxioPathsToReplace
     val alluxioAutoMountEnabled = conf.getAlluxioAutoMountEnabled
@@ -339,10 +339,18 @@ object AlluxioUtils extends Logging {
     }
 
     if (replaceFunc.isDefined) {
-      val alluxPaths = paths.map { p =>
-        val replaced = replaceFunc.get(p.getPath)
-        p.setPath(replaced)
-        p
+      val alluxPaths = pd.files.map { f =>
+        val replaced = replaceFunc.get(f.getPath)
+      // turn serializeableFileStatus back to FileStatus
+/*
+         val blockLocations = f.blockLocations.map { loc =>
+          new BlockLocation(loc.names, loc.hosts, loc.offset, loc.length)
+        }
+        new LocatedFileStatus(
+*/
+          new FileStatus(
+            f.length, f.isDir, f.blockReplication, f.blockSize, f.modificationTime,
+            replaced)
       }
 
       // check the alluxio paths in root paths exist or not
@@ -353,12 +361,12 @@ object AlluxioUtils extends Logging {
             foreach(matched =>
               checkAlluxioMounted(hadoopConf, matched))
         }
-        alluxPaths
+      PartitionDirectory(pd.values, alluxPaths.toArray)
       } else {
-        paths
+        pd
       }
     } else {
-      paths
+      pd
     }
   }
 
@@ -441,7 +449,7 @@ object AlluxioUtils extends Logging {
         case d => {
 
 
-          logInfo("skipping replace unkonw file index: ${relation.location.getClass}, trying later")
+          logInfo(s"skipping replace unkonw file index: ${relation.location.getClass}, trying later")
           /*
           logInfo(s"Handling file index type: ${relation.location.getClass}")
 
