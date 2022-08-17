@@ -33,7 +33,7 @@ import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.physical.{HashPartitioning, Partitioning, UnknownPartitioning}
 import org.apache.spark.sql.connector.read.PartitionReaderFactory
 import org.apache.spark.sql.execution.{ExecSubqueryExpression, ExplainUtils, FileSourceScanExec, PartitionedFileUtil, SQLExecution}
-import org.apache.spark.sql.execution.datasources.{BucketingUtils, DataSourceStrategy, DataSourceUtils, FileFormat, FilePartition, HadoopFsRelation, PartitionDirectory, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{BucketingUtils, CatalogFileIndex, DataSourceStrategy, DataSourceUtils, FileFormat, FilePartition, HadoopFsRelation, PartitionDirectory, PartitionedFile, PartitioningAwareFileIndex}
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
 import org.apache.spark.sql.execution.datasources.json.JsonFileFormat
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
@@ -116,12 +116,21 @@ case class GpuFileSourceScanExec(
       relation.location.listFiles(
         partitionFilters.filterNot(isDynamicPruningFilter), dataFilters)
     logWarning("in selected partitions list files returned: " + origRet.mkString(","))
-    val ret = origRet.map { pd =>
-      val fileStatus = AlluxioUtils.replacePathIfNeededPathOnly(rapidsConf, pd.files,
-        relation.sparkSession.sparkContext.hadoopConfiguration,
-        relation.sparkSession.sparkContext.conf)
-      new PartitionDirectory(pd.values, fileStatus)
-    }
+
+    val ret = relation.location match {
+      case _: PartitioningAwareFileIndex =>
+        origRet
+      case _: CatalogFileIndex =>
+        origRet
+      case _ => {
+        origRet.map { pd =>
+          val fileStatus = AlluxioUtils.replacePathIfNeededPathOnly(rapidsConf, pd.files,
+            relation.sparkSession.sparkContext.hadoopConfiguration,
+            relation.sparkSession.sparkContext.conf)
+          PartitionDirectory(pd.values, fileStatus)
+        }
+      }
+
     logWarning("in selected partitions after replace alluxio: " + ret.mkString(","))
 
     setFilesNumAndSizeMetric(ret, true)
