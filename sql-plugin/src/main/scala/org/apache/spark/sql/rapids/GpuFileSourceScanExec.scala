@@ -123,11 +123,14 @@ case class GpuFileSourceScanExec(
       case _: CatalogFileIndex =>
         origRet
       case _ => {
-        origRet.map { pd =>
+        logWarning(" going to replace")
+        val res = origRet.map { pd =>
           AlluxioUtils.replacePathIfNeededPathOnly(rapidsConf, pd,
             relation.sparkSession.sparkContext.hadoopConfiguration,
             relation.sparkSession.sparkContext.conf)
         }
+        logWarning("replace res is " + res)
+        res
       }
     }
 
@@ -347,10 +350,13 @@ case class GpuFileSourceScanExec(
         None
       }
 
+      logWarning("inputRDD readFile")
     val readRDD = if (bucketedScan) {
+      logWarning("inputRDD bucketed rdd")
       createBucketedReadRDD(relation.bucketSpec.get, readFile, dynamicallySelectedPartitions,
         relation)
     } else {
+      logWarning("inputRDD non bucketed rdd")
       createNonBucketedReadRDD(readFile, dynamicallySelectedPartitions,
         relation)
     }
@@ -535,6 +541,7 @@ case class GpuFileSourceScanExec(
       partition.files.flatMap { file =>
         // getPath() is very expensive so we only want to call it once in this block:
         val filePath = file.getPath
+        logWarning(s"calculatig split files for $filePath")
         val isSplitable = relation.fileFormat.isSplitable(
           relation.sparkSession, relation.options, filePath)
         PartitionedFileUtil.splitFiles(

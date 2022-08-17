@@ -341,6 +341,7 @@ object AlluxioUtils extends Logging {
     if (replaceFunc.isDefined) {
       val alluxPaths = pd.files.map { f =>
         val replaced = replaceFunc.get(f.getPath)
+        logWarning(s" path ${f.getPath} replaced is: $replaced")
       // turn serializeableFileStatus back to FileStatus
 /*
          val blockLocations = f.blockLocations.map { loc =>
