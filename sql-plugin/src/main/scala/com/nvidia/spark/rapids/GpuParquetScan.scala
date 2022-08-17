@@ -346,6 +346,9 @@ case class ParquetFileInfoWithBlockMeta(filePath: Path, blocks: Seq[BlockMetaDat
     isCorrectedInt96RebaseMode: Boolean, isCorrectedRebaseMode: Boolean,
     hasInt96Timestamps: Boolean)
 
+private case class BlockMetaWithFilePart(meta: ParquetFileInfoWithBlockMeta, file: PartitionedFile)
+
+
 /**
  * A parquet compatible stream that allows reading from a HostMemoryBuffer to Parquet.
  * The majority of the code here was copied from Parquet's DelegatingSeekableInputStream with
@@ -974,6 +977,48 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       ignoreMissingFiles, ignoreCorruptFiles, readUseFieldId)
   }
 
+  private class ReadBatchRunner2(
+      footerReadType: ParquetFooterReaderType.Value,
+      taskContext: TaskContext,
+      files: Array[PartitionedFile],
+      conf: Configuration,
+      filters: Array[Filter],
+      readDataSchema: StructType) extends Callable[Array[BlockMetaWithFilePart]] with Logging {
+
+    override def call(): Array[BlockMetaWithFilePart] = {
+      TrampolineUtil.setTaskContext(taskContext)
+      try {
+        files.map { file =>
+          try {
+            val meta = filterHandler.filterBlocks(footerReadType, file, conf, filters,
+              readDataSchema, metrics)
+            BlockMetaWithFilePart(meta, file)
+          } catch {
+            case e: FileNotFoundException if ignoreMissingFiles =>
+              logWarning(s"Skipped missing file: ${file.filePath}", e)
+              val meta = ParquetFileInfoWithBlockMeta(new Path(new URI(file.filePath)), Seq.empty,
+                file.partitionValues, null, null, false, false, false)
+              BlockMetaWithFilePart(meta, file)
+            // Throw FileNotFoundException even if `ignoreCorruptFiles` is true
+            case e: FileNotFoundException if !ignoreMissingFiles => throw e
+            // If ignoreMissingFiles=true, this case will never be reached. But it's ok
+            // to leave this branch here.
+            // TODO - do we need to actually throw from thread and fail?
+            case e@(_: RuntimeException | _: IOException) if ignoreCorruptFiles =>
+              logWarning(
+                s"Skipped the rest of the content in the corrupted file: ${file.filePath}", e)
+              val meta = ParquetFileInfoWithBlockMeta(new Path(new URI(file.filePath)), Seq.empty,
+                file.partitionValues, null, null, false, false, false)
+              BlockMetaWithFilePart(meta, file)
+          }
+        }
+      } finally {
+        TrampolineUtil.unsetTaskContext()
+      }
+    }
+  }
+
+
   /**
    * Build the PartitionReader for coalescing reading
    *
@@ -985,6 +1030,47 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       files: Array[PartitionedFile],
       conf: Configuration): PartitionReader[ColumnarBatch] = {
     val clippedBlocks = ArrayBuffer[ParquetSingleDataBlockMeta]()
+   val tc = TaskContext.get()
+
+    val tasks = new java.util.ArrayList[Future[Array[BlockMetaWithFilePart]]]()
+
+    // TODO - may want to limit
+    // val limit = math.min(maxNumFileProcessed, files.length)
+
+    val filterParallel = rapidsConf.get(RapidsConf.FILTER_PARALLEL)
+
+      if (files.length > 10 && filterParallel) {
+      logWarning(s" number of files is: ${files.length}, running parallel")
+      val start = System.currentTimeMillis()
+      // TODO - just hardcode to try 5
+      files.sliding(5, 5).foreach { fileGroup =>
+        // Add these in the order as we got them so that we can make sure
+        // we process them in the same order as CPU would.
+        val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
+        tasks.add(threadPool.submit(
+          new ReadBatchRunner2(footerReadType, tc, fileGroup, conf, filters, readDataSchema)))
+      }
+      for (future <- tasks.asScala) {
+        val fileBlockMetaArray = future.get()
+        fileBlockMetaArray.foreach { metaAndFile =>
+          val singleFileInfo = metaAndFile.meta
+          val file = metaAndFile.file
+          clippedBlocks ++= singleFileInfo.blocks.map(block =>
+            ParquetSingleDataBlockMeta(
+              singleFileInfo.filePath,
+              ParquetDataBlock(block),
+              file.partitionValues,
+              ParquetSchemaWrapper(singleFileInfo.schema),
+              ParquetExtraInfo(singleFileInfo.isCorrectedRebaseMode,
+                singleFileInfo.isCorrectedInt96RebaseMode, singleFileInfo.hasInt96Timestamps)))
+        }
+      }
+      val timeTook = System.currentTimeMillis() - start
+      logWarning(s"Took $timeTook to do in parallel")
+    } else {
+
+      logWarning(s" number of files is: ${files.length}, running serial")
+      val start = System.currentTimeMillis()
     files.map { file =>
       val singleFileInfo = try {
         filterHandler.filterBlocks(footerReadType, file, conf, filters, readDataSchema, metrics)
@@ -1011,6 +1097,9 @@ case class GpuParquetMultiFilePartitionReaderFactory(
           ParquetSchemaWrapper(singleFileInfo.schema),
           ParquetExtraInfo(singleFileInfo.isCorrectedRebaseMode,
             singleFileInfo.isCorrectedInt96RebaseMode, singleFileInfo.hasInt96Timestamps)))
+    }
+       val timeTook = System.currentTimeMillis() - start
+        logWarning(s"Took $timeTook to do serial")
     }
     new MultiFileParquetPartitionReader(conf, files, clippedBlocks,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
