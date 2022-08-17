@@ -342,13 +342,6 @@ object AlluxioUtils extends Logging {
       val alluxPaths = pd.files.map { f =>
         val replaced = replaceFunc.get(f.getPath)
         logWarning(s" path ${f.getPath} replaced is: $replaced")
-      // turn serializeableFileStatus back to FileStatus
-/*
-         val blockLocations = f.blockLocations.map { loc =>
-          new BlockLocation(loc.names, loc.hosts, loc.offset, loc.length)
-        }
-        new LocatedFileStatus(
-*/
           new FileStatus(
             f.length, f.isDir, f.blockReplication, f.blockSize, f.modificationTime,
             replaced)
@@ -362,6 +355,7 @@ object AlluxioUtils extends Logging {
             foreach(matched =>
               checkAlluxioMounted(hadoopConf, matched))
         }
+        logWarning("using allux paths " + alluxPaths.mkString(","))
       PartitionDirectory(pd.values, alluxPaths.toArray)
       } else {
         pd

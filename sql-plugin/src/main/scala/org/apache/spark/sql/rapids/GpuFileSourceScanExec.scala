@@ -129,7 +129,7 @@ case class GpuFileSourceScanExec(
             relation.sparkSession.sparkContext.hadoopConfiguration,
             relation.sparkSession.sparkContext.conf)
         }
-        logWarning("replace res is " + res)
+        logWarning("replace res is " + res.mkString(","))
         res
       }
     }
