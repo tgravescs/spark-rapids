@@ -439,6 +439,10 @@ object AlluxioUtils extends Logging {
           val memFI = cfi.filterPartitions(Nil)
           createNewFileIndexWithPathsReplaced(memFI.partitionSpec(), memFI.rootPaths)
         case d => {
+
+
+          logInfo("skipping replace unkonw file index: ${relation.location.getClass}, trying later")
+          /*
           logInfo(s"Handling file index type: ${relation.location.getClass}")
 
           // if (d.isInstanceOf[com.databricks.sql.transaction.tahoe.DeltaLogFileIndex]){
@@ -494,6 +498,9 @@ object AlluxioUtils extends Logging {
             parameters,
             Option(relation.dataSchema),
             userSpecifiedPartitionSpec = Some(partitionSpec))
+
+           */
+          relation.location
         }
       }
     } else {
