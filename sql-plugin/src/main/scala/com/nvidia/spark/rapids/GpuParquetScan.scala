@@ -1039,11 +1039,11 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     // val limit = math.min(maxNumFileProcessed, files.length)
 
 
-      if (files.length > 10 && filterParallel) {
+      if (files.length > 4 && filterParallel) {
       logWarning(s" number of files is: ${files.length}, running parallel")
       val start = System.currentTimeMillis()
       // TODO - just hardcode to try 5
-      files.sliding(5, 5).foreach { fileGroup =>
+      files.sliding(2, 2).foreach { fileGroup =>
         // Add these in the order as we got them so that we can make sure
         // we process them in the same order as CPU would.
         val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
