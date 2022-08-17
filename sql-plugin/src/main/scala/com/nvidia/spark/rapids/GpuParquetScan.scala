@@ -949,6 +949,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   private val ignoreCorruptFiles = sqlConf.ignoreCorruptFiles
   private val filterHandler = GpuParquetFileFilterHandler(sqlConf)
   private val readUseFieldId = ParquetSchemaClipShims.useFieldId(sqlConf)
+  private val filterParallel = rapidsConf.get(RapidsConf.FILTER_PARALLEL)
 
   // we can't use the coalescing files reader when InputFileName, InputFileBlockStart,
   // or InputFileBlockLength because we are combining all the files into a single buffer
@@ -1037,7 +1038,6 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     // TODO - may want to limit
     // val limit = math.min(maxNumFileProcessed, files.length)
 
-    val filterParallel = rapidsConf.get(RapidsConf.FILTER_PARALLEL)
 
       if (files.length > 10 && filterParallel) {
       logWarning(s" number of files is: ${files.length}, running parallel")
