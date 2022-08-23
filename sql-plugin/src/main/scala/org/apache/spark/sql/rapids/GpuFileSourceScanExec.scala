@@ -118,10 +118,10 @@ case class GpuFileSourceScanExec(
     logWarning("in selected partitions list files returned: " + origRet.mkString(","))
 
     val ret = relation.location match {
-      case _: PartitioningAwareFileIndex =>
-        origRet
-      case _: CatalogFileIndex =>
-        origRet
+      // case _: PartitioningAwareFileIndex =>
+      // origRet
+      // case _: CatalogFileIndex =>
+      //  origRet
       case _ => {
         logWarning(" going to replace")
         val res = origRet.map { pd =>

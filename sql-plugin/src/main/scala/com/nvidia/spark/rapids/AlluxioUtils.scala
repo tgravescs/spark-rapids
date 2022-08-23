@@ -356,10 +356,8 @@ object AlluxioUtils extends Logging {
               checkAlluxioMounted(hadoopConf, matched))
         }
         logWarning("using allux paths " + alluxPaths.mkString(","))
+      } 
       PartitionDirectory(pd.values, alluxPaths.toArray)
-      } else {
-        pd
-      }
     } else {
       pd
     }
@@ -433,6 +431,7 @@ object AlluxioUtils extends Logging {
       // update the paths to the new Alluxio path. If its not a type of file index
       // we know then fall back to inferring. The latter happens on certain CSPs
       // like Databricks where they have customer file index types.
+          /*
       relation.location match {
         case pfi: PartitioningAwareFileIndex =>
           logDebug("Handling PartitioningAwareFileIndex")
@@ -445,7 +444,6 @@ object AlluxioUtils extends Logging {
 
 
           logInfo(s"skipping replace unkonw file index: ${relation.location.getClass}, trying later")
-          /*
           logInfo(s"Handling file index type: ${relation.location.getClass}")
 
           // if (d.isInstanceOf[com.databricks.sql.transaction.tahoe.DeltaLogFileIndex]){
@@ -502,10 +500,11 @@ object AlluxioUtils extends Logging {
             Option(relation.dataSchema),
             userSpecifiedPartitionSpec = Some(partitionSpec))
 
-           */
           relation.location
         }
       }
+           */
+          relation.location
     } else {
       relation.location
     }
