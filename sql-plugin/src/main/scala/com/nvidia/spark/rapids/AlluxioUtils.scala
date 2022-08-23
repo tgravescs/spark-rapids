@@ -34,6 +34,26 @@ import org.apache.spark.sql.execution.datasources.rapids.GpuPartitioningUtils
 
 object AlluxioUtils extends Logging {
   private val checkedAlluxioPath = scala.collection.mutable.HashSet[String]()
+  private val cachedPaths = scala.collection.mutable.Queue[String]()
+
+  def isFileCached(file: String): Boolean = {
+    cachedPaths.contains(file)
+  }
+
+  def addCachedFile(fileName: String): Unit = {
+    cachedPaths += fileName
+    if (cachedPaths.length > 100000) {
+      logWarning(s"cached length is big: ${cachedPaths.length}")
+      cachedPaths.drop(cachedPaths.length - 65000)
+      logWarning(s"cached lengh is now: ${cachedPaths.length}")
+    }
+  }
+
+ def getFileCachePath(path: Path): String = {
+    val lastDir = path.getParent.getName
+    val fileName = path.getName
+    s"$lastDir/$fileName"
+  }
 
   private def checkAlluxioMounted(hadoopConfiguration: Configuration,
       alluxio_path: String): Unit = {
@@ -342,6 +362,12 @@ object AlluxioUtils extends Logging {
       val alluxPaths = pd.files.map { f =>
         val replaced = replaceFunc.get(f.getPath)
         logWarning(s" path ${f.getPath} replaced is: $replaced")
+       cachedPaths += getFileCachePath(f.getPath)
+        if (cachedPaths.length > 100000) {
+          logWarning(s"cached length is big: ${cachedPaths.length}")
+          cachedPaths.drop(cachedPaths.length - 65000)
+          logWarning(s"cached lengh is now: ${cachedPaths.length}")
+        }
           new FileStatus(
             f.length, f.isDir, f.blockReplication, f.blockSize, f.modificationTime,
             replaced)

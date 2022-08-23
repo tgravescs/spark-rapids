@@ -227,14 +227,24 @@ abstract class MultiFilePartitionReaderFactoryBase(
     val files = filePartition.files
     val filePaths = files.map(_.filePath)
     val conf = broadcastedConf.value.value
+    val areFilesCached = filePaths.forall{ p =>
+      val cachedName = AlluxioUtils.getFileCachePath(new Path(p))
+      val res = AlluxioUtils.isFileCached(cachedName)
+      if (!res) {
+        AlluxioUtils.addCachedFile(cachedName)
+      }
+      res
+    }
 
-    if (useMultiThread(filePaths)) {
+    if (!areFilesCached || useMultiThread(filePaths)) {
       logInfo("Using the multi-threaded multi-file " + getFileFormatShortName + " reader, " +
-        s"files: ${filePaths.mkString(",")} task attemptid: ${TaskContext.get.taskAttemptId()}")
+        s"files: ${filePaths.mkString(",")} task attemptid: ${TaskContext.get.taskAttemptId()} " +
+        s"files cached is: $areFilesCached")
       buildBaseColumnarReaderForCloud(files, conf)
     } else {
       logInfo("Using the coalesce multi-file " + getFileFormatShortName + " reader, files: " +
-        s"${filePaths.mkString(",")} task attemptid: ${TaskContext.get.taskAttemptId()}")
+        s"${filePaths.mkString(",")} task attemptid: ${TaskContext.get.taskAttemptId()} " +
+        s"files cached is: $areFilesCached")
       buildBaseColumnarReaderForCoalescing(files, conf)
     }
   }
