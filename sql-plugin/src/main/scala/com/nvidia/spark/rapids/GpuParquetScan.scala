@@ -629,7 +629,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
       val footer = try {
          footerReader match {
           case ParquetFooterReaderType.NATIVE =>
-            logWarning("Tom using native parquet footer")
+            // logWarning("Tom using native parquet footer")
             val serialized = withResource(readAndFilterFooter(file, conf,
               readDataSchema, filePath)) { tableFooter =>
                 if (tableFooter.getNumColumns <= 0) {
@@ -653,7 +653,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
               }
             }
           case _ =>
-            logWarning("Tom using Simple parquet footer")
+            // logWarning("Tom using Simple parquet footer")
             readAndSimpleFilterFooter(file, conf, filePath)
         }
       } catch {
@@ -663,7 +663,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
             s"reader via ${RapidsConf.ENABLE_PARQUET_READ.key}.", e)
       }
 
-      logWarning(s"read footer for ${context.taskAttemptId()} stage ${context.stageId()}")
+      // logWarning(s"read footer for ${context.taskAttemptId()} stage ${context.stageId()}")
       val fileSchema = footer.getFileMetaData.getSchema
 
       // check spark.sql.parquet.fieldId.read.ignoreMissing
@@ -678,7 +678,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
       } else {
         None
       }
-      logWarning(s"got pushed filters for ${context.taskAttemptId()} stage ${context.stageId()}")
+      // logWarning(s"got pushed filters for ${context.taskAttemptId()} stage ${context.stageId()}")
 
       val hasInt96Timestamps = isParquetTimeInInt96(fileSchema)
 
@@ -703,7 +703,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
       } else {
         footer.getBlocks
       }
-      logWarning(s"got blocks for ${context.taskAttemptId()} stage ${context.stageId()}")
+      // logWarning(s"got blocks for ${context.taskAttemptId()} stage ${context.stageId()}")
 
       val (clipped, clippedSchema) =
         withResource(new NvtxRange("clipSchema", NvtxColor.DARK_GREEN)) { _ =>
@@ -717,7 +717,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
           (clipped, clippedSchema)
         }
 
-      logWarning(s"got clipped schema for ${context.taskAttemptId()} stage ${context.stageId()}")
+      // logWarning(s"got clipped schema for ${context.taskAttemptId()} stage ${context.stageId()}")
       ParquetFileInfoWithBlockMeta(filePath, clipped, file.partitionValues,
         clippedSchema, readDataSchema, isCorrectedInt96RebaseForThisFile,
         isCorrectedRebaseForThisFile, hasInt96Timestamps)
@@ -1034,6 +1034,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
    val tc = TaskContext.get()
 
     val tasks = new java.util.ArrayList[Future[Array[BlockMetaWithFilePart]]]()
+    val currentTime = System.nanoTime()
 
     // TODO - may want to limit
     // val limit = math.min(maxNumFileProcessed, files.length)
@@ -1100,6 +1101,9 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     }
        val timeTook = System.currentTimeMillis() - start
         logWarning(s"Took $timeTook to do serial")
+    }
+    metrics.get("scanTime").foreach {
+      _ += TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - currentTime)
     }
     new MultiFileParquetPartitionReader(conf, files, clippedBlocks,
       isCaseSensitive, readDataSchema, debugDumpPrefix,
