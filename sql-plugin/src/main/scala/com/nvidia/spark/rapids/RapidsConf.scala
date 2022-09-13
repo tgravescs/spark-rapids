@@ -1568,7 +1568,7 @@ object RapidsConf {
       s"see $MULTITHREAD_READ_NUM_THREADS. Note that filtering multithreaded " +
       "is useful with Alluxio.")
     .integerConf
-    .createWithDefault(value = 0)
+    .createWithDefault(value = 2)
 
   private def printSectionHeader(category: String): Unit =
     println(s"\n### $category")

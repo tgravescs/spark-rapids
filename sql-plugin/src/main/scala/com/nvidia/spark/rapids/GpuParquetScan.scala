@@ -1029,7 +1029,9 @@ case class GpuParquetMultiFilePartitionReaderFactory(
 
   private def updateFilesIfAlluxio(files: Array[PartitionedFile]): Array[PartitionedFile] = {
     val rapidsConf = new RapidsConf(SparkEnv.get.conf)
-    AlluxioUtils.updateFilesTaskTimeIfAlluxio(files, rapidsConf).map(_._1)
+    val res = AlluxioUtils.updateFilesTaskTimeIfAlluxio(files, rapidsConf).map(_._1)
+    logWarning("updated alluxio files are: " + res.mkString(","))
+    res
   }
 
   /**
@@ -1122,7 +1124,9 @@ case class GpuParquetPartitionReaderFactory(
 
   private def updateFilesIfAlluxio(file: PartitionedFile): PartitionedFile = {
     val rapidsConf = new RapidsConf(SparkEnv.get.conf)
-    AlluxioUtils.updateFilesTaskTimeIfAlluxio(Array(file), rapidsConf).head._1
+    val res = AlluxioUtils.updateFilesTaskTimeIfAlluxio(Array(file), rapidsConf).head._1
+    logWarning("updated alluxio files are: " + res)
+    res
   }
 
   override def buildColumnarReader(

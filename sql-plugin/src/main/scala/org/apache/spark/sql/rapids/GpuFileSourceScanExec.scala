@@ -137,11 +137,12 @@ case class GpuFileSourceScanExec(
           relation.sparkSession.conf)
       }
     } else if (isAlluxioAutoMountTaskTime) {
-      val anyAlluxioMounted = origRet.map { pd =>
+      anyAlluxioMounted = origRet.map { pd =>
         AlluxioUtils.autoMountIfNeeded(rapidsConf, pd,
           relation.sparkSession.sparkContext.hadoopConfiguration,
           relation.sparkSession.conf)
       }.contains(true)
+      logWarning("any alluxio mnounted is: " +  anyAlluxioMounted)
       origRet
     } else {
       origRet
