@@ -64,9 +64,18 @@ class RunningQualificationApp(reportSqlLevel: Boolean,
   private val SQL_DESC_LENGTH = 100
   private lazy val appName = appInfo.map(_.appName).getOrElse("")
   private lazy val appNameSize = if (appName.nonEmpty) appName.size else 100
+
+  private lazy val unSupExecMaxSize = QualOutputWriter.getunSupportedMaxSize(
+    Seq(appInfo).map(_.unSupportedExecs.size),
+    QualOutputWriter.UNSUPPORTED_EXECS_MAX_SIZE,
+    QualOutputWriter.UNSUPPORTED_EXECS.size)
+  private lazy val unSupExprMaxSize = QualOutputWriter.getunSupportedMaxSize(
+    Seq(appInfo).map(_.unSupportedExprs.size),
+    QualOutputWriter.UNSUPPORTED_EXPRS_MAX_SIZE,
+    QualOutputWriter.UNSUPPORTED_EXPRS.size)
   private lazy val headersAndSizes =
     QualOutputWriter.getDetailedPerSqlHeaderStringsAndSizes(appNameSize,
-      appId.size, SQL_DESC_LENGTH)
+      appId.size, SQL_DESC_LENGTH, unSupExecMaxSize, unSupExprMaxSize)
 
   def this() = {
     this(false)
@@ -164,6 +173,14 @@ class RunningQualificationApp(reportSqlLevel: Boolean,
           delimiter, prettyPrint)
         val appInfoStr = QualOutputWriter.constructAppSummaryInfo(info.estimatedInfo,
           headersAndSizes, appId.size, delimiter, prettyPrint)
+
+
+        val headerStr = QualOutputWriter.constructOutputRowFromMap(headersAndSizes,
+          delimiter, prettyPrint)
+        val appInfoStr = QualOutputWriter.constructAppSummaryInfo(info.estimatedInfo,
+          headersAndSizes, appIdMaxSize, unSupExecMaxSize, unSupExprMaxSize,
+          delimiter, prettyPrint)
+
         headerStr + appInfoStr
       case None =>
         logWarning(s"Unable to get qualification information for this application")
