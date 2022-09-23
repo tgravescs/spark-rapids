@@ -104,8 +104,9 @@ class RunningQualificationApp(reportSqlLevel: Boolean,
     appInfo.foreach { info =>
     logWarning("application info is: " + info)
     }
-    val csvResult = constructPerSqlResult(sqlID, appInfo, QualOutputWriter.CSV_DELIMITER, false)
-    val textResult = constructPerSqlResult(sqlID, appInfo, QualOutputWriter.TEXT_DELIMITER, true)
+    val sqlInfo = aggregatePerSQLStats()
+    val csvResult = constructPerSqlResult(sqlID, sqlInfo, QualOutputWriter.CSV_DELIMITER, false)
+    val textResult = constructPerSqlResult(sqlID, sqlInfo, QualOutputWriter.TEXT_DELIMITER, true)
     (csvResult, textResult)
   }
 
