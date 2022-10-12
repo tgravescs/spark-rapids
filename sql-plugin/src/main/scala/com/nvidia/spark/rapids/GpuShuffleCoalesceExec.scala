@@ -196,6 +196,8 @@ class GpuShuffleCoalesceIterator(iter: Iterator[HostConcatResult],
   private[this] val opTimeMetric = metricsMap(GpuMetric.OP_TIME)
   private[this] val outputBatchesMetric = metricsMap(GpuMetric.NUM_OUTPUT_BATCHES)
   private[this] val outputRowsMetric = metricsMap(GpuMetric.NUM_OUTPUT_ROWS)
+  private[this] val buildMetric = metricsMap(GpuMetric.BUILD_TIME)
+
 
   override def hasNext: Boolean = iter.hasNext
 
@@ -218,7 +220,7 @@ class GpuShuffleCoalesceIterator(iter: Iterator[HostConcatResult],
         // generate GPU data from batches that are empty.
         GpuSemaphore.acquireIfNecessary(TaskContext.get(), semWaitTime)
 
-        withResource(new MetricRange(opTimeMetric)) { _ =>
+        withResource(new MetricRange(buildMetric)) { _ =>
           val batch = cudf_utils.HostConcatResultUtil.getColumnarBatch(hostConcatResult, dataTypes)
           outputBatchesMetric += 1
           outputRowsMetric += batch.numRows()
