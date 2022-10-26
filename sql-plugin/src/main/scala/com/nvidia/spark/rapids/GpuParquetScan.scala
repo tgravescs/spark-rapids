@@ -1056,9 +1056,9 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     val startTime = System.nanoTime()
     val metaAndFilesArr = if (numFilesFilterParallel > 0) {
       val tc = TaskContext.get()
-      val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
+      val threadPool2 = MultiFileReaderThreadPool2.getOrCreateThreadPool(numThreads)
       files.grouped(numFilesFilterParallel).map { fileGroup =>
-        threadPool.submit(
+        threadPool2.submit(
           new CoalescingFilterRunner(footerReadType, tc, fileGroup, conf, filters, readDataSchema))
       }.toArray.flatMap(_.get())
     } else {
