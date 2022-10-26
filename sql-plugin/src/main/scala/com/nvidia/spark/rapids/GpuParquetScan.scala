@@ -1841,6 +1841,7 @@ class MultiFileCloudParquetPartitionReader(
             fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema, fileBlockMeta.readSchema)
         } else {
           blockChunkIter = fileBlockMeta.blocks.iterator.buffered
+          logWarning(s"file has number blocks: ${fileBlockMeta.blocks.size}")
           if (isDone) {
             val bytesRead = fileSystemBytesRead() - startingBytesRead
             // got close before finishing
