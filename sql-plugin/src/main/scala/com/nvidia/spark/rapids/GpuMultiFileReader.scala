@@ -433,7 +433,7 @@ abstract class MultiFileCloudPartitionReaderBase(
     }
     for (i <- 0 until limit) {
       val file = files(i)
-      logDebug(s"MultiFile reader using file ${file.toRead}, orig file is ${file.original}")
+      logWarning(s"MultiFile reader using file ${file.toRead}, orig file is ${file.original}")
       // Add these in the order as we got them so that we can make sure
       // we process them in the same order as CPU would.
 
@@ -443,6 +443,7 @@ abstract class MultiFileCloudPartitionReaderBase(
     // queue up any left to add once others finish
     for (i <- limit until files.length) {
       val file = files(i)
+      logWarning(s"adding file to run later $file")
       tasksToRun.enqueue(getBatchRunner(tc, file.toRead, file.original, conf, filters))
     }
     isInitted = true
@@ -1011,7 +1012,7 @@ abstract class MultiFileCoalescingPartitionReaderBase(
           logWarning("files sorted are: " + filesAndBlocksSorted.map(_._1).mkString("<"))
           logWarning("files not sorted are: " + filesAndBlocks.map(_._1).mkString("<"))
 
-          filesAndBlocksSorted.foreach { case (file, blocks) =>
+          filesAndBlocks.foreach { case (file, blocks) =>
             val fileBlockSize = blocks.map(_.getBlockSize).sum
             logWarning(s"files size is: $fileBlockSize")
             // use a single buffer and slice it up for different files if we need
@@ -1028,7 +1029,7 @@ abstract class MultiFileCoalescingPartitionReaderBase(
           }
 
           // for (future <- tasks.asScala) {
-          for (future <- 0 until filesAndBlocksSorted.size) {
+          for (future <- 0 until filesAndBlocks.size) {
             val (blocks, bytesRead) = fcs.take().get()
             logWarning(s"took for thread for file: ${}")
 
