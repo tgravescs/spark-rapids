@@ -108,6 +108,7 @@ trait MultiFileReaderFunctions extends Arm {
   }
 }
 
+
 // Singleton thread pool used across all tasks for multifile reading.
 // Please note that the TaskContext is not set in these threads and should not be used.
 object MultiFileReaderThreadPool extends Logging {
@@ -130,7 +131,7 @@ object MultiFileReaderThreadPool extends Logging {
         new LinkedBlockingQueue[Runnable],
         threadFactory)
       threadPoolExecutor.allowCoreThreadTimeOut(true)
-      logDebug(s"Using $maxThreads for the multithreaded reader thread pool")
+      logWarning(s"Using $maxThreads for the multithreaded reader thread pool")
       threadPool = Some(threadPoolExecutor)
     }
 
@@ -145,6 +146,44 @@ object MultiFileReaderThreadPool extends Logging {
     threadPool.getOrElse(initThreadPool(numThreads))
   }
 }
+
+object MultiFileReaderCompletionService extends Logging {
+  private var threadPool: Option[ThreadPoolExecutor] = None
+
+  private def initThreadPool(
+      maxThreads: Int,
+      keepAliveSeconds: Long = 60): ThreadPoolExecutor = synchronized {
+    if (threadPool.isEmpty) {
+      val threadFactory = new ThreadFactoryBuilder()
+        .setNameFormat("multithreaded file reader worker-%d")
+        .setDaemon(true)
+        .build()
+
+      val threadPoolExecutor = new ThreadPoolExecutor(
+        maxThreads, // corePoolSize: max number of threads to create before queuing the tasks
+        maxThreads, // maximumPoolSize: because we use LinkedBlockingDeque, this is not used
+        keepAliveSeconds,
+        TimeUnit.SECONDS,
+        new LinkedBlockingQueue[Runnable],
+        threadFactory)
+      threadPoolExecutor.allowCoreThreadTimeOut(true)
+      logWarning(s"Using $maxThreads for the multithreaded reader thread pool")
+      threadPool = Some(threadPoolExecutor)
+    }
+
+    threadPool.get
+  }
+
+  /**
+   * Get the existing thread pool or create one with the given thread count if it does not exist.
+   * @note The thread number will be ignored if the thread pool is already created.
+   */
+  def getOrCreateThreadPool(numThreads: Int): ThreadPoolExecutor = {
+    threadPool.getOrElse(initThreadPool(numThreads))
+  }
+}
+
+
 
 object MultiFileReaderUtils {
 
@@ -386,13 +425,18 @@ abstract class MultiFileCloudPartitionReaderBase(
     // limit the number we submit at once according to the config if set
     val limit = math.min(maxNumFileProcessed, files.length)
     val tc = TaskContext.get
+    synchronized {
+      if (fcs == null) {
+        val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
+        fcs = new ExecutorCompletionService[HostMemoryBuffersWithMetaDataBase](threadPool)
+      }
+    }
     for (i <- 0 until limit) {
       val file = files(i)
       logDebug(s"MultiFile reader using file ${file.toRead}, orig file is ${file.original}")
       // Add these in the order as we got them so that we can make sure
       // we process them in the same order as CPU would.
-      val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
-      fcs = new ExecutorCompletionService[HostMemoryBuffersWithMetaDataBase](threadPool)
+
       fcs.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters))
       // tasks.add(threadPool.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters)))
     }
@@ -984,7 +1028,7 @@ abstract class MultiFileCoalescingPartitionReaderBase(
           }
 
           // for (future <- tasks.asScala) {
-          for (future <- 0 until filesAndBlocks.size) {
+          for (future <- 0 until filesAndBlocksSorted.size) {
             val (blocks, bytesRead) = fcs.take().get()
             logWarning(s"took for thread for file: ${}")
 

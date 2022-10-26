@@ -1213,7 +1213,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       out: OutputStream,
       blocks: Seq[BlockMetaData],
       schema: MessageType): Unit = {
-    logWarning("blocks are: " + blocks.mkString(","))
+    // logWarning("blocks are: " + blocks.mkString(","))
     val fileMeta = new FileMetaData(schema, Collections.emptyMap[String, String],
       ParquetPartitionReader.PARQUET_CREATOR)
     val metadataConverter = new ParquetMetadataConverter
