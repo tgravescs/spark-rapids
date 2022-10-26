@@ -18,7 +18,7 @@ package com.nvidia.spark.rapids
 
 import java.io.{File, IOException}
 import java.net.{URI, URISyntaxException}
-import java.util.concurrent.{Callable, ConcurrentLinkedQueue, Future, LinkedBlockingQueue, ThreadPoolExecutor, TimeUnit}
+import java.util.concurrent.{Callable, ConcurrentLinkedQueue, ExecutorCompletionService, Future, LinkedBlockingQueue, ThreadPoolExecutor, TimeUnit}
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -366,6 +366,7 @@ abstract class MultiFileCloudPartitionReaderBase(
   private val tasksToRun = new Queue[Callable[HostMemoryBuffersWithMetaDataBase]]()
   private[this] val inputMetrics = Option(TaskContext.get).map(_.taskMetrics().inputMetrics)
       .getOrElse(TrampolineUtil.newInputMetrics())
+  private var fcs: ExecutorCompletionService[HostMemoryBuffersWithMetaDataBase] = null
 
   private val files: Array[PartitionedFileInfoOptAlluxio] = {
     if (alluxioPathReplacementMap.nonEmpty) {
@@ -377,7 +378,7 @@ abstract class MultiFileCloudPartitionReaderBase(
         AlluxioUtils.getOrigPathFromReplaced(inputFiles, alluxioPathReplacementMap)
       }
     } else {
-      inputFiles.map(PartitionedFileInfoOptAlluxio(_, None))
+      inputFiles.sortWith(_.length > _.length).map(PartitionedFileInfoOptAlluxio(_, None))
     }
   }
 
@@ -391,7 +392,9 @@ abstract class MultiFileCloudPartitionReaderBase(
       // Add these in the order as we got them so that we can make sure
       // we process them in the same order as CPU would.
       val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
-      tasks.add(threadPool.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters)))
+      fcs = new ExecutorCompletionService[HostMemoryBuffersWithMetaDataBase](threadPool)
+      fcs.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters))
+      // tasks.add(threadPool.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters)))
     }
     // queue up any left to add once others finish
     for (i <- limit until files.length) {
@@ -464,7 +467,9 @@ abstract class MultiFileCloudPartitionReaderBase(
           // happen in the same background threads. This is as close to wall
           // clock as we can get right now without further work.
           val startTime = System.nanoTime()
-          val fileBufsAndMeta = tasks.poll.get()
+          // val fileBufsAndMeta = tasks.poll.get()
+          val fileBufsAndMeta = fcs.take().get()
+
           val blockedTime = System.nanoTime() - startTime
           metrics.get(FILTER_TIME).foreach {
             _ += (blockedTime * fileBufsAndMeta.getFilterTimePct).toLong
@@ -533,7 +538,8 @@ abstract class MultiFileCloudPartitionReaderBase(
     if (tasksToRun.nonEmpty && !isDone) {
       val runner = tasksToRun.dequeue()
       val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
-      tasks.add(threadPool.submit(runner))
+      // tasks.add(threadPool.submit(runner))
+      fcs.submit(runner)
     }
   }
 
@@ -555,6 +561,7 @@ abstract class MultiFileCloudPartitionReaderBase(
     closeCurrentFileHostBuffers()
     batch.foreach(_.close())
     batch = None
+    // TODO clean up with completion service?
     tasks.asScala.foreach { task =>
       if (task.isDone()) {
         task.get.memBuffersAndSizes.foreach { case (buf, _) =>
@@ -926,10 +933,17 @@ abstract class MultiFileCoalescingPartitionReaderBase(
         metrics("bufferTime"))) { _ =>
       // ugly but we want to keep the order
       val filesAndBlocks = LinkedHashMap[Path, ArrayBuffer[DataBlockBase]]()
-      blocks.foreach { case (path, block) =>
+
+      val blocksSorted = blocks.sortWith(_._2.getBlockSize > _._2.getBlockSize )
+      blocksSorted.foreach { case (path, block) =>
         filesAndBlocks.getOrElseUpdate(path, new ArrayBuffer[DataBlockBase]) += block
       }
-      val tasks = new java.util.ArrayList[Future[(Seq[DataBlockBase], Long)]]()
+      // val tasks = new java.util.ArrayList[Future[(Seq[DataBlockBase], Long)]]()
+      val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
+
+      val fcs: ExecutorCompletionService[(Seq[DataBlockBase], Long)] =
+        new ExecutorCompletionService[(Seq[DataBlockBase], Long)](threadPool)
+
 
       val batchContext = createBatchContext(filesAndBlocks, clippedSchema)
       // First, estimate the output file size for the initial allocating.
@@ -943,19 +957,26 @@ abstract class MultiFileCoalescingPartitionReaderBase(
 
           val allOutputBlocks = scala.collection.mutable.ArrayBuffer[DataBlockBase]()
           val tc = TaskContext.get
-          val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
-          filesAndBlocks.foreach { case (file, blocks) =>
+          val filesAndBlocksSorted = filesAndBlocks.toSeq.sortWith{ (one, two) =>
+            val firstSize = one._2.map(_.getBlockSize).sum
+            val secondSize = two._2.map(_.getBlockSize).sum
+            firstSize > secondSize
+          }
+          filesAndBlocksSorted.foreach { case (file, blocks) =>
             val fileBlockSize = blocks.map(_.getBlockSize).sum
             // use a single buffer and slice it up for different files if we need
             val outLocal = hmb.slice(offset, fileBlockSize)
             // Third, copy the blocks for each file in parallel using background threads
-            tasks.add(threadPool.submit(
-              getBatchRunner(tc, file, outLocal, blocks, offset, batchContext)))
+            // tasks.add(threadPool.submit(
+             // getBatchRunner(tc, file, outLocal, blocks, offset, batchContext)))
+            fcs.submit(
+              getBatchRunner(tc, file, outLocal, blocks, offset, batchContext))
             offset += fileBlockSize
           }
 
-          for (future <- tasks.asScala) {
-            val (blocks, bytesRead) = future.get()
+          // for (future <- tasks.asScala) {
+          for (future <- 0 until filesAndBlocks.size) {
+            val (blocks, bytesRead) = fcs.take().get()
             allOutputBlocks ++= blocks
             TrampolineUtil.incBytesRead(inputMetrics, bytesRead)
           }
