@@ -1024,11 +1024,11 @@ abstract class MultiFileCoalescingPartitionReaderBase(
         filesAndBlocks.getOrElseUpdate(path, new ArrayBuffer[DataBlockBase]) += block
       }
 
-      // val tasks = new java.util.ArrayList[Future[(Seq[DataBlockBase], Long)]]()
+      val tasks = new java.util.ArrayList[Future[(Seq[DataBlockBase], Long)]]()
       val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
 
-      val fcs: ExecutorCompletionService[(Seq[DataBlockBase], Long)] =
-        new ExecutorCompletionService[(Seq[DataBlockBase], Long)](threadPool)
+      // val fcs: ExecutorCompletionService[(Seq[DataBlockBase], Long)] =
+       // new ExecutorCompletionService[(Seq[DataBlockBase], Long)](threadPool)
 
       val batchContext = createBatchContext(filesAndBlocks, clippedSchema)
       // First, estimate the output file size for the initial allocating.
@@ -1056,19 +1056,19 @@ abstract class MultiFileCoalescingPartitionReaderBase(
             // use a single buffer and slice it up for different files if we need
             val outLocal = hmb.slice(offset, fileBlockSize)
             // Third, copy the blocks for each file in parallel using background threads
-            // tasks.add(threadPool.submit(
-             // getBatchRunner(tc, file, outLocal, blocks, offset, batchContext)))
+            tasks.add(threadPool.submit(
+              getBatchRunner(tc, file, outLocal, blocks, offset, batchContext)))
             // fetching largest first but what about getting somethign done quickly???
-            fcs.submit(
-              getBatchRunner(tc, file, outLocal, blocks, offset, batchContext))
+            // fcs.submit(
+            //  getBatchRunner(tc, file, outLocal, blocks, offset, batchContext))
             logWarning(s"starting thread for file: $file")
             offset += fileBlockSize
             logWarning(s"new offset is $offset")
           }
 
-          // for (future <- tasks.asScala) {
-          for (future <- 0 until filesAndBlocksSorted.size) {
-            val (blocks, bytesRead) = fcs.take().get()
+          for (future <- tasks.asScala) {
+          // for (future <- 0 until filesAndBlocksSorted.size) {
+            val (blocks, bytesRead) = future.get()
             logWarning(s"took for thread for file: ${}")
 
             allOutputBlocks ++= blocks
