@@ -1213,6 +1213,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       out: OutputStream,
       blocks: Seq[BlockMetaData],
       schema: MessageType): Unit = {
+    logWarning("blocks are: " + blocks.mkString(","))
     val fileMeta = new FileMetaData(schema, Collections.emptyMap[String, String],
       ParquetPartitionReader.PARQUET_CREATOR)
     val metadataConverter = new ParquetMetadataConverter
@@ -1691,6 +1692,7 @@ class MultiFileParquetPartitionReader(
       blocks: Seq[DataBlockBase], bContext: BatchContext): Long = {
 
     val actualFooterSize = calculateParquetFooterSize(blocks, bContext.schema)
+    logWarning("actual footer size is " + actualFooterSize)
     // 4 + 4 is for writing size and the ending PARQUET_MAGIC.
     footerOffset + actualFooterSize + 4 + 4
   }

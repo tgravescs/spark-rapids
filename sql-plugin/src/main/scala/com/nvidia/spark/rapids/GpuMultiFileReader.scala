@@ -934,7 +934,10 @@ abstract class MultiFileCoalescingPartitionReaderBase(
       // ugly but we want to keep the order
       val filesAndBlocks = LinkedHashMap[Path, ArrayBuffer[DataBlockBase]]()
 
+      logWarning("blocks before are: " + blocks.map(_._2.getBlockSize).mkString(","))
       val blocksSorted = blocks.sortWith(_._2.getBlockSize > _._2.getBlockSize )
+      logWarning("blocks before are: " + blocksSorted.map(_._2.getBlockSize).mkString(","))
+
       blocksSorted.foreach { case (path, block) =>
         filesAndBlocks.getOrElseUpdate(path, new ArrayBuffer[DataBlockBase]) += block
       }
@@ -944,12 +947,11 @@ abstract class MultiFileCoalescingPartitionReaderBase(
       val fcs: ExecutorCompletionService[(Seq[DataBlockBase], Long)] =
         new ExecutorCompletionService[(Seq[DataBlockBase], Long)](threadPool)
 
-
       val batchContext = createBatchContext(filesAndBlocks, clippedSchema)
       // First, estimate the output file size for the initial allocating.
       //   the estimated size should be >= size of HEAD + Blocks + FOOTER
       val initTotalSize = calculateEstimatedBlocksOutputSize(batchContext)
-
+      logWarning(s"init size is $initTotalSize")
       val (buffer, bufferSize, footerOffset, outBlocks) =
         closeOnExcept(HostMemoryBuffer.allocate(initTotalSize)) { hmb =>
           // Second, write header
@@ -957,31 +959,41 @@ abstract class MultiFileCoalescingPartitionReaderBase(
 
           val allOutputBlocks = scala.collection.mutable.ArrayBuffer[DataBlockBase]()
           val tc = TaskContext.get
-          val filesAndBlocksSorted = filesAndBlocks.toSeq.sortWith{ (one, two) =>
+         val filesAndBlocksSorted = filesAndBlocks.toSeq.sortWith{ (one, two) =>
             val firstSize = one._2.map(_.getBlockSize).sum
             val secondSize = two._2.map(_.getBlockSize).sum
             firstSize > secondSize
           }
+          logWarning("files sorted are: " + filesAndBlocksSorted.map(_._1).mkString("<"))
+          logWarning("files not sorted are: " + filesAndBlocks.map(_._1).mkString("<"))
+
           filesAndBlocksSorted.foreach { case (file, blocks) =>
             val fileBlockSize = blocks.map(_.getBlockSize).sum
+            logWarning(s"files size is: $fileBlockSize")
             // use a single buffer and slice it up for different files if we need
             val outLocal = hmb.slice(offset, fileBlockSize)
             // Third, copy the blocks for each file in parallel using background threads
             // tasks.add(threadPool.submit(
              // getBatchRunner(tc, file, outLocal, blocks, offset, batchContext)))
+            // fetching largest first but what about getting somethign done quickly???
             fcs.submit(
               getBatchRunner(tc, file, outLocal, blocks, offset, batchContext))
+            logWarning(s"starting thread for file: $file")
             offset += fileBlockSize
+            logWarning(s"new offset is $offset")
           }
 
           // for (future <- tasks.asScala) {
           for (future <- 0 until filesAndBlocks.size) {
             val (blocks, bytesRead) = fcs.take().get()
+            logWarning(s"took for thread for file: ${}")
+
             allOutputBlocks ++= blocks
             TrampolineUtil.incBytesRead(inputMetrics, bytesRead)
           }
 
           // Fourth, calculate the final buffer size
+          logWarning(s"offset is $offset")
           val finalBufferSize = calculateFinalBlocksOutputSize(offset, allOutputBlocks,
             batchContext)
 
