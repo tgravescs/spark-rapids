@@ -1022,12 +1022,7 @@ abstract class MultiFileCoalescingPartitionReaderBase(
         metrics("bufferTime"))) { _ =>
       // ugly but we want to keep the order
       val filesAndBlocks = LinkedHashMap[Path, ArrayBuffer[DataBlockBase]]()
-
-
-      logWarning("blocks before are: " + blocks.map(_._2.getBlockSize).mkString(","))
       val blocksSorted = blocks.sortWith(_._2.getBlockSize > _._2.getBlockSize )
-      logWarning("blocks before are: " + blocksSorted.map(_._2.getBlockSize).mkString(","))
-
       blocksSorted.foreach { case (path, block) =>
         filesAndBlocks.getOrElseUpdate(path, new ArrayBuffer[DataBlockBase]) += block
       }
@@ -1042,7 +1037,6 @@ abstract class MultiFileCoalescingPartitionReaderBase(
       // First, estimate the output file size for the initial allocating.
       //   the estimated size should be >= size of HEAD + Blocks + FOOTER
       val initTotalSize = calculateEstimatedBlocksOutputSize(batchContext)
-      logWarning(s"init size is $initTotalSize")
       val (buffer, bufferSize, footerOffset, outBlocks) =
         closeOnExcept(HostMemoryBuffer.allocate(initTotalSize)) { hmb =>
           // Second, write header
@@ -1055,12 +1049,11 @@ abstract class MultiFileCoalescingPartitionReaderBase(
             val secondSize = two._2.map(_.getBlockSize).sum
             firstSize > secondSize
           }.toMap
-          logWarning("files sorted are: " + filesAndBlocksSorted.map(_._1).mkString("<"))
-          logWarning("files not sorted are: " + filesAndBlocks.map(_._1).mkString("<"))
+          logWarning("num files sorted are: " + filesAndBlocksSorted.size)
 
           filesAndBlocksSorted.foreach { case (file, blocks) =>
             val fileBlockSize = blocks.map(_.getBlockSize).sum
-            logWarning(s"files size is: $fileBlockSize")
+            logWarning(s"files size is: $fileBlockSize num blocks ${blocks.size}")
             // use a single buffer and slice it up for different files if we need
             val outLocal = hmb.slice(offset, fileBlockSize)
             // Third, copy the blocks for each file in parallel using background threads
