@@ -979,6 +979,7 @@ abstract class MultiFileCoalescingPartitionReaderBase(
       // ugly but we want to keep the order
       val filesAndBlocks = LinkedHashMap[Path, ArrayBuffer[DataBlockBase]]()
 
+
       logWarning("blocks before are: " + blocks.map(_._2.getBlockSize).mkString(","))
       val blocksSorted = blocks.sortWith(_._2.getBlockSize > _._2.getBlockSize )
       logWarning("blocks before are: " + blocksSorted.map(_._2.getBlockSize).mkString(","))
@@ -986,6 +987,7 @@ abstract class MultiFileCoalescingPartitionReaderBase(
       blocksSorted.foreach { case (path, block) =>
         filesAndBlocks.getOrElseUpdate(path, new ArrayBuffer[DataBlockBase]) += block
       }
+
       // val tasks = new java.util.ArrayList[Future[(Seq[DataBlockBase], Long)]]()
       val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
 
@@ -1008,11 +1010,11 @@ abstract class MultiFileCoalescingPartitionReaderBase(
             val firstSize = one._2.map(_.getBlockSize).sum
             val secondSize = two._2.map(_.getBlockSize).sum
             firstSize > secondSize
-          }
+          }.toMap
           logWarning("files sorted are: " + filesAndBlocksSorted.map(_._1).mkString("<"))
           logWarning("files not sorted are: " + filesAndBlocks.map(_._1).mkString("<"))
 
-          filesAndBlocks.foreach { case (file, blocks) =>
+          filesAndBlocksSorted.foreach { case (file, blocks) =>
             val fileBlockSize = blocks.map(_.getBlockSize).sum
             logWarning(s"files size is: $fileBlockSize")
             // use a single buffer and slice it up for different files if we need
@@ -1029,7 +1031,7 @@ abstract class MultiFileCoalescingPartitionReaderBase(
           }
 
           // for (future <- tasks.asScala) {
-          for (future <- 0 until filesAndBlocks.size) {
+          for (future <- 0 until filesAndBlocksSorted.size) {
             val (blocks, bytesRead) = fcs.take().get()
             logWarning(s"took for thread for file: ${}")
 
