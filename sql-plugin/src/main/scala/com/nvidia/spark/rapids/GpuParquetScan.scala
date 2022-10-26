@@ -1886,6 +1886,7 @@ class MultiFileCloudParquetPartitionReader(
           throw e
       }
       val bufferTime = bufferStartTime - System.nanoTime()
+      logWarning("buffer time was: " + bufferTime)
       result.setMetrics(filterTime, bufferTime)
       result
     }
