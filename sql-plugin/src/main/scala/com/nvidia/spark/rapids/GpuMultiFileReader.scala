@@ -61,14 +61,18 @@ trait HostMemoryBuffersWithMetaDataBase {
   // Total bytes read
   def bytesRead: Long
   // Percentage of time spent on filtering
-  private var _filterTimePct: Double = 0L
+  var _filterTimePct: Double = 0L
   // Percentage of time spent on buffering
-  private var _bufferTimePct: Double = 0L
+  var _bufferTimePct: Double = 0L
+  var filterTime = 0L
+  var bufferTime = 0L
 
   // Called by parquet/orc/avro scanners to set the amount of time (in nanoseconds)
   // that filtering and buffering incurred in one of the scan runners.
   def setMetrics(filterTime: Long, bufferTime: Long): Unit = {
     val totalTime = filterTime + bufferTime
+    this.filterTime = filterTime
+    this.bufferTime = bufferTime
     _filterTimePct = filterTime.toDouble / totalTime
     _bufferTimePct = bufferTime.toDouble / totalTime
   }
@@ -551,6 +555,9 @@ abstract class MultiFileCloudPartitionReaderBase(
           // val fileBufsAndMeta = tasks.poll.get()
           val fileBufsAndMeta = fcs.take().get()
 
+          logWarning(s"got file ${fileBufsAndMeta.partitionedFile} and filter time was: "
+            + fileBufsAndMeta.filterTime +
+            " buffer time: " + fileBufsAndMeta.bufferTime)
           val blockedTime = System.nanoTime() - startTime
           metrics.get(FILTER_TIME).foreach {
             _ += (blockedTime * fileBufsAndMeta.getFilterTimePct).toLong
