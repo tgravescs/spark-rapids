@@ -1214,9 +1214,10 @@ abstract class MultiFileCoalescingPartitionReaderBase(
     }
     readNextBatch()
     rowsPerPartition += (numRows - lastPartRows)
-    logDebug(s"Loaded $numRows rows from ${getFileFormatShortName}. " +
+    logWarning(s"Loaded $numRows rows from ${getFileFormatShortName}. " +
       s"${getFileFormatShortName} bytes read: $numChunkBytes. Estimated GPU bytes: $numBytes. " +
-      s"Number of different partitions: ${allPartValues.size}")
+      s"Number of different partitions: ${allPartValues.size} Number of chunks is: " +
+      s"${currentChunk.size}")
     CurrentChunkMeta(currentClippedSchema, currentReadSchema, currentChunk,
       numRows, rowsPerPartition.toArray, allPartValues.toArray, extraInfo)
   }
