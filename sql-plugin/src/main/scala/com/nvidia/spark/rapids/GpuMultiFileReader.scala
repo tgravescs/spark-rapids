@@ -16,9 +16,9 @@
 
 package com.nvidia.spark.rapids
 
-import java.io.{File, IOException}
+import java.io.{ByteArrayInputStream, File, IOException}
 import java.net.{URI, URISyntaxException}
-import java.util.concurrent.{Callable, ConcurrentLinkedQueue, ExecutorCompletionService, Future, LinkedBlockingQueue, ThreadPoolExecutor, TimeUnit}
+import java.util.concurrent._
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -26,12 +26,19 @@ import scala.collection.mutable.{ArrayBuffer, LinkedHashMap, Queue}
 import scala.language.implicitConversions
 import scala.math.max
 
-import ai.rapids.cudf.{ColumnVector, HostMemoryBuffer, NvtxColor, NvtxRange, Table}
-import com.nvidia.spark.rapids.GpuMetric.{BUFFER_TIME, FILTER_TIME, NUM_OUTPUT_BATCHES, PEAK_DEVICE_MEMORY, SEMAPHORE_WAIT_TIME}
+import ai.rapids.cudf._
+import com.nvidia.spark.rapids.GpuMetric._
 import com.nvidia.spark.rapids.RapidsPluginImplicits.AutoCloseableProducingSeq
+import com.nvidia.spark.rapids.jni.ParquetFooter
+import org.apache.avro.util.ReusableByteArrayInputStream
 import org.apache.commons.io.IOUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.parquet.bytes.BytesUtils
+import org.apache.parquet.bytes.BytesUtils.readIntLittleEndian
+import org.apache.parquet.hadoop.ParquetFileWriter.MAGIC
+import org.apache.parquet.hadoop.metadata.BlockMetaData
+import org.apache.parquet.schema.MessageType
 
 import org.apache.spark.TaskContext
 import org.apache.spark.broadcast.Broadcast
@@ -48,6 +55,9 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector => SparkVector}
 import org.apache.spark.util.SerializableConfiguration
 
+case class HostMemoryBufferInfo(hmb: HostMemoryBuffer, bytes: Long, numRows: Long,
+    blockMeta: Seq[BlockMetaData], schema: MessageType)
+
 /**
  * The base HostMemoryBuffer information read from a single file.
  */
@@ -57,7 +67,7 @@ trait HostMemoryBuffersWithMetaDataBase {
   // Original PartitionedFile if path was replaced with Alluxio
   def origPartitionedFile: Option[PartitionedFile] = None
   // An array of BlockChunk(HostMemoryBuffer and its data size) read from PartitionedFile
-  def memBuffersAndSizes: Array[(HostMemoryBuffer, Long)]
+  def memBuffersAndSizes: Array[HostMemoryBufferInfo]
   // Total bytes read
   def bytesRead: Long
   // Percentage of time spent on filtering
@@ -66,6 +76,7 @@ trait HostMemoryBuffersWithMetaDataBase {
   var _bufferTimePct: Double = 0L
   var filterTime = 0L
   var bufferTime = 0L
+
 
   // Called by parquet/orc/avro scanners to set the amount of time (in nanoseconds)
   // that filtering and buffering incurred in one of the scan runners.
@@ -490,6 +501,14 @@ abstract class MultiFileCloudPartitionReaderBase(
     filesToRead = files.length
   }
 
+  def combineHMBs(results: java.util.ArrayList[HostMemoryBuffersWithMetaDataBase])
+    : HostMemoryBuffersWithMetaDataBase = {
+    if (results.size < 1) {
+      throw new Exception("expect atleast one host memory buffer")
+    }
+    results.get(0)
+  }
+
   /**
    * The sub-class must implement the real file reading logic in a Callable
    * which will be running in a thread pool
@@ -553,7 +572,79 @@ abstract class MultiFileCloudPartitionReaderBase(
           // clock as we can get right now without further work.
           val startTime = System.nanoTime()
           // val fileBufsAndMeta = tasks.poll.get()
-          val fileBufsAndMeta = fcs.take().get()
+          var takeMore = true
+          val results = new java.util.ArrayList[HostMemoryBuffersWithMetaDataBase]()
+          var numCombine = 500
+          while(takeMore && numCombine > 0) {
+            val res = fcs.poll()
+            numCombine -= 1
+            if (res == null) {
+              takeMore = false
+            }
+            results.add(res.get())
+          }
+          val fileBufsAndMeta = if (results.isEmpty) {
+            fcs.take().get()
+          } else {
+            val startCombineTime = System.nanoTime()
+            val res = combineHMBs(results)
+            logWarning(s"took ${startCombineTime - System.nanoTime()} nanos to do combine")
+            res
+            /*
+              // TODO
+            results.asScala.map { hbWithMeta =>
+              val partValues = hbWithMeta.partitionedFile.partitionValues
+              val numRows = hbWithMeta.memBuffersAndSizes.map(hmbInfo => hmbInfo.numRows)
+              val buffers = hbWithMeta.memBuffersAndSizes
+              buffers.map { hmbInfo =>
+
+                // withResource(new ByteArrayInputStream(hmbInfo.hmb.asByteBuffer().array()))
+                // { inputStream =>
+
+                withResource(new HostMemoryInputStream(hmbInfo.hmb, hmbInfo.bytes)) { inputStream =>
+                  val FOOTER_LENGTH_SIZE = 4
+                  val footerLengthIndex = hmbInfo.bytes - FOOTER_LENGTH_SIZE - MAGIC.length
+                  inputStream.skip(footerLengthIndex)
+                  val footerLength = readIntLittleEndian(inputStream)
+                  val magic = new Array[Byte](MAGIC.length)
+                  inputStream.read(magic, 0, MAGIC.length)
+                  // TODO - error checking magic is magic
+                  val footerIndex = footerLengthIndex - footerLength
+                  // TODO - error checking
+                  inputStream.reset();
+                  inputStream.skip(footerIndex);
+                  // how big is this??
+                  val tmpBuffer = new Array[Byte](footerLength)
+                  inputStream.read(tmpBuffer, 0, footerLength)
+                  // ParquetFooter.readAndFilter(tmpBuffer, file.start, len,
+                  //   footerSchema, !isCaseSensitive)
+
+                }
+                val newBufSize = hbWithMeta.memBuffersAndSizes.map(_.bytes).sum
+
+              }
+            }
+            // have to add the footer
+            // allocate new buffer
+            // write new header
+            // copy combined blocks
+            // write footer
+            // either read footer or pass along
+            // val clippedSchema = ?
+            /*
+            writeFooter(out, outputBlocks, clippedSchema)
+            BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
+            out.write(ParquetPartitionReader.PARQUET_MAGIC)
+
+             */
+            fcs.take().get()
+
+
+            val meta = results.get(0)
+            HostMemoryBuffersWithMetaData(meta.partitionedFile, meta.origPartitionedFile, all)
+
+             */
+          }
 
           logWarning(s"got file ${fileBufsAndMeta.partitionedFile} and filter time was: "
             + fileBufsAndMeta.filterTime.toString +
@@ -569,6 +660,9 @@ abstract class MultiFileCloudPartitionReaderBase(
 
           filesToRead -= 1
           TrampolineUtil.incBytesRead(inputMetrics, fileBufsAndMeta.bytesRead)
+
+          // TODO - we can't do combining when inputfile is set - fix later
+
           // if we replaced the path with Alluxio, set it to the original filesystem file
           // since Alluxio replacement is supposed to be transparent to the user
           val inputFileToSet =
@@ -620,7 +714,7 @@ abstract class MultiFileCloudPartitionReaderBase(
   }
 
   private def getSizeOfHostBuffers(fileInfo: HostMemoryBuffersWithMetaDataBase): Long = {
-    fileInfo.memBuffersAndSizes.map(_._2).sum
+    fileInfo.memBuffersAndSizes.map(_.bytes).sum
   }
 
   private def addNextTaskIfNeeded(): Unit = {
@@ -634,9 +728,9 @@ abstract class MultiFileCloudPartitionReaderBase(
 
   private def closeCurrentFileHostBuffers(): Unit = {
     currentFileHostBuffers.foreach { current =>
-      current.memBuffersAndSizes.foreach { case (buf, _) =>
-        if (buf != null) {
-          buf.close()
+      current.memBuffersAndSizes.foreach { hbInfo =>
+        if (hbInfo.hmb != null) {
+          hbInfo.hmb.close()
         }
       }
     }
@@ -653,9 +747,9 @@ abstract class MultiFileCloudPartitionReaderBase(
     // TODO clean up with completion service?
     tasks.asScala.foreach { task =>
       if (task.isDone()) {
-        task.get.memBuffersAndSizes.foreach { case (buf, _) =>
-          if (buf != null) {
-            buf.close()
+        task.get.memBuffersAndSizes.foreach { hmbInfo =>
+          if (hmbInfo.hmb != null) {
+            hmbInfo.hmb.close()
           }
         }
       } else {

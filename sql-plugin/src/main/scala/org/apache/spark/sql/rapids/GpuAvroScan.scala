@@ -666,7 +666,7 @@ class GpuMultiFileCloudAvroPartitionReader(
   /** Two utils classes */
   private case class AvroHostBuffersWithMeta(
     override val partitionedFile: PartitionedFile,
-    override val memBuffersAndSizes: Array[(HostMemoryBuffer, Long)],
+    override val memBuffersAndSizes: Array[HostMemoryBufferInfo],
     override val bytesRead: Long) extends HostMemoryBuffersWithMetaDataBase
 
   private class ReadBatchRunner(

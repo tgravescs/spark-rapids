@@ -1597,13 +1597,13 @@ class MultiFileCloudOrcPartitionReader(
     updatedReadSchema: TypeDescription,
     readSchema: StructType) extends HostMemoryBuffersWithMetaDataBase {
 
-    override def memBuffersAndSizes: Array[(HostMemoryBuffer, Long)] =
-      Array(null.asInstanceOf[HostMemoryBuffer] -> bufferSize)
+    override def memBuffersAndSizes: Array[HostMemoryBufferInfo] =
+      Array(HostMemoryBufferInfo(null.asInstanceOf[HostMemoryBuffer], bufferSize, 0))
   }
 
   private case class HostMemoryBuffersWithMetaData(
     override val partitionedFile: PartitionedFile,
-    override val memBuffersAndSizes: Array[(HostMemoryBuffer, Long)],
+    override val memBuffersAndSizes: Array[HostMemoryBufferInfo],
     override val bytesRead: Long,
     updatedReadSchema: TypeDescription,
     requestedMapping: Option[Array[Int]]) extends HostMemoryBuffersWithMetaDataBase
