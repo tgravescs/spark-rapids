@@ -1598,7 +1598,8 @@ class MultiFileCloudOrcPartitionReader(
     readSchema: StructType) extends HostMemoryBuffersWithMetaDataBase {
 
     override def memBuffersAndSizes: Array[HostMemoryBufferInfo] =
-      Array(HostMemoryBufferInfo(null.asInstanceOf[HostMemoryBuffer], bufferSize, 0))
+      Array(HostMemoryBufferInfo(null.asInstanceOf[HostMemoryBuffer], bufferSize,
+        0, Seq.empty, null))
   }
 
   private case class HostMemoryBuffersWithMetaData(
@@ -1639,7 +1640,7 @@ class MultiFileCloudOrcPartitionReader(
     private def doRead(): HostMemoryBuffersWithMetaDataBase = {
       val startingBytesRead = fileSystemBytesRead()
 
-      val hostBuffers = new ArrayBuffer[(HostMemoryBuffer, Long)]
+      val hostBuffers = new ArrayBuffer[HostMemoryBufferInfo]
       val filterStartTime = System.nanoTime()
       val ctx = filterHandler.filterStripes(partFile, dataSchema, readDataSchema,
         partitionSchema)
@@ -1669,12 +1670,13 @@ class MultiFileCloudOrcPartitionReader(
               while (blockChunkIter.hasNext) {
                 val blocksToRead = populateCurrentBlockChunk(blockChunkIter, maxReadBatchSizeRows,
                   maxReadBatchSizeBytes)
-                hostBuffers += readPartFile(ctx, blocksToRead)
+                val info = readPartFile(ctx, blocksToRead)
+                hostBuffers += HostMemoryBufferInfo(info._1, info._2, 0, Seq.empty, null)
               }
               val bytesRead = fileSystemBytesRead() - startingBytesRead
               if (isDone) {
                 // got close before finishing
-                hostBuffers.foreach(_._1.safeClose())
+                hostBuffers.foreach(_.hmb.safeClose())
                 HostMemoryEmptyMetaData(
                   partFile, 0, bytesRead, ctx.updatedReadSchema, readDataSchema)
               } else {
@@ -1686,7 +1688,7 @@ class MultiFileCloudOrcPartitionReader(
         }
       } catch {
         case e: Throwable =>
-          hostBuffers.foreach(_._1.safeClose())
+          hostBuffers.foreach(_.hmb.safeClose())
           throw e
       }
       val bufferTime = System.nanoTime() - bufferTimeStart
@@ -1747,10 +1749,10 @@ class MultiFileCloudOrcPartitionReader(
 
       case buffer: HostMemoryBuffersWithMetaData =>
         val memBuffersAndSize = buffer.memBuffersAndSizes
-        val (hostBuffer, size) = memBuffersAndSize.head
+        val hmbInfo = memBuffersAndSize.head
         val nextBatch = addPartitionValues(
-          decodeToBatch(hostBuffer, size, buffer.updatedReadSchema, buffer.requestedMapping,
-            filterHandler.isCaseSensitive, files),
+          decodeToBatch(hmbInfo.hmb, hmbInfo.bytes, buffer.updatedReadSchema,
+            buffer.requestedMapping, filterHandler.isCaseSensitive, files),
           buffer.partitionedFile.partitionValues, partitionSchema)
         if (memBuffersAndSize.length > 1) {
           val updatedBuffers = memBuffersAndSize.drop(1)

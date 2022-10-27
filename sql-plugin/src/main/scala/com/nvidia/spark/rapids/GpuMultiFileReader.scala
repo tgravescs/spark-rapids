@@ -16,7 +16,7 @@
 
 package com.nvidia.spark.rapids
 
-import java.io.{ByteArrayInputStream, File, IOException}
+import java.io.{File, IOException}
 import java.net.{URI, URISyntaxException}
 import java.util.concurrent._
 
@@ -29,14 +29,9 @@ import scala.math.max
 import ai.rapids.cudf._
 import com.nvidia.spark.rapids.GpuMetric._
 import com.nvidia.spark.rapids.RapidsPluginImplicits.AutoCloseableProducingSeq
-import com.nvidia.spark.rapids.jni.ParquetFooter
-import org.apache.avro.util.ReusableByteArrayInputStream
 import org.apache.commons.io.IOUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.parquet.bytes.BytesUtils
-import org.apache.parquet.bytes.BytesUtils.readIntLittleEndian
-import org.apache.parquet.hadoop.ParquetFileWriter.MAGIC
 import org.apache.parquet.hadoop.metadata.BlockMetaData
 import org.apache.parquet.schema.MessageType
 

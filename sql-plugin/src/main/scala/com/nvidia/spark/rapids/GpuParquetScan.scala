@@ -1791,7 +1791,7 @@ class MultiFileCloudParquetPartitionReader(
       results.asScala.map { hbWithMeta =>
         val partValues = hbWithMeta.partitionedFile.partitionValues
         val totalNumRows = hbWithMeta.memBuffersAndSizes.map(_.numRows).sum
-        allPartValues += (totalNumRows, partValues)
+        allPartValues.append((totalNumRows, partValues))
         hbWithMeta.memBuffersAndSizes.map { hmbInfo =>
           // can't use size in hbmInfo because that includes footers
           val sizeOfBlockData = hmbInfo.blockMeta.map(_.getTotalByteSize).sum
