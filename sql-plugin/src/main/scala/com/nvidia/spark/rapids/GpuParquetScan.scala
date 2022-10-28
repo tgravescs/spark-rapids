@@ -1352,7 +1352,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       filePath: Path): (HostMemoryBuffer, Long) = {
     withResource(new NvtxRange("Parquet buffer file split", NvtxColor.YELLOW)) { _ =>
       withResource(filePath.getFileSystem(conf).open(filePath)) { in =>
-        val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema, false)
+        val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema, falscome)
         closeOnExcept(HostMemoryBuffer.allocate(estTotalSize)) { hmb =>
           val out = new HostMemoryOutputStream(hmb)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
@@ -1802,11 +1802,15 @@ class MultiFileCloudParquetPartitionReader(
             throw new Exception("schema is different")
           }
           currentSchema = hmbInfo.schema
+          //val outputBlocks = copyBlocksData(in, out, blocks, out.getPos)
+
           newHmb.copyFromHostBuffer(offset, hmbInfo.hmb,
             ParquetPartitionReader.PARQUET_MAGIC.size, sizeOfBlockData)
-          hmbInfo.hmb.close()
+          val outputBlocks = computeBlockMetaData(hmbInfo.blockMeta, offset, None)
+
           offset += sizeOfBlockData
-          allOutputBlocks ++= hmbInfo.blockMeta
+
+          allOutputBlocks ++= outputBlocks
         }
       }
       // write footer
@@ -1822,6 +1826,10 @@ class MultiFileCloudParquetPartitionReader(
           footerOut.write(ParquetPartitionReader.PARQUET_MAGIC)
           offset += footerOut.getPos
         }
+      }
+
+      results.asScala.foreach { hbWithMeta =>
+        hbWithMeta.memBuffersAndSizes.foreach(_.hmb.close())
       }
 
       if (!results.get(0).isInstanceOf[HostMemoryBuffersWithMetaData]) {
