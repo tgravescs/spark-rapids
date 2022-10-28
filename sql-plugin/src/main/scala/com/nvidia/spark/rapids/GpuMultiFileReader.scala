@@ -570,75 +570,34 @@ abstract class MultiFileCloudPartitionReaderBase(
           var takeMore = true
           val results = new java.util.ArrayList[HostMemoryBuffersWithMetaDataBase]()
           var numCombine = 500
-          while(takeMore && numCombine > 0) {
+
+          // shouldn't really need files to read check as will be null returned
+          while(takeMore && numCombine > 0 && filesToRead > 0) {
             val res = fcs.poll()
             numCombine -= 1
             if (res == null) {
               takeMore = false
+            } else {
+              results.add(res.get())
+              filesToRead -= 1
             }
-            results.add(res.get())
           }
+
           val fileBufsAndMeta = if (results.isEmpty) {
-            fcs.take().get()
-          } else {
-            val startCombineTime = System.nanoTime()
-            val res = combineHMBs(results)
-            logWarning(s"took ${startCombineTime - System.nanoTime()} nanos to do combine")
+            logWarning("no results, waiting on one")
+            val res = fcs.take().get()
+            filesToRead -= 1
             res
-            /*
-              // TODO
-            results.asScala.map { hbWithMeta =>
-              val partValues = hbWithMeta.partitionedFile.partitionValues
-              val numRows = hbWithMeta.memBuffersAndSizes.map(hmbInfo => hmbInfo.numRows)
-              val buffers = hbWithMeta.memBuffersAndSizes
-              buffers.map { hmbInfo =>
-
-                // withResource(new ByteArrayInputStream(hmbInfo.hmb.asByteBuffer().array()))
-                // { inputStream =>
-
-                withResource(new HostMemoryInputStream(hmbInfo.hmb, hmbInfo.bytes)) { inputStream =>
-                  val FOOTER_LENGTH_SIZE = 4
-                  val footerLengthIndex = hmbInfo.bytes - FOOTER_LENGTH_SIZE - MAGIC.length
-                  inputStream.skip(footerLengthIndex)
-                  val footerLength = readIntLittleEndian(inputStream)
-                  val magic = new Array[Byte](MAGIC.length)
-                  inputStream.read(magic, 0, MAGIC.length)
-                  // TODO - error checking magic is magic
-                  val footerIndex = footerLengthIndex - footerLength
-                  // TODO - error checking
-                  inputStream.reset();
-                  inputStream.skip(footerIndex);
-                  // how big is this??
-                  val tmpBuffer = new Array[Byte](footerLength)
-                  inputStream.read(tmpBuffer, 0, footerLength)
-                  // ParquetFooter.readAndFilter(tmpBuffer, file.start, len,
-                  //   footerSchema, !isCaseSensitive)
-
-                }
-                val newBufSize = hbWithMeta.memBuffersAndSizes.map(_.bytes).sum
-
-              }
-            }
-            // have to add the footer
-            // allocate new buffer
-            // write new header
-            // copy combined blocks
-            // write footer
-            // either read footer or pass along
-            // val clippedSchema = ?
-            /*
-            writeFooter(out, outputBlocks, clippedSchema)
-            BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
-            out.write(ParquetPartitionReader.PARQUET_MAGIC)
-
-             */
-            fcs.take().get()
-
-
-            val meta = results.get(0)
-            HostMemoryBuffersWithMetaData(meta.partitionedFile, meta.origPartitionedFile, all)
-
-             */
+          } else if (results.size > 1) {
+            logWarning("combining results")
+            val startCombineTime = System.nanoTime()
+            val combinedRes = combineHMBs(results)
+            logWarning(s"took ${(System.nanoTime() - startCombineTime) /1024 /1024} " +
+              s"ms to do combine")
+            combinedRes
+          } else {
+            logWarning("just one results getting it")
+            results.get(0)
           }
 
           logWarning(s"got file ${fileBufsAndMeta.partitionedFile} and filter time was: "
@@ -653,7 +612,6 @@ abstract class MultiFileCloudPartitionReaderBase(
             _ += (blockedTime * fileBufsAndMeta.getBufferTimePct).toLong
           }
 
-          filesToRead -= 1
           TrampolineUtil.incBytesRead(inputMetrics, fileBufsAndMeta.bytesRead)
 
           // TODO - we can't do combining when inputfile is set - fix later

@@ -696,7 +696,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
       } else {
         footer.getBlocks
       }
-      logWarning(s"num filtered block is ${blocks.size} all was ${footer.getBlocks}")
+      logWarning(s"num filtered block is ${blocks.size}")
 
       val (clipped, clippedSchema) =
         withResource(new NvtxRange("clipSchema", NvtxColor.DARK_GREEN)) { _ =>
@@ -1772,9 +1772,10 @@ class MultiFileCloudParquetPartitionReader(
     }
     // this size includes the written header and footer on each buffer, do we need
     // to calculate footer differently?
+    // footer can still be larger when combined - multiple by 2 for temp
     val initTotalSize = results.asScala.map { hbWithMeta =>
       hbWithMeta.memBuffersAndSizes.map(_.bytes).sum
-    }.sum
+    }.sum * 2
     // calculateParquetOutputSize(updatedBlocks, batchContext.schema, true)
 
     closeOnExcept(HostMemoryBuffer.allocate(initTotalSize)) { newHmb =>
@@ -1783,6 +1784,8 @@ class MultiFileCloudParquetPartitionReader(
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
         out.getPos
       }
+      val out = new HostMemoryOutputStream(newHmb)
+
       var currentSchema: MessageType = null
       val allPartValues = new ArrayBuffer[(Long, InternalRow)]()
       val allOutputBlocks = new ArrayBuffer[BlockMetaData]()
@@ -1801,24 +1804,23 @@ class MultiFileCloudParquetPartitionReader(
           currentSchema = hmbInfo.schema
           newHmb.copyFromHostBuffer(offset, hmbInfo.hmb,
             ParquetPartitionReader.PARQUET_MAGIC.size, sizeOfBlockData)
+          hmbInfo.hmb.close()
           offset += sizeOfBlockData
           allOutputBlocks ++= hmbInfo.blockMeta
         }
       }
       // write footer
-      // val (finalBuffer, finalBufferSize) = writeFooter(newHmb, initTotalSize, offset,
-      //  allOutputBlocks, currentSchema)
       val lenLeft = initTotalSize - offset
-      withResource(newHmb.slice(offset, lenLeft)) { finalizehmb =>
-        withResource(new HostMemoryOutputStream(finalizehmb)) { footerOut =>
+      withResource(newHmb.slice(offset, lenLeft)) { footerHmbSlice =>
+        withResource(new HostMemoryOutputStream(footerHmbSlice)) { footerOut =>
           writeFooter(footerOut, allOutputBlocks, currentSchema)
           BytesUtils.writeIntLittleEndian(footerOut, footerOut.getPos.toInt)
           footerOut.write(ParquetPartitionReader.PARQUET_MAGIC)
-          offset + footerOut.getPos
+          offset += footerOut.getPos
         }
       }
 
-      if (results.get(0).isInstanceOf[HostMemoryBuffersWithMetaData]) {
+      if (!results.get(0).isInstanceOf[HostMemoryBuffersWithMetaData]) {
         throw new Exception("type of results should have been HostMemoryBuffersWithMetaData")
       }
       val meta = results.get(0).asInstanceOf[HostMemoryBuffersWithMetaData]
@@ -1968,7 +1970,7 @@ class MultiFileCloudParquetPartitionReader(
           hostBuffers.foreach(_.hmb.safeClose())
           throw e
       }
-      val bufferTime = bufferStartTime - System.nanoTime()
+      val bufferTime = System.nanoTime() - bufferStartTime
       logWarning("buffer time was: " + bufferTime + " start time: " + bufferStartTime +
         " now is: " + System.nanoTime())
       result.setMetrics(filterTime, bufferTime)
