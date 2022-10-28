@@ -1811,8 +1811,12 @@ class MultiFileCloudParquetPartitionReader(
       }
       // write footer
       val lenLeft = initTotalSize - offset
+      if (lenLeft < 0) {
+        throw new Exception(s" initial total size is to small: $initTotalSize")
+      }
       withResource(newHmb.slice(offset, lenLeft)) { footerHmbSlice =>
         withResource(new HostMemoryOutputStream(footerHmbSlice)) { footerOut =>
+          logWarning(s" going to write footer Tom, location: $lenLeft initiali: $initTotalSize")
           writeFooter(footerOut, allOutputBlocks, currentSchema)
           BytesUtils.writeIntLittleEndian(footerOut, footerOut.getPos.toInt)
           footerOut.write(ParquetPartitionReader.PARQUET_MAGIC)
