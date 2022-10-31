@@ -1816,7 +1816,6 @@ class MultiFileCloudParquetPartitionReader(
           val copyAmount = footerPos - ParquetPartitionReader.PARQUET_MAGIC.size
           newHmb.copyFromHostBuffer(offset, hmbInfo.hmb,
             ParquetPartitionReader.PARQUET_MAGIC.size, copyAmount)
-          hmbInfo.hmb.close()
           val outputBlocks = computeBlockMetaData(hmbInfo.blockMeta, offset, None)
 
           offset += copyAmount
@@ -2122,7 +2121,6 @@ class MultiFileCloudParquetPartitionReader(
         // its not different for all the blocks in this batch
         val rowsPerPartition = allPartValues.get.map(_._1).toArray
         val allPartInternalRows = allPartValues.get.map(_._2).toArray
-
         addAllPartitionValues(maybeBatch, allPartInternalRows, rowsPerPartition, partitionSchema)
       } else {
         // we have to add partition values here for this batch, we already verified that
