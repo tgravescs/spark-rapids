@@ -1231,6 +1231,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       copyBuffer: Array[Byte]): Unit = {
     var readTime = 0L
     var writeTime = 0L
+    logWarning(s"copy data range in posotion is ${in.getPos} range ${range.offset}")
     if (in.getPos != range.offset) {
       in.seek(range.offset)
     }
@@ -1243,6 +1244,8 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       val mid = System.nanoTime()
       out.write(copyBuffer, 0, readLength)
       val end = System.nanoTime()
+      logWarning(s"write length is $readLength")
+
       readTime += (mid - start)
       writeTime += (end - mid)
       bytesLeft -= readLength
@@ -1359,9 +1362,9 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
           val outputBlocks = copyBlocksData(in, out, blocks, out.getPos)
           val footerPos = out.getPos
-          logWarning(s"footer pos is ${footerPos}")
+         // logWarning(s"footer pos is ${footerPos}")
           val sizeOfBlockData = outputBlocks.map(_.getTotalByteSize).sum
-          logWarning(s"size of block data 2 is ${sizeOfBlockData}")
+          // logWarning(s"size of block data 2 is ${sizeOfBlockData}")
 
           writeFooter(out, outputBlocks, clippedSchema)
           BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
@@ -1371,7 +1374,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
             throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is to " +
               s"small, actual written: ${out.getPos}")
           }
-          logWarning(s"reading file actual size is ${out.getPos}")
+          // logWarning(s"reading file actual size is ${out.getPos}")
           (hmb, out.getPos, footerPos)
         }
       }
@@ -1700,7 +1703,7 @@ class MultiFileParquetPartitionReader(
       blocks: Seq[DataBlockBase], bContext: BatchContext): Long = {
 
     val actualFooterSize = calculateParquetFooterSize(blocks, bContext.schema)
-    logWarning("actual footer size is " + actualFooterSize)
+    // logWarning("actual footer size is " + actualFooterSize)
     // 4 + 4 is for writing size and the ending PARQUET_MAGIC.
     footerOffset + actualFooterSize + 4 + 4
   }
@@ -1819,9 +1822,9 @@ class MultiFileCloudParquetPartitionReader(
           val outputBlocks = computeBlockMetaData(hmbInfo.blockMeta, offset, None)
 
           offset += copyAmount
-          logWarning(s"footer position is $footerPos")
+          // logWarning(s"footer position is $footerPos")
 
-          logWarning(s"size of block data is $sizeOfBlockData")
+          // logWarning(s"size of block data is $sizeOfBlockData")
           allOrigOutputBlocks ++= hmbInfo.blockMeta
           allOutputBlocks ++= outputBlocks
         }
@@ -1834,7 +1837,7 @@ class MultiFileCloudParquetPartitionReader(
       val footerOutPos = offset
       withResource(newHmb.slice(offset, lenLeft)) { footerHmbSlice =>
         withResource(new HostMemoryOutputStream(footerHmbSlice)) { footerOut =>
-          logWarning(s" going to write footer Tom, location: $lenLeft initiali: $initTotalSize")
+          // logWarning(s" going to write footer Tom, location: $lenLeft initiali: $initTotalSize")
           writeFooter(footerOut, allOutputBlocks, currentSchema)
           BytesUtils.writeIntLittleEndian(footerOut, footerOut.getPos.toInt)
           footerOut.write(ParquetPartitionReader.PARQUET_MAGIC)

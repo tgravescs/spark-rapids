@@ -589,7 +589,7 @@ abstract class MultiFileCloudPartitionReaderBase(
             filesToRead -= 1
             res
           } else if (results.size > 1) {
-            logWarning("combining results")
+            logWarning(s"combining results, size: ${results.size}")
             val startCombineTime = System.nanoTime()
             val combinedRes = combineHMBs(results)
             logWarning(s"took ${(System.nanoTime() - startCombineTime) /1024 /1024} " +
@@ -1111,7 +1111,7 @@ abstract class MultiFileCoalescingPartitionReaderBase(
             //  getBatchRunner(tc, file, outLocal, blocks, offset, batchContext))
             logWarning(s"starting thread for file: $file")
             offset += fileBlockSize
-            logWarning(s"new offset is $offset")
+            // logWarning(s"new offset is $offset")
           }
 
           for (future <- tasks.asScala) {
