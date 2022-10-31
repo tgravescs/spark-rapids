@@ -51,7 +51,7 @@ import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector => SparkVect
 import org.apache.spark.util.SerializableConfiguration
 
 case class HostMemoryBufferInfo(hmb: HostMemoryBuffer, bytes: Long, numRows: Long,
-    blockMeta: Seq[BlockMetaData], schema: MessageType)
+    blockMeta: Seq[BlockMetaData], schema: MessageType, footerPos: Long)
 
 /**
  * The base HostMemoryBuffer information read from a single file.
