@@ -2061,7 +2061,8 @@ class MultiFileCloudParquetPartitionReader(
         val hmbAndInfo = memBuffersAndSize.head
         val nextBatch = readBufferToTable(buffer.isCorrectRebaseMode,
           buffer.isCorrectInt96RebaseMode, buffer.hasInt96Timestamps, buffer.clippedSchema,
-          buffer.readSchema, buffer.partitionedFile, hmbAndInfo.hmb, hmbAndInfo.bytes)
+          buffer.readSchema, buffer.partitionedFile, hmbAndInfo.hmb, hmbAndInfo.bytes,
+          buffer.allPartValues)
         if (memBuffersAndSize.length > 1) {
           val updatedBuffers = memBuffersAndSize.drop(1)
           currentFileHostBuffers = Some(buffer.copy(memBuffersAndSizes = updatedBuffers))
@@ -2081,7 +2082,8 @@ class MultiFileCloudParquetPartitionReader(
       readDataSchema: StructType,
       partedFile: PartitionedFile,
       hostBuffer: HostMemoryBuffer,
-      dataSize: Long): Option[ColumnarBatch] = {
+      dataSize: Long,
+      allPartValues: Option[ArrayBuffer[(Long, InternalRow)]]): Option[ColumnarBatch] = {
     val table = withResource(hostBuffer) { _ =>
 
       // Dump parquet data into a file
@@ -2114,12 +2116,84 @@ class MultiFileCloudParquetPartitionReader(
       maybeBatch.foreach { batch =>
         logDebug(s"GPU batch size: ${GpuColumnVector.getTotalDeviceMemoryUsed(batch)} bytes")
       }
-      // we have to add partition values here for this batch, we already verified that
-      // its not different for all the blocks in this batch
-      addPartitionValues(maybeBatch, partedFile.partitionValues, partitionSchema)
+      // add all part values properly:
+      if (allPartValues.isDefined) {
+        // we have to add partition values here for this batch, we already verified that
+        // its not different for all the blocks in this batch
+        val rowsPerPartition = allPartValues.get.map(_._1).toArray
+        val allPartInternalRows = allPartValues.get.map(_._2).toArray
+
+        addAllPartitionValues(maybeBatch, allPartInternalRows, rowsPerPartition, partitionSchema)
+      } else {
+        // we have to add partition values here for this batch, we already verified that
+        // its not different for all the blocks in this batch
+        addPartitionValues(maybeBatch, partedFile.partitionValues, partitionSchema)
+      }
     } finally {
       table.foreach(_.close())
     }
+  }
+
+  private def addAllPartitionValues(
+      batch: Option[ColumnarBatch],
+      inPartitionValues: Array[InternalRow],
+      rowsPerPartition: Array[Long],
+      partitionSchema: StructType): Option[ColumnarBatch] = {
+    assert(rowsPerPartition.length == inPartitionValues.length)
+    if (partitionSchema.nonEmpty) {
+      batch.map { cb =>
+        val numPartitions = inPartitionValues.length
+        if (numPartitions > 1) {
+          concatAndAddPartitionColsToBatch(cb, rowsPerPartition, inPartitionValues)
+        } else {
+          // single partition, add like other readers
+          addPartitionValues(Some(cb), inPartitionValues.head, partitionSchema).get
+        }
+      }
+    } else {
+      batch
+    }
+  }
+
+  private def concatAndAddPartitionColsToBatch(
+      cb: ColumnarBatch,
+      rowsPerPartition: Array[Long],
+      inPartitionValues: Array[InternalRow]): ColumnarBatch = {
+    withResource(cb) { _ =>
+      closeOnExcept(buildAndConcatPartitionColumns(rowsPerPartition, inPartitionValues)) {
+        allPartCols =>
+          ColumnarPartitionReaderWithPartitionValues.addGpuColumVectorsToBatch(cb, allPartCols)
+      }
+    }
+  }
+
+  private def buildAndConcatPartitionColumns(
+      rowsPerPartition: Array[Long],
+      inPartitionValues: Array[InternalRow]): Array[GpuColumnVector] = {
+    val numCols = partitionSchema.fields.length
+    val allPartCols = new Array[GpuColumnVector](numCols)
+    // build the partitions vectors for all partitions within each column
+    // and concatenate those together then go to the next column
+    for ((field, colIndex) <- partitionSchema.fields.zipWithIndex) {
+      val dataType = field.dataType
+      withResource(new Array[GpuColumnVector](inPartitionValues.length)) {
+        partitionColumns =>
+          for ((rowsInPart, partIndex) <- rowsPerPartition.zipWithIndex) {
+            val partInternalRow = inPartitionValues(partIndex)
+            val partValueForCol = partInternalRow.get(colIndex, dataType)
+            val partitionScalar = GpuScalar.from(partValueForCol, dataType)
+            withResource(partitionScalar) { scalar =>
+              partitionColumns(partIndex) = GpuColumnVector.from(
+                ai.rapids.cudf.ColumnVector.fromScalar(scalar, rowsInPart.toInt),
+                dataType)
+            }
+          }
+          val baseOfCols = partitionColumns.map(_.getBase)
+          allPartCols(colIndex) = GpuColumnVector.from(
+            ColumnVector.concatenate(baseOfCols: _*), field.dataType)
+      }
+    }
+    allPartCols
   }
 }
 
