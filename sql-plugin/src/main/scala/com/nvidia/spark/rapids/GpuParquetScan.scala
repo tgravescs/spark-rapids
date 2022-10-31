@@ -1813,11 +1813,12 @@ class MultiFileCloudParquetPartitionReader(
           currentSchema = hmbInfo.schema
           //val outputBlocks = copyBlocksData(in, out, blocks, out.getPos)
 
+          val copyAmount = footerPos - ParquetPartitionReader.PARQUET_MAGIC.size
           newHmb.copyFromHostBuffer(offset, hmbInfo.hmb,
-            ParquetPartitionReader.PARQUET_MAGIC.size, footerPos)
+            ParquetPartitionReader.PARQUET_MAGIC.size, copyAmount)
           val outputBlocks = computeBlockMetaData(hmbInfo.blockMeta, offset, None)
 
-          offset += footerPos
+          offset += copyAmount
           logWarning(s"footer position is $footerPos")
 
           logWarning(s"size of block data is $sizeOfBlockData")
