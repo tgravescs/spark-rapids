@@ -1244,7 +1244,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       val mid = System.nanoTime()
       out.write(copyBuffer, 0, readLength)
       val end = System.nanoTime()
-      logWarning(s"write length is $readLength")
+      // logWarning(s"write length is $readLength")
 
       readTime += (mid - start)
       writeTime += (end - mid)
@@ -1283,7 +1283,6 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
         // update column metadata to reflect new position in the output file
         val startPosCol = column.getStartingPos
         val offsetAdjustment = realStartOffset + totalBytesToCopy - startPosCol
-        logWarning(s"realStartOffset $realStartOffset $totalBytesToCopy $startPosCol $offsetAdjustment")
         val newDictOffset = if (column.getDictionaryPageOffset > 0) {
           column.getDictionaryPageOffset + offsetAdjustment
         } else {
