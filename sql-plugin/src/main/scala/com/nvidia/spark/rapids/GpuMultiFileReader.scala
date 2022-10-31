@@ -570,7 +570,7 @@ abstract class MultiFileCloudPartitionReaderBase(
           var takeMore = true
           val results = new java.util.ArrayList[HostMemoryBuffersWithMetaDataBase]()
           var numCombine = 500
-
+          var currSize = 0L
           // shouldn't really need files to read check as will be null returned
           while(takeMore && numCombine > 0 && filesToRead > 0) {
             val res = fcs.poll()
@@ -579,7 +579,12 @@ abstract class MultiFileCloudPartitionReaderBase(
               takeMore = false
             } else {
               results.add(res.get())
+              currSize += res.get().memBuffersAndSizes.map(_.bytes).sum
               filesToRead -= 1
+              if (currSize > (64 * 1024 * 1024)) {
+                logWarning(s"current size $currSize is more then 64mb, stopping")
+                takeMore = false
+              }
             }
           }
 
