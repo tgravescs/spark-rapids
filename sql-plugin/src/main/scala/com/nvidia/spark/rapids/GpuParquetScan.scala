@@ -952,7 +952,8 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   private val filterHandler = GpuParquetFileFilterHandler(sqlConf)
   private val readUseFieldId = ParquetSchemaClipShims.useFieldId(sqlConf)
   private val numFilesFilterParallel = rapidsConf.numFilesFilterParallel
-  private val alluxioReplacementTaskTime = rapidsConf.isAlluxioReplacementAlgoTaskTime
+  private val alluxioReplacementTaskTime =
+    AlluxioCfgUtils.enabledAlluxioReplacementAlgoTaskTime(rapidsConf)
 
   // We can't use the coalescing files reader when InputFileName, InputFileBlockStart,
   // or InputFileBlockLength because we are combining all the files into a single buffer
@@ -1125,7 +1126,6 @@ case class GpuParquetPartitionReaderFactory(
 
   private val filterHandler = GpuParquetFileFilterHandler(sqlConf)
   private val readUseFieldId = ParquetSchemaClipShims.useFieldId(sqlConf)
-  private val alluxioReplacementTaskTime = rapidsConf.isAlluxioReplacementAlgoTaskTime
 
   override def supportColumnarReads(partition: InputPartition): Boolean = true
 
