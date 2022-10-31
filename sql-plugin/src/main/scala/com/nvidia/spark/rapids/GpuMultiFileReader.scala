@@ -72,6 +72,7 @@ trait HostMemoryBuffersWithMetaDataBase {
   var filterTime = 0L
   var bufferTime = 0L
 
+  def allPartValues: Option[ArrayBuffer[(Long, InternalRow)]] = None
 
   // Called by parquet/orc/avro scanners to set the amount of time (in nanoseconds)
   // that filtering and buffering incurred in one of the scan runners.

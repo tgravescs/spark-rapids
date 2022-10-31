@@ -1794,12 +1794,9 @@ class MultiFileCloudParquetPartitionReader(
         out.getPos
       }
       // val out = new HostMemoryOutputStream(newHmb)
-
       var currentSchema: MessageType = null
       val allPartValues = new ArrayBuffer[(Long, InternalRow)]()
       val allOutputBlocks = new ArrayBuffer[BlockMetaData]()
-      val allOrigOutputBlocks = new ArrayBuffer[BlockMetaData]()
-
 
       // copy the actual data
       results.asScala.map { hbWithMeta =>
@@ -1819,13 +1816,13 @@ class MultiFileCloudParquetPartitionReader(
           val copyAmount = footerPos - ParquetPartitionReader.PARQUET_MAGIC.size
           newHmb.copyFromHostBuffer(offset, hmbInfo.hmb,
             ParquetPartitionReader.PARQUET_MAGIC.size, copyAmount)
+          hmbInfo.hmb.close()
           val outputBlocks = computeBlockMetaData(hmbInfo.blockMeta, offset, None)
 
           offset += copyAmount
           // logWarning(s"footer position is $footerPos")
 
           // logWarning(s"size of block data is $sizeOfBlockData")
-          allOrigOutputBlocks ++= hmbInfo.blockMeta
           allOutputBlocks ++= outputBlocks
         }
       }
@@ -1859,14 +1856,15 @@ class MultiFileCloudParquetPartitionReader(
         Seq.empty, currentSchema, footerOutPos)
       HostMemoryBuffersWithMetaData(
         meta.partitionedFile, // TODO - this is wrong since could be multiple files
-        meta.origPartitionedFile,  // TODO - this is wrong since could be multiple files
+        meta.origPartitionedFile,  // TODO - this is wrong since could be multiple files - not used for alluxio since aleady read ?
         Array(newHmbBufferInfo),
         offset,
         meta.isCorrectRebaseMode, // TODO - need to add checks for these to see if different?
         meta.isCorrectInt96RebaseMode, // TODO - need to add checks for these to see if different?
         meta.hasInt96Timestamps,
         currentSchema,
-        meta.readSchema)
+        meta.readSchema,
+        Some(allPartValues))
     }
   }
 
@@ -1896,6 +1894,7 @@ class MultiFileCloudParquetPartitionReader(
       hasInt96Timestamps: Boolean,
       clippedSchema: MessageType,
       readSchema: StructType,
+      override val allPartValues: Option[ArrayBuffer[(Long, InternalRow)]]
   ) extends HostMemoryBuffersWithMetaDataBase
 
   private class ReadBatchRunner(
@@ -1990,7 +1989,7 @@ class MultiFileCloudParquetPartitionReader(
                 HostMemoryBuffersWithMetaData(file, origPartitionedFile, hostBuffers.toArray,
                   bytesRead, fileBlockMeta.isCorrectedRebaseMode,
                   fileBlockMeta.isCorrectedInt96RebaseMode, fileBlockMeta.hasInt96Timestamps,
-                  fileBlockMeta.schema, fileBlockMeta.readSchema)
+                  fileBlockMeta.schema, fileBlockMeta.readSchema, None)
               }
             }
           }
