@@ -1359,7 +1359,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
   protected def readPartFile(
       blocks: Seq[BlockMetaData],
       clippedSchema: MessageType,
-      filePath: Path): (HostMemoryBuffer, Long, Long, Seq[Long]) = {
+      filePath: Path): (HostMemoryBuffer, Long, Long, Seq[Long], Seq[BlockMetaData]) = {
     withResource(new NvtxRange("Parquet buffer file split", NvtxColor.YELLOW)) { _ =>
       withResource(filePath.getFileSystem(conf).open(filePath)) { in =>
         val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema, false)
@@ -1369,10 +1369,6 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
           logWarning(s"after writing header location: ${out.getPos}")
           val (outputBlocks, startLocs) = copyBlocksData(in, out, blocks, out.getPos)
           val footerPos = out.getPos
-         logWarning(s"footer pos is ${footerPos}")
-          val sizeOfBlockData = outputBlocks.map(_.getTotalByteSize).sum
-         logWarning(s"size of block data 2 is ${sizeOfBlockData}")
-
           writeFooter(out, outputBlocks, clippedSchema)
           BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
@@ -1382,7 +1378,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
               s"small, actual written: ${out.getPos}")
           }
           // logWarning(s"reading file actual size is ${out.getPos}")
-          (hmb, out.getPos, footerPos, startLocs)
+          (hmb, out.getPos, footerPos, startLocs, outputBlocks)
         }
       }
     }
@@ -1812,8 +1808,8 @@ class MultiFileCloudParquetPartitionReader(
         allPartValues.append((totalNumRows, partValues))
         hbWithMeta.memBuffersAndSizes.map { hmbInfo =>
           // can't use size in hbmInfo because that includes footers
-          val sizeOfBlockData = hmbInfo.blockMeta.map(_.getTotalByteSize).sum
-          val footerPos = hmbInfo.footerPos
+          // val sizeOfBlockData = hmbInfo.blockMeta.map(_.getTotalByteSize).sum
+          // val footerPos = hmbInfo.footerPos
           if (currentSchema != null && hmbInfo.schema != currentSchema) {
             throw new Exception("schema is different")
           }
@@ -1994,10 +1990,10 @@ class MultiFileCloudParquetPartitionReader(
                 val blocksToRead = populateCurrentBlockChunk(blockChunkIter,
                   maxReadBatchSizeRows, maxReadBatchSizeBytes, fileBlockMeta.readSchema)
                 val numRows = blocksToRead.map(_.getRowCount).sum.toInt
-                val (dataBuffer, dataSize, footerPos, startLocs) =
+                val (dataBuffer, dataSize, footerPos, startLocs, blockMeta) =
                   readPartFile(blocksToRead, fileBlockMeta.schema, filePath)
-                hostBuffers +=  HostMemoryBufferInfo(dataBuffer, dataSize,
-                  numRows, blocksToRead, fileBlockMeta.schema, footerPos, startLocs)
+                hostBuffers += HostMemoryBufferInfo(dataBuffer, dataSize,
+                  numRows, blockMeta, fileBlockMeta.schema, footerPos, startLocs)
               }
               val bytesRead = fileSystemBytesRead() - startingBytesRead
               if (isDone) {
@@ -2312,7 +2308,7 @@ class ParquetPartitionReader(
     if (currentChunkedBlocks.isEmpty) {
       return None
     }
-    val (dataBuffer, dataSize, _, _) = metrics(BUFFER_TIME).ns {
+    val (dataBuffer, dataSize, _, _, _) = metrics(BUFFER_TIME).ns {
       readPartFile(currentChunkedBlocks, clippedParquetSchema, filePath)
     }
     try {
