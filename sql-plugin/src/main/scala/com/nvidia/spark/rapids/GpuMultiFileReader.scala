@@ -51,7 +51,8 @@ import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector => SparkVect
 import org.apache.spark.util.SerializableConfiguration
 
 case class HostMemoryBufferInfo(hmb: HostMemoryBuffer, bytes: Long, numRows: Long,
-    blockMeta: Seq[BlockMetaData], schema: MessageType, footerPos: Long)
+    blockMeta: Seq[BlockMetaData], schema: MessageType, footerPos: Long,
+    startLocs: Seq[Long])
 
 /**
  * The base HostMemoryBuffer information read from a single file.
@@ -1109,10 +1110,11 @@ abstract class MultiFileCoalescingPartitionReaderBase(
             logWarning(s"files size is: $fileBlockSize num blocks ${blocks.size}")
             // use a single buffer and slice it up for different files if we need
             val outLocal = hmb.slice(offset, fileBlockSize)
+            logWarning(s"slicing at offset $offset $fileBlockSize")
             // Third, copy the blocks for each file in parallel using background threads
             tasks.add(threadPool.submit(
               getBatchRunner(tc, file, outLocal, blocks, offset, batchContext)))
-            // fetching largest first but what about getting somethign done quickly???
+            // fetching largest first but what about getting something done quickly???
             // fcs.submit(
             //  getBatchRunner(tc, file, outLocal, blocks, offset, batchContext))
             logWarning(s"starting thread for file: $file")

@@ -32,7 +32,8 @@ class GpuMultiFileReaderSuite extends FunSuite with Arm {
   test("avoid infinite loop when host buffers empty") {
     val conf = new Configuration(false)
     val membuffers =
-      Array(HostMemoryBufferInfo(HostMemoryBuffer.allocate(0), 0L, 0, Seq.empty, null, 0))
+      Array(HostMemoryBufferInfo(
+        HostMemoryBuffer.allocate(0), 0L, 0, Seq.empty, null, 0, Seq.empty))
     val multiFileReader = new MultiFileCloudPartitionReaderBase(
       conf,
       inputFiles = Array.empty,
