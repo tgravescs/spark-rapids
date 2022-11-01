@@ -535,9 +535,11 @@ case class GpuFileSourceScanExec(
       s"open cost is considered as scanning $openCostInBytes bytes.")
 
     val splitFiles = selectedPartitions.flatMap { partition =>
+      logWarning(s"number of files is ${partition.files.size}")
       partition.files.flatMap { file =>
         // getPath() is very expensive so we only want to call it once in this block:
         val filePath = file.getPath
+        logWarning(s"file length is ${file.getLen}")
         val isSplitable = relation.fileFormat.isSplitable(
           relation.sparkSession, relation.options, filePath)
         PartitionedFileUtil.splitFiles(
@@ -554,6 +556,7 @@ case class GpuFileSourceScanExec(
     val partitions =
       FilePartition.getFilePartitions(relation.sparkSession, splitFiles, maxSplitBytes)
 
+    logWarning(s"number of file partitions is ${partitions.size}")
     getFinalRDD(readFile, partitions)
   }
 

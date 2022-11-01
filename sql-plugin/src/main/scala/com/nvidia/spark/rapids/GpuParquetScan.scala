@@ -1343,23 +1343,20 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       in: FSDataInputStream,
       out: HostMemoryOutputStream,
       blocks: Seq[BlockMetaData],
-      realStartOffset: Long): (Seq[BlockMetaData], Seq[Long]) = {
+      realStartOffset: Long): Seq[BlockMetaData] = {
     val copyRanges = new ArrayBuffer[CopyRange]
     val outputBlocks = computeBlockMetaData(blocks, realStartOffset, Some(copyRanges))
     val copyBuffer = new Array[Byte](copyBufferSize)
-    val realStartLocations = new ArrayBuffer[Long]
-
     copyRanges.foreach { copyRange =>
-      realStartLocations += out.getPos
       copyDataRange(copyRange, in, out, copyBuffer)
     }
-    (outputBlocks, realStartLocations)
+    outputBlocks
   }
 
   protected def readPartFile(
       blocks: Seq[BlockMetaData],
       clippedSchema: MessageType,
-      filePath: Path): (HostMemoryBuffer, Long, Long, Seq[Long], Seq[BlockMetaData]) = {
+      filePath: Path): (HostMemoryBuffer, Long, Long, Seq[BlockMetaData]) = {
     withResource(new NvtxRange("Parquet buffer file split", NvtxColor.YELLOW)) { _ =>
       withResource(filePath.getFileSystem(conf).open(filePath)) { in =>
         val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema, false)
@@ -1367,7 +1364,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
           val out = new HostMemoryOutputStream(hmb)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
           logWarning(s"after writing header location: ${out.getPos}")
-          val (outputBlocks, startLocs) = copyBlocksData(in, out, blocks, out.getPos)
+          val outputBlocks = copyBlocksData(in, out, blocks, out.getPos)
           val footerPos = out.getPos
           writeFooter(out, outputBlocks, clippedSchema)
           BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
@@ -1378,7 +1375,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
               s"small, actual written: ${out.getPos}")
           }
           // logWarning(s"reading file actual size is ${out.getPos}")
-          (hmb, out.getPos, footerPos, startLocs, outputBlocks)
+          (hmb, out.getPos, footerPos, outputBlocks)
         }
       }
     }
@@ -1597,7 +1594,7 @@ class MultiFileParquetPartitionReader(
       TrampolineUtil.setTaskContext(taskContext)
       try {
         val startBytesRead = fileSystemBytesRead()
-        val (outputBlocks, _) = withResource(outhmb) { _ =>
+        val outputBlocks = withResource(outhmb) { _ =>
           withResource(new HostMemoryOutputStream(outhmb)) { out =>
             withResource(file.getFileSystem(conf).open(file)) { in =>
               copyBlocksData(in, out, blocks, offset)
@@ -1990,10 +1987,10 @@ class MultiFileCloudParquetPartitionReader(
                 val blocksToRead = populateCurrentBlockChunk(blockChunkIter,
                   maxReadBatchSizeRows, maxReadBatchSizeBytes, fileBlockMeta.readSchema)
                 val numRows = blocksToRead.map(_.getRowCount).sum.toInt
-                val (dataBuffer, dataSize, footerPos, startLocs, blockMeta) =
+                val (dataBuffer, dataSize, footerPos, blockMeta) =
                   readPartFile(blocksToRead, fileBlockMeta.schema, filePath)
                 hostBuffers += HostMemoryBufferInfo(dataBuffer, dataSize,
-                  numRows, blockMeta, fileBlockMeta.schema, footerPos, startLocs)
+                  numRows, blockMeta, fileBlockMeta.schema, footerPos, Seq.empty)
               }
               val bytesRead = fileSystemBytesRead() - startingBytesRead
               if (isDone) {
@@ -2308,7 +2305,7 @@ class ParquetPartitionReader(
     if (currentChunkedBlocks.isEmpty) {
       return None
     }
-    val (dataBuffer, dataSize, _, _, _) = metrics(BUFFER_TIME).ns {
+    val (dataBuffer, dataSize, _, _) = metrics(BUFFER_TIME).ns {
       readPartFile(currentChunkedBlocks, clippedParquetSchema, filePath)
     }
     try {

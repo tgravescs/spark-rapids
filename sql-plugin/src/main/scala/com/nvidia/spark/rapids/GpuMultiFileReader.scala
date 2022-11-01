@@ -50,6 +50,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector => SparkVector}
 import org.apache.spark.util.SerializableConfiguration
 
+// TODO - remove startLocs and footerPos
 case class HostMemoryBufferInfo(hmb: HostMemoryBuffer, bytes: Long, numRows: Long,
     blockMeta: Seq[BlockMetaData], schema: MessageType, footerPos: Long,
     startLocs: Seq[Long])
