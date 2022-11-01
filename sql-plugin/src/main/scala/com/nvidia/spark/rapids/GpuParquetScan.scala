@@ -1812,17 +1812,23 @@ class MultiFileCloudParquetPartitionReader(
           }
           currentSchema = hmbInfo.schema
 
+          val copyAmount = hmbInfo.blockMeta.map { meta =>
+            meta.getColumns.asScala.map(_.getTotalSize).sum
+          }.sum
           // val copyAmount = footerPos - ParquetPartitionReader.PARQUET_MAGIC.size
-          // newHmb.copyFromHostBuffer(offset, hmbInfo.hmb,
-          //   ParquetPartitionReader.PARQUET_MAGIC.size, copyAmount)
-          // val outputBlocks = computeBlockMetaData(hmbInfo.blockMeta, offset, None)
-          // offset += copyAmount
+          newHmb.copyFromHostBuffer(offset, hmbInfo.hmb,
+             ParquetPartitionReader.PARQUET_MAGIC.size, copyAmount)
+          val outputBlocks = computeBlockMetaData(hmbInfo.blockMeta, offset, None)
+          allOutputBlocks ++= outputBlocks
+          offset += copyAmount
+          hmbInfo.hmb.close()
 
           var j = 0
           // compute new offsets based on the new start location before copying data
-          val outputBlocks = computeBlockMetaData(hmbInfo.blockMeta, offset, None)
-          allOutputBlocks ++= outputBlocks
+          // val outputBlocks = computeBlockMetaData(hmbInfo.blockMeta, offset, None)
+          // allOutputBlocks ++= outputBlocks
 
+          /*
           var hmbOffset = 4L
           hmbInfo.blockMeta.foreach { meta =>
             // start location could be different from offset due to output stream padding
@@ -1836,6 +1842,8 @@ class MultiFileCloudParquetPartitionReader(
             hmbOffset += realSize
             j += 1
           }
+
+           */
           // logWarning(s"footer position is $footerPos")
           // logWarning(s"size of block data is $sizeOfBlockData")
         }
@@ -1856,9 +1864,11 @@ class MultiFileCloudParquetPartitionReader(
         }
       }
 
+      /*
       results.asScala.foreach { hbWithMeta =>
         hbWithMeta.memBuffersAndSizes.foreach(_.hmb.close())
       }
+       */
 
       if (!results.get(0).isInstanceOf[HostMemoryBuffersWithMetaData]) {
         throw new Exception("type of results should have been HostMemoryBuffersWithMetaData")
