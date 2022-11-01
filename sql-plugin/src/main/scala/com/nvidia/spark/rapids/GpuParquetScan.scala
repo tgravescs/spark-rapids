@@ -1349,12 +1349,9 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
     val copyBuffer = new Array[Byte](copyBufferSize)
     val realStartLocations = new ArrayBuffer[Long]
 
-    var i = 0
     copyRanges.foreach { copyRange =>
       realStartLocations += out.getPos
       copyDataRange(copyRange, in, out, copyBuffer)
-      logWarning(s"copy blocks, copied to stream: ${out.getPos} size ${blocks(i).getTotalByteSize}")
-      i += 1
     }
     (outputBlocks, realStartLocations)
   }
