@@ -952,8 +952,11 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   private val filterHandler = GpuParquetFileFilterHandler(sqlConf)
   private val readUseFieldId = ParquetSchemaClipShims.useFieldId(sqlConf)
   private val numFilesFilterParallel = rapidsConf.numFilesFilterParallel
+  private val combineThresholdSize = rapidsConf.getParquetMultithreadedCombineThreshold
+  private val combineWaitTime = rapidsConf.getParquetMultithreadedCombineWaitTime
   private val alluxioReplacementTaskTime =
     AlluxioCfgUtils.enabledAlluxioReplacementAlgoTaskTime(rapidsConf)
+
 
   // We can't use the coalescing files reader when InputFileName, InputFileBlockStart,
   // or InputFileBlockLength because we are combining all the files into a single buffer
@@ -982,7 +985,8 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       debugDumpPrefix, maxReadBatchSizeRows, maxReadBatchSizeBytes,
       metrics, partitionSchema, numThreads, maxNumFileProcessed,
       ignoreMissingFiles, ignoreCorruptFiles, readUseFieldId,
-      alluxioPathReplacementMap.getOrElse(Map.empty), alluxioReplacementTaskTime)
+      alluxioPathReplacementMap.getOrElse(Map.empty), alluxioReplacementTaskTime,
+      combineThresholdSize, combineWaitTime)
   }
 
   private def filterBlocksForCoalescingReader(
@@ -1769,9 +1773,12 @@ class MultiFileCloudParquetPartitionReader(
     ignoreCorruptFiles: Boolean,
     useFieldId: Boolean,
     alluxioPathReplacementMap: Map[String, String],
-    alluxioReplacementTaskTime: Boolean)
+    alluxioReplacementTaskTime: Boolean,
+    combineThresholdSize: Long,
+    combineWaitTime: Int)
   extends MultiFileCloudPartitionReaderBase(conf, files, numThreads, maxNumFileProcessed, null,
-    execMetrics, ignoreCorruptFiles, alluxioPathReplacementMap, alluxioReplacementTaskTime)
+    execMetrics, ignoreCorruptFiles, alluxioPathReplacementMap, alluxioReplacementTaskTime,
+    combineThresholdSize = combineThresholdSize)
     with ParquetPartitionReaderBase {
 
   override def combineHMBs(results: java.util.ArrayList[HostMemoryBuffersWithMetaDataBase])

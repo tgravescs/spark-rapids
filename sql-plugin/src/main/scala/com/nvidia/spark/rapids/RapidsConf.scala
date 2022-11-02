@@ -808,6 +808,21 @@ object RapidsConf {
       .checkValues(ParquetFooterReaderType.values.map(_.toString))
       .createWithDefault(ParquetFooterReaderType.AUTO.toString)
 
+  val PARQUET_MULTITHREADED_COMBINE_THRESHOLD =
+    conf("spark.rapids.sql.format.parquet.multithreaded.combine.threshold")
+      .doc("When using the multithreaded parquet reader, if other files are already ready," +
+      "combine them together up to this threadhold size before sending down to GPU.")
+      .bytesConf(ByteUnit.BYTE)
+      .createWithDefault(67108864L)   // 64mb
+
+  val PARQUET_MULTITHREADED_COMBINE_WAIT_TIME =
+    conf("spark.rapids.sql.format.parquet.multithreaded.combine.waitTime")
+      .doc("When using the multithreaded parquet reader with combine mode, how long" +
+        "to wait for more files to finish if haven't met size yet.")
+      .integerConf
+      .createWithDefault(5) // ms
+
+
   // This is an experimental feature now. And eventually, should be enabled or disabled depending
   // on something that we don't know yet but would try to figure out.
   val ENABLE_CPU_BASED_UDF = conf("spark.rapids.sql.rowBasedUDF.enabled")
@@ -1983,6 +1998,12 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
             s"${PARQUET_READER_FOOTER_TYPE.key}")
     }
   }
+
+  lazy val getParquetMultithreadedCombineThreshold: Long =
+    get(PARQUET_MULTITHREADED_COMBINE_THRESHOLD)
+
+  lazy val getParquetMultithreadedCombineWaitTime: Int =
+    get(PARQUET_MULTITHREADED_COMBINE_WAIT_TIME)
 
   lazy val isParquetPerFileReadEnabled: Boolean =
     RapidsReaderType.withName(get(PARQUET_READER_TYPE)) == RapidsReaderType.PERFILE

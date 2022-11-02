@@ -444,7 +444,9 @@ abstract class MultiFileCloudPartitionReaderBase(
     execMetrics: Map[String, GpuMetric],
     ignoreCorruptFiles: Boolean = false,
     alluxioPathReplacementMap: Map[String, String] = Map.empty,
-    alluxioReplacementTaskTime: Boolean = false)
+    alluxioReplacementTaskTime: Boolean = false,
+    combineThresholdSize: Long = -1,
+    combineWaitTime: Int = -1)
   extends FilePartitionReaderBase(conf, execMetrics) {
 
   private var filesToRead = 0
@@ -572,22 +574,25 @@ abstract class MultiFileCloudPartitionReaderBase(
           // val fileBufsAndMeta = tasks.poll.get()
           var takeMore = true
           val results = new java.util.ArrayList[HostMemoryBuffersWithMetaDataBase]()
-          var numCombine = 500
           var currSize = 0L
+          var waited = false
           // shouldn't really need files to read check as will be null returned
-          while(takeMore && numCombine > 0 && filesToRead > 0) {
+          // while there are files done sitting there take up to threshold size
+          // TODO - perhaps we want to wait a bit to see if more finish quickly?
+          while(takeMore && currSize < combineThresholdSize && filesToRead > 0) {
             val res = fcs.poll()
-            numCombine -= 1
             if (res == null) {
-              takeMore = false
+              if (waited == false && combineWaitTime > 0) {
+                Thread.sleep(combineWaitTime)
+                waited = true
+              } else {
+                takeMore = false
+              }
             } else {
               results.add(res.get())
               currSize += res.get().memBuffersAndSizes.map(_.bytes).sum
+              logWarning(s"current size $currSize")
               filesToRead -= 1
-              if (currSize > (64 * 1024 * 1024)) {
-                logWarning(s"current size $currSize is more then 64mb, stopping")
-                takeMore = false
-              }
             }
           }
 
@@ -596,7 +601,7 @@ abstract class MultiFileCloudPartitionReaderBase(
             val res = fcs.take().get()
             filesToRead -= 1
             res
-          } else if (results.size > 1) {
+          } else if (results.size > 1 && combineThresholdSize > 0) {
             logWarning(s"combining results, size: ${results.size}")
             val startCombineTime = System.nanoTime()
             val combinedRes = combineHMBs(results)
