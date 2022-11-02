@@ -623,6 +623,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
           conf.unset(encryptConf)
         }
       }
+      val startFooterRead = System.nanoTime()
       val footer = try {
          footerReader match {
           case ParquetFooterReaderType.NATIVE =>
@@ -658,6 +659,8 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
             s"reader via ${RapidsConf.ENABLE_PARQUET_READ.key}.", e)
       }
 
+      logWarning(s"reading footer took: ${System.nanoTime() - startFooterRead}")
+      val restTime = System.nanoTime()
       val fileSchema = footer.getFileMetaData.getSchema
 
       // check spark.sql.parquet.fieldId.read.ignoreMissing
@@ -696,8 +699,10 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
       } else {
         footer.getBlocks
       }
-      logWarning(s"num filtered block is ${blocks.size}")
+      logWarning(s"num filtered block is ${blocks.size}, " +
+        s"to here took ${System.nanoTime() - restTime}")
 
+      val startClipped = System.nanoTime()
       val (clipped, clippedSchema) =
         withResource(new NvtxRange("clipSchema", NvtxColor.DARK_GREEN)) { _ =>
           val clippedSchema = ParquetSchemaUtils.clipParquetSchema(
@@ -710,6 +715,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
           (clipped, clippedSchema)
         }
 
+      logWarning(s"slipping schema took: ${System.nanoTime() - startClipped}")
       ParquetFileInfoWithBlockMeta(filePath, clipped, file.partitionValues,
         clippedSchema, readDataSchema, isCorrectedInt96RebaseForThisFile,
         isCorrectedRebaseForThisFile, hasInt96Timestamps)
