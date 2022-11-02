@@ -1974,6 +1974,9 @@ class MultiFileCloudParquetPartitionReader(
         val filterStartTime = System.nanoTime()
         val fileBlockMeta = filterFunc(file)
         filterTime = System.nanoTime() - filterStartTime
+        if (filterTime > (10 * 1000 * 1000 * 1000)) {
+           logWarning(s"filter time took over 10 seconds, file: $file")
+        }
         bufferStartTime = System.nanoTime()
         if (fileBlockMeta.blocks.isEmpty) {
           val bytesRead = fileSystemBytesRead() - startingBytesRead
