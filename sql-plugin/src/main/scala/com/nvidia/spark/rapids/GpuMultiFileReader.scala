@@ -572,39 +572,58 @@ abstract class MultiFileCloudPartitionReaderBase(
           // clock as we can get right now without further work.
           val startTime = System.nanoTime()
           // val fileBufsAndMeta = tasks.poll.get()
-          var takeMore = true
           val results = new java.util.ArrayList[HostMemoryBuffersWithMetaDataBase]()
-          var currSize = 0L
-          var waited = false
-          // shouldn't really need files to read check as will be null returned
           // while there are files done sitting there take up to threshold size
-          // TODO - perhaps we want to wait a bit to see if more finish quickly?
-          logWarning(s"files to read $filesToRead takemore $takeMore curr" +
-            s" size $currSize $combineThresholdSize")
-          while(takeMore && currSize < combineThresholdSize && filesToRead > 0) {
-            val res = fcs.poll()
-            if (res == null) {
-              if (waited == false && combineWaitTime > 0) {
-                Thread.sleep(combineWaitTime)
-                logWarning(s"waited $combineWaitTime")
-                waited = true
+          def readReadyFiles(initSize: Long = 0) = {
+            var waited = false
+            var takeMore = true
+            var currSize = initSize
+            logWarning(s"files to read $filesToRead takemore $takeMore curr" +
+              s" size $currSize $combineThresholdSize")
+            while (takeMore && currSize < combineThresholdSize && filesToRead > 0) {
+              val res = fcs.poll()
+              if (res == null) {
+                if (waited == false && combineWaitTime > 0) {
+                  val startWait = System.nanoTime()
+                  // TODO - can we change to busy wait to be chekcing
+                  Thread.sleep(combineWaitTime)
+                  logWarning(s"waited $combineWaitTime")
+                  waited = true
+                } else {
+                  takeMore = false
+                }
               } else {
-                takeMore = false
+                results.add(res.get())
+                currSize += res.get().memBuffersAndSizes.map(_.bytes).sum
+                logWarning(s"current size $currSize")
+                filesToRead -= 1
               }
-            } else {
-              results.add(res.get())
-              currSize += res.get().memBuffersAndSizes.map(_.bytes).sum
-              logWarning(s"current size $currSize")
-              filesToRead -= 1
             }
           }
-
-          val fileBufsAndMeta = if (results.isEmpty) {
+          if (combineThresholdSize > 0) {
+            var sizeRead = 0L
+            readReadyFiles(0)
+            if (results.isEmpty) {
+              val res = fcs.take().get()
+              sizeRead += res.memBuffersAndSizes.map(_.bytes).sum
+              filesToRead -= 1
+              results.add(res)
+            }
+            readReadyFiles(sizeRead)
+          } else {
             logWarning("no results, waiting on one")
             val res = fcs.take().get()
             filesToRead -= 1
+            results.add(res)
+          }
+
+          val fileBufsAndMeta = if (results.isEmpty) {
+            // TODO - shouldn't ever hit here any more
+            throw new Exception("no results, shouldn't be here")
+            val res = fcs.take().get()
+            filesToRead -= 1
             res
-          } else if (results.size > 1 && combineThresholdSize > 0) {
+          } else if (results.size > 1) {
             logWarning(s"combining results, size: ${results.size}")
             val startCombineTime = System.nanoTime()
             val combinedRes = combineHMBs(results)
