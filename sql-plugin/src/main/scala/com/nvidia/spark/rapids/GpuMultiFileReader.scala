@@ -579,11 +579,14 @@ abstract class MultiFileCloudPartitionReaderBase(
           // shouldn't really need files to read check as will be null returned
           // while there are files done sitting there take up to threshold size
           // TODO - perhaps we want to wait a bit to see if more finish quickly?
+          logWarning(s"files to read $filesToRead takemore $takeMore curr" +
+            s" size $currSize $combineThresholdSize")
           while(takeMore && currSize < combineThresholdSize && filesToRead > 0) {
             val res = fcs.poll()
             if (res == null) {
               if (waited == false && combineWaitTime > 0) {
                 Thread.sleep(combineWaitTime)
+                logWarning(s"waited $combineWaitTime")
                 waited = true
               } else {
                 takeMore = false

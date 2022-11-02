@@ -1778,7 +1778,7 @@ class MultiFileCloudParquetPartitionReader(
     combineWaitTime: Int)
   extends MultiFileCloudPartitionReaderBase(conf, files, numThreads, maxNumFileProcessed, null,
     execMetrics, ignoreCorruptFiles, alluxioPathReplacementMap, alluxioReplacementTaskTime,
-    combineThresholdSize = combineThresholdSize)
+    combineThresholdSize, combineWaitTime)
     with ParquetPartitionReaderBase {
 
   override def combineHMBs(results: java.util.ArrayList[HostMemoryBuffersWithMetaDataBase])
