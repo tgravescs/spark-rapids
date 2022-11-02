@@ -1194,7 +1194,8 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
   protected def calculateParquetOutputSize(
       currentChunkedBlocks: Seq[BlockMetaData],
       schema: MessageType,
-      handleCoalesceFiles: Boolean): Long = {
+      handleCoalesceFiles: Boolean,
+      skipFooter: Boolean = false): Long = {
     // start with the size of Parquet magic (at start+end) and footer length values
     var size: Long = 4 + 4 + 4
 
@@ -1203,7 +1204,16 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
     //       uncompressed size rather than the size in the file.
     size += currentChunkedBlocks.flatMap(_.getColumns.asScala.map(_.getTotalSize)).sum
 
+    val footerStart = System.nanoTime()
     val footerSize = calculateParquetFooterSize(currentChunkedBlocks, schema)
+    logWarning(s"calculate footer size took: ${System.nanoTime() - footerStart}")
+    /*    if (skipFooter) {
+      0
+    } else {
+      calculateParquetFooterSize(currentChunkedBlocks, schema)
+    }
+
+ */
     val extraMemory = if (handleCoalesceFiles) {
       // we want to add extra memory because the ColumnChunks saved in the Footer have 2 fields
       // file_offset and data_page_offset that get much larger when we are combining files.
@@ -1366,7 +1376,8 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
   protected def readPartFile(
       blocks: Seq[BlockMetaData],
       clippedSchema: MessageType,
-      filePath: Path): (HostMemoryBuffer, Long, Long, Seq[BlockMetaData]) = {
+      filePath: Path,
+      skipFooter: Boolean = false): (HostMemoryBuffer, Long, Long, Seq[BlockMetaData]) = {
     withResource(new NvtxRange("Parquet buffer file split", NvtxColor.YELLOW)) { _ =>
       withResource(filePath.getFileSystem(conf).open(filePath)) { in =>
         val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema, false)
@@ -1376,9 +1387,11 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
           logWarning(s"after writing header location: ${out.getPos}")
           val outputBlocks = copyBlocksData(in, out, blocks, out.getPos)
           val footerPos = out.getPos
+          val startFooter = System.nanoTime()
           writeFooter(out, outputBlocks, clippedSchema)
           BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
+          logWarning(s"writing footer took ${System.nanoTime() - startFooter}ns")
           // check we didn't go over memory
           if (out.getPos > estTotalSize) {
             throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is to " +
@@ -2014,7 +2027,7 @@ class MultiFileCloudParquetPartitionReader(
                   maxReadBatchSizeRows, maxReadBatchSizeBytes, fileBlockMeta.readSchema)
                 val numRows = blocksToRead.map(_.getRowCount).sum.toInt
                 val (dataBuffer, dataSize, footerPos, blockMeta) =
-                  readPartFile(blocksToRead, fileBlockMeta.schema, filePath)
+                  readPartFile(blocksToRead, fileBlockMeta.schema, filePath, skipFooter = true)
                 hostBuffers += HostMemoryBufferInfo(dataBuffer, dataSize,
                   numRows, blockMeta, fileBlockMeta.schema, footerPos, Seq.empty)
               }
