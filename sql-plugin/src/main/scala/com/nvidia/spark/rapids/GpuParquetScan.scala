@@ -2058,10 +2058,10 @@ class MultiFileCloudParquetPartitionReader(
     }
      */
 
-      if (!results.get(0).isInstanceOf[HostMemoryBuffersWithMetaData]) {
+      if (!results(0).isInstanceOf[HostMemoryBuffersWithMetaData]) {
         throw new Exception("type of results should have been HostMemoryBuffersWithMetaData")
       }
-      val meta = results.get(0).asInstanceOf[HostMemoryBuffersWithMetaData]
+      val meta = results(0).asInstanceOf[HostMemoryBuffersWithMetaData]
       logWarning(s"combined files to total size $offset")
       val newHmbBufferInfo = HostMemoryBufferInfo(newHmb, offset, allPartValues.map(_._1).sum,
         Seq.empty, currentSchema, footerOutPos, Seq.empty)
