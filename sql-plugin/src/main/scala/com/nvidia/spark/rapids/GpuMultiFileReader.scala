@@ -648,6 +648,7 @@ abstract class MultiFileCloudPartitionReaderBase(
             " buffer time: " + fileBufsAndMeta.bufferTime.toString +
           "number of blocks is " + fileBufsAndMeta.memBuffersAndSizes.size)
           val blockedTime = System.nanoTime() - startTime
+          logWarning(s"blocked time is $blockedTime")
           metrics.get(FILTER_TIME).foreach {
             _ += (blockedTime * fileBufsAndMeta.getFilterTimePct).toLong
           }
