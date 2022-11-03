@@ -1498,20 +1498,21 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       clippedSchema: MessageType,
       filePath: Path,
       inputFile: InputFile): (HostMemoryBuffer, Long, Long, Seq[BlockMetaData]) = {
+    val tid = TaskContext.get().taskAttemptId()
     withResource(new NvtxRange("Parquet buffer file split", NvtxColor.YELLOW)) { _ =>
       withResource(inputFile.newStream()) { in =>
         val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema, false)
         closeOnExcept(HostMemoryBuffer.allocate(estTotalSize)) { hmb =>
           val out = new HostMemoryOutputStream(hmb)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
-          logWarning(s"after writing header location: ${out.getPos}")
+          logWarning(s"after writing header location: ${out.getPos} taskid: $tid")
           val outputBlocks = copyBlocksData(in, out, blocks, out.getPos)
           val footerPos = out.getPos
           val startFooter = System.nanoTime()
           writeFooter(out, outputBlocks, clippedSchema)
           BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
-          logWarning(s"writing footer took ${System.nanoTime() - startFooter}ns")
+          logWarning(s"writing footer took ${System.nanoTime() - startFooter}ns taskid: $tid")
           // check we didn't go over memory
           if (out.getPos > estTotalSize) {
             throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is to " +
@@ -2154,6 +2155,7 @@ class MultiFileCloudParquetPartitionReader(
       var bufferStartTime = 0L
       var reuseParquetStream: ParquetStream = null
       var fileIn: FSDataInputStream = null
+      val tid = TaskContext.get().taskAttemptId()
       val result = try {
         val filePath = new Path(new URI(file.filePath))
         val stat = filePath.getFileSystem(conf).getFileStatus(filePath)
@@ -2161,13 +2163,13 @@ class MultiFileCloudParquetPartitionReader(
         reuseParquetStream =
           new ParquetStream(fileIn, file.start, file.length, stat.getLen)
         val filterStartTime = System.nanoTime()
-        logWarning(s"in do read for file $file")
+        logWarning(s"in do read for file $file taskid: $tid")
         val fileBlockMeta = filterFunc(file, reuseParquetStream)
         filterTime = System.nanoTime() - filterStartTime
         if (filterTime > (10L * 1000L * 1000L * 1000L)) {
-          logWarning(s"filter time took over 10 seconds, file: $file time $filterTime")
+          logWarning(s"filter time took over 10 seconds, file: $file time $filterTime taskid: $tid")
         }
-        logWarning(s"in do read done filter for file $file")
+        logWarning(s"in do read done filter for file $file taskid: $tid")
 
         bufferStartTime = System.nanoTime()
         if (fileBlockMeta.blocks.isEmpty) {
@@ -2178,7 +2180,7 @@ class MultiFileCloudParquetPartitionReader(
             fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema, fileBlockMeta.readSchema, 0)
         } else {
           blockChunkIter = fileBlockMeta.blocks.iterator.buffered
-          logWarning(s"file has number blocks: ${fileBlockMeta.blocks.size}")
+          logWarning(s"file has number blocks: ${fileBlockMeta.blocks.size} taskid: $tid")
           if (isDone) {
             val bytesRead = fileSystemBytesRead() - startingBytesRead
             // got close before finishing
@@ -2238,7 +2240,7 @@ class MultiFileCloudParquetPartitionReader(
       }
       val bufferTime = System.nanoTime() - bufferStartTime
       logWarning("buffer time was: " + bufferTime + " start time: " + bufferStartTime +
-        " now is: " + System.nanoTime())
+        " now is: " + System.nanoTime() + s"taskid: $tid")
       result.setMetrics(filterTime, bufferTime)
       // logWarning(s"idone reading $file result is $result")
 
