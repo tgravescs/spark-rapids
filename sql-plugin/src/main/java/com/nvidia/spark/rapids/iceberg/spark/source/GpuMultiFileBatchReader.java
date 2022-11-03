@@ -330,7 +330,7 @@ class GpuMultiFileBatchReader extends BaseDataReader<ColumnarBatch> {
       );
     }
 
-    private ParquetFileInfoWithBlockMeta filterParquetBlocks(PartitionedFile file) {
+    private ParquetFileInfoWithBlockMeta filterParquetBlocks(PartitionedFile file, org.apache.parquet.io.InputFile inputFile) {
       FileScanTask fst = files.get(file.filePath());
       FilteredParquetFileInfo filteredInfo = filterParquetBlocks(fst);
       constsSchemaMap.put(file.filePath(),
