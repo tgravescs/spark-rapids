@@ -2136,7 +2136,7 @@ class MultiFileCloudParquetPartitionReader(
       var bufferStartTime = 0L
       var reuseParquetStream: ParquetStream = null
       val result = try {
-        val filePath = new Path(file.filePath)
+        val filePath = new Path(new URI(file.filePath))
         reuseParquetStream =
           new ParquetStream(filePath.getFileSystem(conf).open(filePath), file.length)
         val filterStartTime = System.nanoTime()
