@@ -502,12 +502,12 @@ abstract class MultiFileCloudPartitionReaderBase(
     filesToRead = files.length
   }
 
-  def combineHMBs(results: java.util.ArrayList[HostMemoryBuffersWithMetaDataBase])
+  def combineHMBs(results: ArrayBuffer[HostMemoryBuffersWithMetaDataBase])
     : HostMemoryBuffersWithMetaDataBase = {
     if (results.size < 1) {
       throw new Exception("expect atleast one host memory buffer")
     }
-    results.get(0)
+    results(0)
   }
 
   /**
@@ -573,7 +573,7 @@ abstract class MultiFileCloudPartitionReaderBase(
           // clock as we can get right now without further work.
           val startTime = System.nanoTime()
           // val fileBufsAndMeta = tasks.poll.get()
-          val results = new java.util.ArrayList[HostMemoryBuffersWithMetaDataBase]()
+          val results = ArrayBuffer[HostMemoryBuffersWithMetaDataBase]()
           // while there are files done sitting there take up to threshold size
           def readReadyFiles(initSize: Long = 0) = {
             var waited = false
@@ -594,7 +594,7 @@ abstract class MultiFileCloudPartitionReaderBase(
                   takeMore = false
                 }
               } else {
-                results.add(res.get())
+                results.append(res.get())
                 currSize += res.get().memBuffersAndSizes.map(_.bytes).sum
                 logWarning(s"current size $currSize")
                 filesToRead -= 1
@@ -614,14 +614,14 @@ abstract class MultiFileCloudPartitionReaderBase(
               }
               sizeRead += res.memBuffersAndSizes.map(_.bytes).sum
               filesToRead -= 1
-              results.add(res)
+              results.append(res)
             }
             readReadyFiles(sizeRead)
           } else {
             logWarning("no results, waiting on one")
             val res = fcs.take().get()
             filesToRead -= 1
-            results.add(res)
+            results.append(res)
           }
 
           val fileBufsAndMeta = if (results.isEmpty) {
@@ -639,7 +639,7 @@ abstract class MultiFileCloudPartitionReaderBase(
             combinedRes
           } else {
             logWarning("just one results getting it")
-            results.get(0)
+            results(0)
           }
           numBatchesSent += 1
           logWarning(s"num batches sent is: $numBatchesSent of ${results.size}")

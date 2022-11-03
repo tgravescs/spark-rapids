@@ -734,15 +734,20 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
           conf.unset(encryptConf)
         }
       }
+      val startTime = System.nanoTime()
 
       val filter = ParquetMetadataConverter.range(file.start, file.start + file.length)
       val options = HadoopReadOptions.builder(conf).withMetadataFilter(filter).build
+      logWarning(s"before open file: $file")
       val parquetReader = ParquetFileReader.open(inputFile, options)
+      logWarning(s"after open file $file, took ${System.nanoTime() - startTime}")
       // TODO - just use java footer reader for now
       val footer = withResource(new NvtxRange("readFooter", NvtxColor.YELLOW)) { _ =>
         parquetReader.getFooter()
         // don't close on purpose, though since we wrap stream could close ??
       }
+      logWarning(s"after read footer file $file, took ${System.nanoTime() - startTime}")
+
       val fileSchema = footer.getFileMetaData.getSchema
 
       // check spark.sql.parquet.fieldId.read.ignoreMissing
@@ -778,7 +783,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
       } else {
         footer.getBlocks
       }
-      logWarning(s"num filtered block is ${blocks.size}")
+      logWarning(s"num filtered block is ${blocks.size} $file took ${System.nanoTime()-startTime}")
 
       val (clipped, clippedSchema) =
         withResource(new NvtxRange("clipSchema", NvtxColor.DARK_GREEN)) { _ =>
@@ -791,6 +796,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
           val clipped = GpuParquetUtils.clipBlocksToSchema(clippedSchema, blocks, isCaseSensitive)
           (clipped, clippedSchema)
         }
+      logWarning(s"after clip blocks before return $file took ${System.nanoTime()-startTime}")
 
       ParquetFileInfoWithBlockMeta(new Path(file.filePath), clipped, file.partitionValues,
         clippedSchema, readDataSchema, isCorrectedInt96RebaseForThisFile,
@@ -1945,7 +1951,7 @@ class MultiFileCloudParquetPartitionReader(
     combineThresholdSize, combineWaitTime)
     with ParquetPartitionReaderBase {
 
-  override def combineHMBs(results: java.util.ArrayList[HostMemoryBuffersWithMetaDataBase])
+  override def combineHMBs(results: ArrayBuffer[HostMemoryBuffersWithMetaDataBase])
   : HostMemoryBuffersWithMetaDataBase = {
     if (results.size < 1) {
       throw new Exception("expect atleast one host memory buffer")
@@ -1953,19 +1959,17 @@ class MultiFileCloudParquetPartitionReader(
     // this size includes the written header and footer on each buffer, do we need
     // to calculate footer differently?
     // footer can still be larger when combined - multiple by 2 for temp
-    val initTotalSize = results.asScala.map { hbWithMeta =>
+    val initTotalSize = results.map { hbWithMeta =>
       hbWithMeta.memBuffersAndSizes.map(_.bytes).sum
     }.sum * 2
     // calculateParquetOutputSize(updatedBlocks, batchContext.schema, true)
 
-    // TODO - handle mixed empty and full but for now if any empty just return
-
-
-    val anyEmpty = results.asScala.exists(_.isInstanceOf[HostMemoryEmptyMetaData])
+    val anyEmpty = results.exists(_.isInstanceOf[HostMemoryEmptyMetaData])
     if (initTotalSize == 0 || anyEmpty) {
       throw new Exception("trying to combine empty metadata")
     }
 
+    // TODO - don't allocate buffer is 0 size and handle empty
     closeOnExcept(HostMemoryBuffer.allocate(initTotalSize)) { newHmb =>
       // write header
       var offset = withResource(new HostMemoryOutputStream(newHmb)) { out =>
@@ -1978,7 +1982,7 @@ class MultiFileCloudParquetPartitionReader(
       val allOutputBlocks = new ArrayBuffer[BlockMetaData]()
 
       // copy the actual data
-      results.asScala.map { hbWithMeta =>
+      results.map { hbWithMeta =>
         val partValues = hbWithMeta.partitionedFile.partitionValues
         val totalNumRows = hbWithMeta.memBuffersAndSizes.map(_.numRows).sum
         allPartValues.append((totalNumRows, partValues))
