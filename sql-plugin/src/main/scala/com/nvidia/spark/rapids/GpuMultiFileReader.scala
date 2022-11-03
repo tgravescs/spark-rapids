@@ -450,6 +450,7 @@ abstract class MultiFileCloudPartitionReaderBase(
   extends FilePartitionReaderBase(conf, execMetrics) {
 
   private var filesToRead = 0
+  private var numBatchesSent = 0
   protected var currentFileHostBuffers: Option[HostMemoryBuffersWithMetaDataBase] = None
   private var isInitted = false
   private val tasks = new ConcurrentLinkedQueue[Future[HostMemoryBuffersWithMetaDataBase]]()
@@ -634,7 +635,8 @@ abstract class MultiFileCloudPartitionReaderBase(
             logWarning("just one results getting it")
             results.get(0)
           }
-
+          numBatchesSent += 1
+          logWarning(s"num batches sent is: $numBatchesSent of ${results.size}")
           logWarning(s"got file ${fileBufsAndMeta.partitionedFile} and filter time was: "
             + fileBufsAndMeta.filterTime.toString +
             " buffer time: " + fileBufsAndMeta.bufferTime.toString +
