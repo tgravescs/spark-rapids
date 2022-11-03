@@ -734,12 +734,12 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
           conf.unset(encryptConf)
         }
       }
-      
+
+      val filter = ParquetMetadataConverter.range(file.start, file.start + file.length)
+      val options = HadoopReadOptions.builder(conf).withMetadataFilter(filter).build
+      val parquetReader = ParquetFileReader.open(inputFile, options)
       // TODO - just use java footer reader for now
       val footer = withResource(new NvtxRange("readFooter", NvtxColor.YELLOW)) { _ =>
-        val filter = ParquetMetadataConverter.range(file.start, file.start + file.length)
-        val options = HadoopReadOptions.builder(conf).withMetadataFilter(filter).build
-        val parquetReader = ParquetFileReader.open(inputFile, options)
         parquetReader.getFooter()
         // don't close on purpose, though since we wrap stream could close ??
       }
@@ -773,10 +773,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
           // Use the ParquetFileReader to perform dictionary-level filtering
           ParquetInputFormat.setFilterPredicate(conf, pushedFilters.get)
           //noinspection ScalaDeprecation
-          withResource(new ParquetFileReader(inputFile,
-            HadoopReadOptions.builder(conf).build)) { parquetReader =>
-            parquetReader.getRowGroups
-          }
+          parquetReader.getRowGroups
         }
       } else {
         footer.getBlocks
