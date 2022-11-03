@@ -609,6 +609,9 @@ abstract class MultiFileCloudPartitionReaderBase(
               val future = fcs.take()
               logWarning(s"got future from fcs take $future")
               val res = future.get()
+              if (res == null) {
+                throw new Exception("results from future is null")
+              }
               sizeRead += res.memBuffersAndSizes.map(_.bytes).sum
               filesToRead -= 1
               results.add(res)

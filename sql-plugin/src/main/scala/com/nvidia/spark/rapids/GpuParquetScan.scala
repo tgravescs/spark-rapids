@@ -2140,11 +2140,14 @@ class MultiFileCloudParquetPartitionReader(
         reuseParquetStream =
           new ParquetStream(filePath.getFileSystem(conf).open(filePath), file.length)
         val filterStartTime = System.nanoTime()
+        logWarning(s"in do read for file $file")
         val fileBlockMeta = filterFunc(file, reuseParquetStream)
         filterTime = System.nanoTime() - filterStartTime
         if (filterTime > (10L * 1000L * 1000L * 1000L)) {
           logWarning(s"filter time took over 10 seconds, file: $file time $filterTime")
         }
+        logWarning(s"in do read done filter for file $file")
+
         bufferStartTime = System.nanoTime()
         if (fileBlockMeta.blocks.isEmpty) {
           val bytesRead = fileSystemBytesRead() - startingBytesRead
@@ -2200,15 +2203,19 @@ class MultiFileCloudParquetPartitionReader(
         }
       } catch {
         case e: Throwable =>
+          logError("Exception occurred", e)
           hostBuffers.foreach(_.hmb.safeClose())
           throw e
       } finally {
+        logWarning("done closing reuse parquet stream")
         reuseParquetStream.close()
       }
       val bufferTime = System.nanoTime() - bufferStartTime
       logWarning("buffer time was: " + bufferTime + " start time: " + bufferStartTime +
         " now is: " + System.nanoTime())
       result.setMetrics(filterTime, bufferTime)
+      logWarning(s"idone reading $file result is $result")
+
       result
     }
   }
