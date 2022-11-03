@@ -735,10 +735,19 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
         }
       }
 
+      val filePath = new Path(new URI(file.filePath))
+      val oldFooter = withResource(new NvtxRange("readFooter", NvtxColor.YELLOW)) { _ =>
+        ParquetFileReader.readFooter(conf, filePath,
+          ParquetMetadataConverter.range(file.start, file.start + file.length))
+      }
+
       // TODO - just use java footer reader for now
       val footer = withResource(new NvtxRange("readFooter", NvtxColor.YELLOW)) { _ =>
-        ParquetFileReader.readFooter(inputFile,
-          ParquetMetadataConverter.range(file.start, file.start + file.length))
+        val filter = ParquetMetadataConverter.range(file.start, file.start + file.length)
+        val options = HadoopReadOptions.builder(conf).withMetadataFilter(filter).build
+        val parquetReader = ParquetFileReader.open(inputFile, options)
+        parquetReader.getFooter()
+        // don't close on purpose, though since we wrap stream could close ??
       }
       val fileSchema = footer.getFileMetaData.getSchema
 
@@ -1408,7 +1417,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
         } else {
           0
         }
-        logWarning(s"realStartOffset $realStartOffset $totalBytesToCopy $startPosCol $offsetAdjustment dict off $newDictOffset")
+        // logWarning(s"realStartOffset $realStartOffset $totalBytesToCopy $startPosCol $offsetAdjustment dict off $newDictOffset")
 
         //noinspection ScalaDeprecation
         outputColumns += ColumnChunkMetaData.get(
@@ -1958,6 +1967,14 @@ class MultiFileCloudParquetPartitionReader(
     }.sum * 2
     // calculateParquetOutputSize(updatedBlocks, batchContext.schema, true)
 
+    // TODO - handle mixed empty and full but for now if any empty just return
+
+
+    val anyEmpty = results.asScala.exists(_.isInstanceOf[HostMemoryEmptyMetaData])
+    if (initTotalSize == 0 || anyEmpty) {
+      throw new Exception("trying to combine empty metadata")
+    }
+
     closeOnExcept(HostMemoryBuffer.allocate(initTotalSize)) { newHmb =>
       // write header
       var offset = withResource(new HostMemoryOutputStream(newHmb)) { out =>
@@ -1986,13 +2003,17 @@ class MultiFileCloudParquetPartitionReader(
           val copyAmount = hmbInfo.blockMeta.map { meta =>
             meta.getColumns.asScala.map(_.getTotalSize).sum
           }.sum
-          // val copyAmount = footerPos - ParquetPartitionReader.PARQUET_MAGIC.size
-          newHmb.copyFromHostBuffer(offset, hmbInfo.hmb,
-             ParquetPartitionReader.PARQUET_MAGIC.size, copyAmount)
-          val outputBlocks = computeBlockMetaData(hmbInfo.blockMeta, offset, None)
-          allOutputBlocks ++= outputBlocks
-          offset += copyAmount
-          hmbInfo.hmb.close()
+          if (hbWithMeta.isInstanceOf[HostMemoryEmptyMetaData]) {
+            // no data so don't copy
+          } else {
+            // val copyAmount = footerPos - ParquetPartitionReader.PARQUET_MAGIC.size
+            newHmb.copyFromHostBuffer(offset, hmbInfo.hmb,
+              ParquetPartitionReader.PARQUET_MAGIC.size, copyAmount)
+            val outputBlocks = computeBlockMetaData(hmbInfo.blockMeta, offset, None)
+            allOutputBlocks ++= outputBlocks
+            offset += copyAmount
+            hmbInfo.hmb.close()
+          }
 
           var j = 0
           // compute new offsets based on the new start location before copying data
@@ -2000,21 +2021,21 @@ class MultiFileCloudParquetPartitionReader(
           // allOutputBlocks ++= outputBlocks
 
           /*
-          var hmbOffset = 4L
-          hmbInfo.blockMeta.foreach { meta =>
-            // start location could be different from offset due to output stream padding
-            val realSize = meta.getColumns.asScala.map(_.getTotalSize).sum
-            val startLoc = offset
-            // val copyAmount = meta.getTotalByteSize
-            logWarning(s"total column size is $realSize start local is $startLoc")
-            // change offset
-            newHmb.copyFromHostBuffer(offset, hmbInfo.hmb, hmbOffset, realSize)
-            offset += realSize
-            hmbOffset += realSize
-            j += 1
-          }
+        var hmbOffset = 4L
+        hmbInfo.blockMeta.foreach { meta =>
+          // start location could be different from offset due to output stream padding
+          val realSize = meta.getColumns.asScala.map(_.getTotalSize).sum
+          val startLoc = offset
+          // val copyAmount = meta.getTotalByteSize
+          logWarning(s"total column size is $realSize start local is $startLoc")
+          // change offset
+          newHmb.copyFromHostBuffer(offset, hmbInfo.hmb, hmbOffset, realSize)
+          offset += realSize
+          hmbOffset += realSize
+          j += 1
+        }
 
-           */
+         */
           // logWarning(s"footer position is $footerPos")
           // logWarning(s"size of block data is $sizeOfBlockData")
         }
@@ -2035,11 +2056,12 @@ class MultiFileCloudParquetPartitionReader(
         }
       }
 
+
       /*
-      results.asScala.foreach { hbWithMeta =>
-        hbWithMeta.memBuffersAndSizes.foreach(_.hmb.close())
-      }
-       */
+    results.asScala.foreach { hbWithMeta =>
+      hbWithMeta.memBuffersAndSizes.foreach(_.hmb.close())
+    }
+     */
 
       if (!results.get(0).isInstanceOf[HostMemoryBuffersWithMetaData]) {
         throw new Exception("type of results should have been HostMemoryBuffersWithMetaData")
@@ -2050,7 +2072,7 @@ class MultiFileCloudParquetPartitionReader(
         Seq.empty, currentSchema, footerOutPos, Seq.empty)
       HostMemoryBuffersWithMetaData(
         meta.partitionedFile, // TODO - this is wrong since could be multiple files
-        meta.origPartitionedFile,  // TODO - this is wrong since could be multiple files - not used for alluxio since aleady read ?
+        meta.origPartitionedFile, // TODO - this is wrong since could be multiple files - not used for alluxio since aleady read ?
         Array(newHmbBufferInfo),
         offset,
         meta.isCorrectRebaseMode, // TODO - need to add checks for these to see if different?
@@ -2060,6 +2082,7 @@ class MultiFileCloudParquetPartitionReader(
         meta.readSchema,
         Some(allPartValues))
     }
+
   }
 
   private case class HostMemoryEmptyMetaData(
@@ -2135,10 +2158,13 @@ class MultiFileCloudParquetPartitionReader(
       var filterTime = 0L
       var bufferStartTime = 0L
       var reuseParquetStream: ParquetStream = null
+      var fileIn: FSDataInputStream = null
       val result = try {
         val filePath = new Path(new URI(file.filePath))
+        val stat = filePath.getFileSystem(conf).getFileStatus(filePath)
+        fileIn = filePath.getFileSystem(conf).open(filePath)
         reuseParquetStream =
-          new ParquetStream(filePath.getFileSystem(conf).open(filePath), file.length)
+          new ParquetStream(fileIn, file.start, file.length, stat.getLen)
         val filterStartTime = System.nanoTime()
         logWarning(s"in do read for file $file")
         val fileBlockMeta = filterFunc(file, reuseParquetStream)
@@ -2168,7 +2194,7 @@ class MultiFileCloudParquetPartitionReader(
             if (fileBlockMeta.schema.getFieldCount == 0) {
               val bytesRead = fileSystemBytesRead() - startingBytesRead
               val numRows = fileBlockMeta.blocks.map(_.getRowCount).sum.toInt
-              HostMemoryEmptyMetaData(file, origPartitionedFile, 0, bytesRead,
+              HostMemoryEmptyMetaData(file, origPartitionedFile, numRows, bytesRead,
                 fileBlockMeta.isCorrectedRebaseMode, fileBlockMeta.isCorrectedInt96RebaseMode,
                 fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema, fileBlockMeta.readSchema,
                 numRows)
@@ -2208,13 +2234,18 @@ class MultiFileCloudParquetPartitionReader(
           throw e
       } finally {
         logWarning("done closing reuse parquet stream")
-        reuseParquetStream.close()
+        if (reuseParquetStream != null) {
+          reuseParquetStream.close()
+        }
+        if (fileIn != null) {
+          fileIn.close()
+        }
       }
       val bufferTime = System.nanoTime() - bufferStartTime
       logWarning("buffer time was: " + bufferTime + " start time: " + bufferStartTime +
         " now is: " + System.nanoTime())
       result.setMetrics(filterTime, bufferTime)
-      logWarning(s"idone reading $file result is $result")
+      // logWarning(s"idone reading $file result is $result")
 
       result
     }

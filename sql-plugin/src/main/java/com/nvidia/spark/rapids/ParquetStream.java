@@ -17,6 +17,7 @@
 package com.nvidia.spark.rapids;
 
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.parquet.hadoop.util.HadoopStreams;
 import org.apache.parquet.io.DelegatingSeekableInputStream;
 import org.apache.parquet.io.InputFile;
 import org.apache.parquet.io.SeekableInputStream;
@@ -26,21 +27,27 @@ import java.io.IOException;
 class ParquetStream implements InputFile {
 
     DelegatingSeekableInputStream inputStream;
+    SeekableInputStream sInputStream;
     FSDataInputStream fsInputStream;
-    long fileLength;
+    long fileLength = 0;
+    long start = 0;
+    long entireFileLength = 0;
 
-    ParquetStream(FSDataInputStream in, long len) {
+    ParquetStream(FSDataInputStream in, long start, long len, long entireFileLen) {
         fsInputStream = in;
-        fileLength = len;
-        inputStream =  new DelegatingSeekableInputStream(in) {
+        this.fileLength = len;
+        this.start = start;
+        this.entireFileLength = entireFileLen;
+        sInputStream = HadoopStreams.wrap(in);
+        inputStream = new DelegatingSeekableInputStream(sInputStream) {
             @Override
             public void seek(long newPos) throws IOException {
-                fsInputStream.seek(newPos);
+                sInputStream.seek(newPos);
             }
 
             @Override
             public long getPos() throws IOException {
-                return fsInputStream.getPos();
+                return sInputStream.getPos();
             }
 
             @Override
@@ -48,21 +55,24 @@ class ParquetStream implements InputFile {
                 // don't actually close because we want to reuse the input stream
             }
         };
+
+
     }
 
     @Override
     public long getLength() {
-        return fileLength;
+        return entireFileLength;
     }
 
     @Override
     public SeekableInputStream newStream() throws IOException {
         // reuse the existing input stream and just seek around
-        inputStream.seek(0);
+        inputStream.seek(start);
         return inputStream;
     }
 
     public void close() throws IOException {
+        sInputStream.close();
         inputStream.close();
     }
 }
