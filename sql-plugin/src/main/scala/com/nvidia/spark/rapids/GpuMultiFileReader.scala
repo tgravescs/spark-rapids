@@ -604,8 +604,11 @@ abstract class MultiFileCloudPartitionReaderBase(
           if (combineThresholdSize > 0) {
             var sizeRead = 0L
             readReadyFiles(0)
+            logWarning(s"done checking one ${results.size} and files to read are ${filesToRead}")
             if (results.isEmpty) {
-              val res = fcs.take().get()
+              val future = fcs.take()
+              logWarning(s"got future from fcs take $future")
+              val res = future.get()
               sizeRead += res.memBuffersAndSizes.map(_.bytes).sum
               filesToRead -= 1
               results.add(res)
