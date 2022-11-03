@@ -734,13 +734,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
           conf.unset(encryptConf)
         }
       }
-
-      val filePath = new Path(new URI(file.filePath))
-      val oldFooter = withResource(new NvtxRange("readFooter", NvtxColor.YELLOW)) { _ =>
-        ParquetFileReader.readFooter(conf, filePath,
-          ParquetMetadataConverter.range(file.start, file.start + file.length))
-      }
-
+      
       // TODO - just use java footer reader for now
       val footer = withResource(new NvtxRange("readFooter", NvtxColor.YELLOW)) { _ =>
         val filter = ParquetMetadataConverter.range(file.start, file.start + file.length)
