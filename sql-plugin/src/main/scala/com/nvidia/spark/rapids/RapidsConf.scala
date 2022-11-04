@@ -1660,7 +1660,8 @@ object RapidsConf {
     .createWithDefault(value = true)
 
   val FALLBACK_DELTA_CHECKPOINT = conf("spark.rapids.sql.fallbackDeltaCheckpoint")
-    .doc("Fallback when we see Delta checkpoint files")
+    .doc("Fall back to the CPU when we see Delta checkpoint files being read. Many times we see " +
+      "the overhead of doing columnar conversions very high for these queries.")
     .booleanConf
     .createWithDefault(value = true)
 
