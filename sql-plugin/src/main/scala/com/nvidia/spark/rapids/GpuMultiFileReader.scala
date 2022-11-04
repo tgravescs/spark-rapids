@@ -446,7 +446,8 @@ abstract class MultiFileCloudPartitionReaderBase(
     alluxioPathReplacementMap: Map[String, String] = Map.empty,
     alluxioReplacementTaskTime: Boolean = false,
     combineThresholdSize: Long = -1,
-    combineWaitTime: Int = -1)
+    combineWaitTime: Int = -1,
+    queryUsesInputFile: Boolean = false)
   extends FilePartitionReaderBase(conf, execMetrics) {
 
   private var filesToRead = 0
@@ -549,6 +550,8 @@ abstract class MultiFileCloudPartitionReaderBase(
       if (!isInitted) {
         initAndStartReaders()
       }
+      // can't combine if the query uses needs the input file name
+      val canUseCombine = queryUsesInputFile == false && combineThresholdSize > 0
       batch.foreach(_.close())
       batch = None
       // if we have batch left from the last file read return it
@@ -601,7 +604,7 @@ abstract class MultiFileCloudPartitionReaderBase(
               }
             }
           }
-          if (combineThresholdSize > 0) {
+          if (canUseCombine) {
             var sizeRead = 0L
             readReadyFiles(0)
             // logWarning(s"done checking one ${results.size} and files to read are ${filesToRead}")
@@ -623,13 +626,7 @@ abstract class MultiFileCloudPartitionReaderBase(
             results.append(res)
           }
 
-          val fileBufsAndMeta = if (results.isEmpty) {
-            // TODO - shouldn't ever hit here any more
-            throw new Exception("no results, shouldn't be here")
-            val res = fcs.take().get()
-            filesToRead -= 1
-            res
-          } else if (results.size > 1) {
+          val fileBufsAndMeta = if (results.size > 1) {
             logWarning(s"combining results, size: ${results.size}")
             val startCombineTime = System.nanoTime()
             val combinedRes = combineHMBs(results)
@@ -637,17 +634,13 @@ abstract class MultiFileCloudPartitionReaderBase(
               s"ms to do combine")
             combinedRes
           } else {
-            logWarning("just one results getting it")
+            require(results.size == 1)
             results(0)
           }
           numBatchesSent += 1
-          logWarning(s"taskid: ${TaskContext.get.taskAttemptId()} num batches sent is: $numBatchesSent of ${results.size}")
-         /* logWarning(s"got file ${fileBufsAndMeta.partitionedFile} and filter time was: "
-            + fileBufsAndMeta.filterTime.toString +
-            " buffer time: " + fileBufsAndMeta.bufferTime.toString +
-          "number of blocks is " + fileBufsAndMeta.memBuffernsAndSizes.size)
+          logWarning(s"taskid: ${TaskContext.get.taskAttemptId()} num batches " +
+            s"sent is: $numBatchesSent of ${results.size}")
 
-          */
           val blockedTime = System.nanoTime() - startTime
           logWarning(s"blocked time is $blockedTime")
           metrics.get(FILTER_TIME).foreach {

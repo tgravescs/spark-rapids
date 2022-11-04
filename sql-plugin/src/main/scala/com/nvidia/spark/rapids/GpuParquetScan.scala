@@ -1076,7 +1076,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       metrics, partitionSchema, numThreads, maxNumFileProcessed,
       ignoreMissingFiles, ignoreCorruptFiles, readUseFieldId,
       alluxioPathReplacementMap.getOrElse(Map.empty), alluxioReplacementTaskTime,
-      combineThresholdSize, combineWaitTime)
+      combineThresholdSize, combineWaitTime, queryUsesInputFile)
   }
 
   private def filterBlocksForCoalescingReader(
@@ -1946,7 +1946,8 @@ class MultiFileCloudParquetPartitionReader(
     alluxioPathReplacementMap: Map[String, String],
     alluxioReplacementTaskTime: Boolean,
     combineThresholdSize: Long,
-    combineWaitTime: Int)
+    combineWaitTime: Int,
+    queryUsesInputFile: Boolean)
   extends MultiFileCloudPartitionReaderBase(conf, files, numThreads, maxNumFileProcessed, null,
     execMetrics, ignoreCorruptFiles, alluxioPathReplacementMap, alluxioReplacementTaskTime,
     combineThresholdSize, combineWaitTime)
