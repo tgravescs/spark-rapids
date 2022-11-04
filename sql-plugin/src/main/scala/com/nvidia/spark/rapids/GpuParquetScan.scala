@@ -1961,9 +1961,10 @@ class MultiFileCloudParquetPartitionReader(
     // this size includes the written header and footer on each buffer, do we need
     // to calculate footer differently?
     // footer can still be larger when combined - multiple by 2 for temp
-    val initTotalSize = results.map { hbWithMeta =>
+    val tmpTotalSize = results.map { hbWithMeta =>
       hbWithMeta.memBuffersAndSizes.map(_.bytes).sum
-    }.sum * 2
+    }.sum
+    val initTotalSize = tmpTotalSize * 2
 
     val anyEmpty = results.exists(_.isInstanceOf[HostMemoryEmptyMetaData])
     if (initTotalSize == 0 || anyEmpty) {
@@ -1987,9 +1988,7 @@ class MultiFileCloudParquetPartitionReader(
       val numColumnChunks = numCols * allBlocks.size
       numColumnChunks * 2 * 8
     }
-    val totalSize = initTotalSize + footerSize + extraMemory
-
-
+    val totalSize = tmpTotalSize + footerSize + extraMemory
 
     // TODO - don't allocate buffer is 0 size and handle empty
     closeOnExcept(HostMemoryBuffer.allocate(initTotalSize)) { newHmb =>
@@ -2076,7 +2075,7 @@ class MultiFileCloudParquetPartitionReader(
         withResource(new HostMemoryOutputStream(footerHmbSlice)) { footerOut =>
           // logWarning(s" going to write footer Tom, location: $lenLeft initial: $initTotalSize")
           writeFooter(footerOut, allOutputBlocks, currentSchema)
-          logWarning(s"footer actual size was: ${footerOut.getPos - footerOutPos}")
+          logWarning(s"footer actual size was: ${footerOut.getPos} estimated was  $footerSize")
           BytesUtils.writeIntLittleEndian(footerOut, footerOut.getPos.toInt)
           footerOut.write(ParquetPartitionReader.PARQUET_MAGIC)
           offset += footerOut.getPos
@@ -2094,7 +2093,7 @@ class MultiFileCloudParquetPartitionReader(
         throw new Exception("type of results should have been HostMemoryBuffersWithMetaData")
       }
       val meta = results(0).asInstanceOf[HostMemoryBuffersWithMetaData]
-      logWarning(s"combined files to total size $offset")
+      logWarning(s"combined files to total size $offset new estimated is $totalSize initial $initTotalSize")
       val newHmbBufferInfo = HostMemoryBufferInfo(newHmb, offset, allPartValues.map(_._1).sum,
         Seq.empty, currentSchema, footerOutPos, Seq.empty)
       HostMemoryBuffersWithMetaData(
