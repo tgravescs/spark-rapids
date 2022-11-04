@@ -738,15 +738,15 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
 
       val filter = ParquetMetadataConverter.range(file.start, file.start + file.length)
       val options = HadoopReadOptions.builder(conf).withMetadataFilter(filter).build
-      logWarning(s"before open file: $file")
+      // logWarning(s"before open file: $file")
       val parquetReader = ParquetFileReader.open(inputFile, options)
-      logWarning(s"after open file $file, took ${System.nanoTime() - startTime}")
+      //logWarning(s"after open file $file, took ${System.nanoTime() - startTime}")
       // TODO - just use java footer reader for now
       val footer = withResource(new NvtxRange("readFooter", NvtxColor.YELLOW)) { _ =>
         parquetReader.getFooter()
         // don't close on purpose, though since we wrap stream could close ??
       }
-      logWarning(s"after read footer file $file, took ${System.nanoTime() - startTime}")
+      //logWarning(s"after read footer file $file, took ${System.nanoTime() - startTime}")
 
       val fileSchema = footer.getFileMetaData.getSchema
 
@@ -783,7 +783,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
       } else {
         footer.getBlocks
       }
-      logWarning(s"num filtered block is ${blocks.size} $file took ${System.nanoTime()-startTime}")
+      // logWarning(s"num filtered block is ${blocks.size} $file took ${System.nanoTime()-startTime}")
 
       val (clipped, clippedSchema) =
         withResource(new NvtxRange("clipSchema", NvtxColor.DARK_GREEN)) { _ =>
@@ -796,7 +796,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf)
           val clipped = GpuParquetUtils.clipBlocksToSchema(clippedSchema, blocks, isCaseSensitive)
           (clipped, clippedSchema)
         }
-      logWarning(s"after clip blocks before return $file took ${System.nanoTime()-startTime}")
+      // logWarning(s"after clip blocks before return $file took ${System.nanoTime()-startTime}")
 
       ParquetFileInfoWithBlockMeta(new Path(file.filePath), clipped, file.partitionValues,
         clippedSchema, readDataSchema, isCorrectedInt96RebaseForThisFile,
@@ -2163,7 +2163,7 @@ class MultiFileCloudParquetPartitionReader(
         reuseParquetStream =
           new ParquetStream(fileIn, file.start, file.length, stat.getLen)
         val filterStartTime = System.nanoTime()
-        logWarning(s"in do read for file $file taskid: $tid")
+        // logWarning(s"in do read for file $file taskid: $tid")
         val fileBlockMeta = filterFunc(file, reuseParquetStream)
         filterTime = System.nanoTime() - filterStartTime
         if (filterTime > (10L * 1000L * 1000L * 1000L)) {

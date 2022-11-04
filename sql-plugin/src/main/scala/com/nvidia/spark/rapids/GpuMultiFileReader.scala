@@ -579,8 +579,8 @@ abstract class MultiFileCloudPartitionReaderBase(
             var waited = false
             var takeMore = true
             var currSize = initSize
-            logWarning(s"files to read $filesToRead takemore $takeMore curr" +
-              s" size $currSize $combineThresholdSize")
+            // logWarning(s"files to read $filesToRead takemore $takeMore curr" +
+              // s" size $currSize $combineThresholdSize")
             while (takeMore && currSize < combineThresholdSize && filesToRead > 0) {
               val res = fcs.poll()
               if (res == null) {
@@ -596,7 +596,7 @@ abstract class MultiFileCloudPartitionReaderBase(
               } else {
                 results.append(res.get())
                 currSize += res.get().memBuffersAndSizes.map(_.bytes).sum
-                logWarning(s"current size $currSize")
+                // logWarning(s"current size $currSize")
                 filesToRead -= 1
               }
             }
@@ -604,10 +604,9 @@ abstract class MultiFileCloudPartitionReaderBase(
           if (combineThresholdSize > 0) {
             var sizeRead = 0L
             readReadyFiles(0)
-            logWarning(s"done checking one ${results.size} and files to read are ${filesToRead}")
+            // logWarning(s"done checking one ${results.size} and files to read are ${filesToRead}")
             if (results.isEmpty) {
               val future = fcs.take()
-              logWarning(s"got future from fcs take $future")
               val res = future.get()
               if (res == null) {
                 throw new Exception("results from future is null")
@@ -643,10 +642,12 @@ abstract class MultiFileCloudPartitionReaderBase(
           }
           numBatchesSent += 1
           logWarning(s"num batches sent is: $numBatchesSent of ${results.size}")
-          logWarning(s"got file ${fileBufsAndMeta.partitionedFile} and filter time was: "
+         /* logWarning(s"got file ${fileBufsAndMeta.partitionedFile} and filter time was: "
             + fileBufsAndMeta.filterTime.toString +
             " buffer time: " + fileBufsAndMeta.bufferTime.toString +
           "number of blocks is " + fileBufsAndMeta.memBuffersAndSizes.size)
+          
+          */
           val blockedTime = System.nanoTime() - startTime
           logWarning(s"blocked time is $blockedTime")
           metrics.get(FILTER_TIME).foreach {
