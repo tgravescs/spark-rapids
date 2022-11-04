@@ -1659,6 +1659,11 @@ object RapidsConf {
     .booleanConf
     .createWithDefault(value = true)
 
+  val FALLBACK_DELTA_CHECKPOINT = conf("spark.rapids.sql.fallbackDeltaCheckpoint")
+    .doc("Fallback when we see Delta checkpoint files")
+    .booleanConf
+    .createWithDefault(value = true)
+
   val NUM_FILES_FILTER_PARALLEL = conf("spark.rapids.sql.coalescing.reader.numFilterParallel")
     .doc("This controls the number of files the coalescing reader will run " +
       "in each thread when it filters blocks for reading. If this value is greater than zero " +
@@ -2241,6 +2246,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val isFastSampleEnabled: Boolean = get(ENABLE_FAST_SAMPLE)
 
   lazy val isDetectDeltaLogQueries: Boolean = get(DETECT_DELTA_LOG_QUERIES)
+
+  lazy val fallbackDeltaCheckpoint: Boolean = get(FALLBACK_DELTA_CHECKPOINT)
 
   lazy val concurrentWriterPartitionFlushSize:Long = get(CONCURRENT_WRITER_PARTITION_FLUSH_SIZE)
 
