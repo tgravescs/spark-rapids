@@ -641,12 +641,12 @@ abstract class MultiFileCloudPartitionReaderBase(
             results(0)
           }
           numBatchesSent += 1
-          logWarning(s"num batches sent is: $numBatchesSent of ${results.size}")
+          logWarning(s"taskid: ${TaskContext.get.taskAttemptId()} num batches sent is: $numBatchesSent of ${results.size}")
          /* logWarning(s"got file ${fileBufsAndMeta.partitionedFile} and filter time was: "
             + fileBufsAndMeta.filterTime.toString +
             " buffer time: " + fileBufsAndMeta.bufferTime.toString +
-          "number of blocks is " + fileBufsAndMeta.memBuffersAndSizes.size)
-          
+          "number of blocks is " + fileBufsAndMeta.memBuffernsAndSizes.size)
+
           */
           val blockedTime = System.nanoTime() - startTime
           logWarning(s"blocked time is $blockedTime")

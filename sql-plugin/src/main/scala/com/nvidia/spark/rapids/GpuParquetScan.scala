@@ -1957,18 +1957,39 @@ class MultiFileCloudParquetPartitionReader(
     if (results.size < 1) {
       throw new Exception("expect atleast one host memory buffer")
     }
+
     // this size includes the written header and footer on each buffer, do we need
     // to calculate footer differently?
     // footer can still be larger when combined - multiple by 2 for temp
     val initTotalSize = results.map { hbWithMeta =>
       hbWithMeta.memBuffersAndSizes.map(_.bytes).sum
     }.sum * 2
-    // calculateParquetOutputSize(updatedBlocks, batchContext.schema, true)
 
     val anyEmpty = results.exists(_.isInstanceOf[HostMemoryEmptyMetaData])
     if (initTotalSize == 0 || anyEmpty) {
       throw new Exception("trying to combine empty metadata")
     }
+
+    // TODO - also check to make have buffers
+    val allBlocks = results.flatMap(_.memBuffersAndSizes.flatMap(_.blockMeta))
+    val footerSize = calculateParquetFooterSize(allBlocks,
+      results.head.memBuffersAndSizes.head.schema)
+    logWarning(s"footer estimated size was: ${footerSize}")
+
+    val extraMemory = {
+      // we want to add extra memory because the ColumnChunks saved in the Footer have 2 fields
+      // file_offset and data_page_offset that get much larger when we are combining files.
+      // Here we estimate that by taking the number of columns * number of blocks which should be
+      // the number of column chunks and then saying there are 2 fields that could be larger and
+      // assume max size of those would be 8 bytes worst case. So we probably allocate to much here
+      // but it shouldn't be by a huge amount and its better then having to realloc and copy.
+      val numCols = allBlocks.head.getColumns().size()
+      val numColumnChunks = numCols * allBlocks.size
+      numColumnChunks * 2 * 8
+    }
+    val totalSize = initTotalSize + footerSize + extraMemory
+
+
 
     // TODO - don't allocate buffer is 0 size and handle empty
     closeOnExcept(HostMemoryBuffer.allocate(initTotalSize)) { newHmb =>
@@ -2010,42 +2031,52 @@ class MultiFileCloudParquetPartitionReader(
             offset += copyAmount
             hmbInfo.hmb.close()
           }
-
-          var j = 0
-          // compute new offsets based on the new start location before copying data
-          // val outputBlocks = computeBlockMetaData(hmbInfo.blockMeta, offset, None)
-          // allOutputBlocks ++= outputBlocks
-
-          /*
-        var hmbOffset = 4L
-        hmbInfo.blockMeta.foreach { meta =>
-          // start location could be different from offset due to output stream padding
-          val realSize = meta.getColumns.asScala.map(_.getTotalSize).sum
-          val startLoc = offset
-          // val copyAmount = meta.getTotalByteSize
-          logWarning(s"total column size is $realSize start local is $startLoc")
-          // change offset
-          newHmb.copyFromHostBuffer(offset, hmbInfo.hmb, hmbOffset, realSize)
-          offset += realSize
-          hmbOffset += realSize
-          j += 1
-        }
-
-         */
-          // logWarning(s"footer position is $footerPos")
-          // logWarning(s"size of block data is $sizeOfBlockData")
         }
       }
       // write footer
       val lenLeft = initTotalSize - offset
+
+      if (totalSize < offset) {
+        logError("total estimated size is less then actual written")
+      }
+
+      /*
+      var buf: HostMemoryBuffer = buffer
+      val totalBufferSize = if (bufferSize > initTotalSize) {
+        // Just ensure to close buffer when there is an exception
+        closeOnExcept(buffer) { _ =>
+          logWarning(s"The original estimated size $initTotalSize is too small, " +
+            s"reallocating and copying data to bigger buffer size: $bufferSize")
+        }
+        // Copy the old buffer to a new allocated bigger buffer and close the old buffer
+        buf = withResource(buffer) { _ =>
+          withResource(new HostMemoryInputStream(buffer, footerOffset)) { in =>
+            // realloc memory and copy
+            closeOnExcept(HostMemoryBuffer.allocate(bufferSize)) { newhmb =>
+              withResource(new HostMemoryOutputStream(newhmb)) { out =>
+                IOUtils.copy(in, out)
+              }
+              newhmb
+            }
+          }
+        }
+        bufferSize
+      } else {
+        initTotalSize
+      }
+       */
+
+
       if (lenLeft < 0) {
         throw new Exception(s" initial total size is to small: $initTotalSize")
       }
+
       val footerOutPos = offset
       withResource(newHmb.slice(offset, lenLeft)) { footerHmbSlice =>
         withResource(new HostMemoryOutputStream(footerHmbSlice)) { footerOut =>
-          // logWarning(s" going to write footer Tom, location: $lenLeft initiali: $initTotalSize")
+          // logWarning(s" going to write footer Tom, location: $lenLeft initial: $initTotalSize")
           writeFooter(footerOut, allOutputBlocks, currentSchema)
+          logWarning(s"footer actual size was: ${footerOut.getPos - footerOutPos}")
           BytesUtils.writeIntLittleEndian(footerOut, footerOut.getPos.toInt)
           footerOut.write(ParquetPartitionReader.PARQUET_MAGIC)
           offset += footerOut.getPos
