@@ -1308,6 +1308,33 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
 
   protected def copyDataRange(
       range: CopyRange,
+      in: SeekableInputStream,
+      out: OutputStream,
+      copyBuffer: Array[Byte]): Unit = {
+    var readTime = 0L
+    var writeTime = 0L
+    if (in.getPos != range.offset) {
+      in.seek(range.offset)
+    }
+    var bytesLeft = range.length
+    while (bytesLeft > 0) {
+      // downcast is safe because copyBuffer.length is an int
+      val readLength = Math.min(bytesLeft, copyBuffer.length).toInt
+      val start = System.nanoTime()
+      in.readFully(copyBuffer, 0, readLength)
+      val mid = System.nanoTime()
+      out.write(copyBuffer, 0, readLength)
+      val end = System.nanoTime()
+      readTime += (mid - start)
+      writeTime += (end - mid)
+      bytesLeft -= readLength
+    }
+    execMetrics.get(READ_FS_TIME).foreach(_.add(readTime))
+    execMetrics.get(WRITE_BUFFER_TIME).foreach(_.add(writeTime))
+  }
+
+  protected def copyDataRange(
+      range: CopyRange,
       in: FSDataInputStream,
       out: OutputStream,
       copyBuffer: Array[Byte]): Unit = {
