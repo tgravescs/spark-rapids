@@ -1059,7 +1059,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       files: Array[PartitionedFile],
       conf: Configuration): PartitionReader[ColumnarBatch] = {
     val filterFunc = (file: PartitionedFile, inputFile: InputFile) => {
-      filterHandler.filterBlocksInputFile(footerReadType, file, inputFile, conf, filters
+      filterHandler.filterBlocksInputFile(footerReadType, file, inputFile, conf, filters,
         readDataSchema)
     }
     new MultiFileCloudParquetPartitionReader(conf, files, filterFunc, isCaseSensitive,
