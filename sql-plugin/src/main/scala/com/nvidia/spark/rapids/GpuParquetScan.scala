@@ -1992,7 +1992,7 @@ class MultiFileCloudParquetPartitionReader(
           file.length, stat.getLen)) { reuseParquetInputFile =>
 
           val filterStartTime = System.nanoTime()
-          val fileBlockMeta = filterFunc(reuseParquetInputFile)
+          val fileBlockMeta = filterFunc(file, reuseParquetInputFile)
           filterTime = System.nanoTime() - filterStartTime
           bufferStartTime = System.nanoTime()
           if (fileBlockMeta.blocks.isEmpty) {
