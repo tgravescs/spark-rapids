@@ -2027,7 +2027,7 @@ class MultiFileCloudParquetPartitionReader(
                   val (dataBuffer, dataSize, footerPos, blockMeta) =
                     readPartFileInputFile(blocksToRead, fileBlockMeta.schema, filePath,
                       reuseParquetInputFile)
-                  hostBuffers += (dataBuffer, dataSize)
+                  hostBuffers += ((dataBuffer, dataSize))
                 }
                 val bytesRead = fileSystemBytesRead() - startingBytesRead
                 if (isDone) {
@@ -2035,7 +2035,8 @@ class MultiFileCloudParquetPartitionReader(
                   hostBuffers.foreach(_._1.safeClose())
                   HostMemoryEmptyMetaData(file, origPartitionedFile, 0, bytesRead,
                     fileBlockMeta.isCorrectedRebaseMode, fileBlockMeta.isCorrectedInt96RebaseMode,
-                    fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema, fileBlockMeta.readSchema)
+                    fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema,
+                    fileBlockMeta.readSchema)
                 } else {
 
                   HostMemoryBuffersWithMetaData(file, origPartitionedFile, hostBuffers.toArray,
