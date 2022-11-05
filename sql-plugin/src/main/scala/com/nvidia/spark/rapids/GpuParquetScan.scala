@@ -1058,8 +1058,9 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   override def buildBaseColumnarReaderForCloud(
       files: Array[PartitionedFile],
       conf: Configuration): PartitionReader[ColumnarBatch] = {
-    val filterFunc = (inputFile: InputFile) => {
-      filterHandler.filterBlocksInputFile(footerReadType, inputFile, conf, filters, readDataSchema)
+    val filterFunc = (file: PartitionedFile, inputFile: InputFile) => {
+      filterHandler.filterBlocksInputFile(footerReadType, file, inputFile, conf, filters
+        readDataSchema)
     }
     new MultiFileCloudParquetPartitionReader(conf, files, filterFunc, isCaseSensitive,
       debugDumpPrefix, maxReadBatchSizeRows, maxReadBatchSizeBytes,
@@ -1867,7 +1868,7 @@ class MultiFileParquetPartitionReader(
 class MultiFileCloudParquetPartitionReader(
     override val conf: Configuration,
     files: Array[PartitionedFile],
-    filterFunc: InputFile => ParquetFileInfoWithBlockMeta,
+    filterFunc: (PartitionedFile, InputFile) => ParquetFileInfoWithBlockMeta,
     override val isSchemaCaseSensitive: Boolean,
     debugDumpPrefix: String,
     maxReadBatchSizeRows: Integer,
@@ -1913,7 +1914,7 @@ class MultiFileCloudParquetPartitionReader(
   private class ReadBatchRunner(
       file: PartitionedFile,
       origPartitionedFile: Option[PartitionedFile],
-      filterFunc: InputFile => ParquetFileInfoWithBlockMeta,
+      filterFunc: (PartitionedFile, InputFile) => ParquetFileInfoWithBlockMeta,
       taskContext: TaskContext) extends Callable[HostMemoryBuffersWithMetaDataBase] with Logging {
 
     private var blockChunkIter: BufferedIterator[BlockMetaData] = null
