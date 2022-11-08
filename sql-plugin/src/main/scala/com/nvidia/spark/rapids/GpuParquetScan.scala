@@ -1414,7 +1414,6 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
         } else {
           0
         }
-        // logWarning(s"realStartOffset $realStartOffset $totalBytesToCopy $startPosCol $offsetAdjustment dict off $newDictOffset")
 
         //noinspection ScalaDeprecation
         outputColumns += ColumnChunkMetaData.get(
@@ -1927,6 +1926,9 @@ class MultiFileParquetPartitionReader(
  * @param useFieldId Whether to use field id for column matching
  * @param alluxioPathReplacementMap Map containing mapping of DFS scheme to Alluxio scheme
  * @param alluxioReplacementTaskTime Whether the Alluxio replacement algorithm is set to task time
+ * @param combineThresholdSize
+ * @param combineWaitTime
+ * @param queryUsesInputFile
  */
 class MultiFileCloudParquetPartitionReader(
     override val conf: Configuration,
@@ -1955,10 +1957,6 @@ class MultiFileCloudParquetPartitionReader(
 
   override def combineHMBs(results: ArrayBuffer[HostMemoryBuffersWithMetaDataBase])
   : HostMemoryBuffersWithMetaDataBase = {
-    if (results.size < 1) {
-      throw new Exception("expect atleast one host memory buffer")
-    }
-
     // this size includes the written header and footer on each buffer, do we need
     // to calculate footer differently?
     // footer can still be larger when combined - multiple by 2 for temp
@@ -1967,6 +1965,7 @@ class MultiFileCloudParquetPartitionReader(
     }.sum
     val initTotalSize = tmpTotalSize * 2
 
+    // TODO handle empty
     val anyEmpty = results.exists(_.isInstanceOf[HostMemoryEmptyMetaData])
     if (initTotalSize == 0 || anyEmpty) {
       throw new Exception("trying to combine empty metadata")
