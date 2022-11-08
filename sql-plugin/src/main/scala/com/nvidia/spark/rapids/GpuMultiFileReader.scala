@@ -604,7 +604,7 @@ abstract class MultiFileCloudPartitionReaderBase(
                   logWarning(s"Waited ${System.currentTimeMillis() - startTime}ms")
                   if (waitFuture != null) {
                     results.append(waitFuture.get())
-                    currSize += hmbFuture.get().memBuffersAndSizes.map(_.bytes).sum
+                    currSize += waitFuture.get().memBuffersAndSizes.map(_.bytes).sum
                     filesToRead -= 1
                   } else {
                     takeMore = false
