@@ -326,7 +326,7 @@ class GpuMultiFileBatchReader extends BaseDataReader<ColumnarBatch> {
           false, // useFieldId
           scala.collection.immutable.Map$.MODULE$.empty(), // alluxioPathReplacementMap
           false, // alluxioReplacementTaskTime
-          -1, -1
+          -1, -1, false // TODO - does inputFileName work with iceberg?
       );
     }
 

@@ -474,6 +474,20 @@ abstract class MultiFileCloudPartitionReaderBase(
     }
   }
 
+  private val canUseCombine: Boolean = {
+    // can't combine if the query uses needs the input file name
+    if (queryUsesInputFile == false) {
+      if (combineThresholdSize > 0) {
+        true
+      } else {
+        false
+      }
+    } else {
+      logInfo("Query uses input file name, can't use combine mode")
+      false
+    }
+  }
+
   private def initAndStartReaders(): Unit = {
     // limit the number we submit at once according to the config if set
     val limit = math.min(maxNumFileProcessed, files.length)
@@ -506,7 +520,7 @@ abstract class MultiFileCloudPartitionReaderBase(
   def combineHMBs(results: ArrayBuffer[HostMemoryBuffersWithMetaDataBase])
     : HostMemoryBuffersWithMetaDataBase = {
     if (results.size < 1) {
-      throw new Exception("expect atleast one host memory buffer")
+      throw new Exception("Expect at least one host memory buffer")
     }
     results(0)
   }
@@ -550,8 +564,6 @@ abstract class MultiFileCloudPartitionReaderBase(
       if (!isInitted) {
         initAndStartReaders()
       }
-      // can't combine if the query uses needs the input file name
-      val canUseCombine = queryUsesInputFile == false && combineThresholdSize > 0
       batch.foreach(_.close())
       batch = None
       // if we have batch left from the last file read return it
@@ -577,50 +589,50 @@ abstract class MultiFileCloudPartitionReaderBase(
           val startTime = System.nanoTime()
           // val fileBufsAndMeta = tasks.poll.get()
           val results = ArrayBuffer[HostMemoryBuffersWithMetaDataBase]()
+
           // while there are files done sitting there take up to threshold size
           def readReadyFiles(initSize: Long = 0) = {
             var waited = false
             var takeMore = true
             var currSize = initSize
-            // logWarning(s"files to read $filesToRead takemore $takeMore curr" +
-              // s" size $currSize $combineThresholdSize")
             while (takeMore && currSize < combineThresholdSize && filesToRead > 0) {
-              val res = fcs.poll()
-              if (res == null) {
-                if (waited == false && combineWaitTime > 0) {
-                  val startWait = System.nanoTime()
-                  // TODO - can we change to busy wait to be chekcing
-                  Thread.sleep(combineWaitTime)
-                  logWarning(s"waited $combineWaitTime")
-                  waited = true
+              val hmbFuture = fcs.poll()
+              if (hmbFuture == null) {
+                if (combineWaitTime > 0) {
+                  val startTime = System.currentTimeMillis()
+                  val waitFuture = fcs.poll(combineWaitTime, TimeUnit.MILLISECONDS)
+                  logWarning(s"Waited ${System.currentTimeMillis() - startTime}ms")
+                  if (waitFuture != null) {
+                    results.append(waitFuture.get())
+                    currSize += hmbFuture.get().memBuffersAndSizes.map(_.bytes).sum
+                    filesToRead -= 1
+                  } else {
+                    takeMore = false
+                  }
                 } else {
                   takeMore = false
                 }
               } else {
-                results.append(res.get())
-                currSize += res.get().memBuffersAndSizes.map(_.bytes).sum
-                // logWarning(s"current size $currSize")
+                results.append(hmbFuture.get())
+                currSize += hmbFuture.get().memBuffersAndSizes.map(_.bytes).sum
                 filesToRead -= 1
               }
             }
           }
+
           if (canUseCombine) {
             var sizeRead = 0L
             readReadyFiles(0)
-            // logWarning(s"done checking one ${results.size} and files to read are ${filesToRead}")
             if (results.isEmpty) {
-              val future = fcs.take()
-              val res = future.get()
-              if (res == null) {
-                throw new Exception("results from future is null")
-              }
+              // none were ready yet so wait as long as need for first one
+              val res = fcs.take().get()
               sizeRead += res.memBuffersAndSizes.map(_.bytes).sum
               filesToRead -= 1
               results.append(res)
+              // check if others ready as well
+              readReadyFiles(sizeRead)
             }
-            readReadyFiles(sizeRead)
           } else {
-            logWarning("no results, waiting on one")
             val res = fcs.take().get()
             filesToRead -= 1
             results.append(res)
@@ -628,9 +640,9 @@ abstract class MultiFileCloudPartitionReaderBase(
 
           val fileBufsAndMeta = if (results.size > 1) {
             logWarning(s"combining results, size: ${results.size}")
-            val startCombineTime = System.nanoTime()
+            val startCombineTime = System.currentTimeMillis()
             val combinedRes = combineHMBs(results)
-            logWarning(s"took ${(System.nanoTime() - startCombineTime) /1024 /1024} " +
+            logWarning(s"took ${(System.currentTimeMillis() - startCombineTime)} " +
               s"ms to do combine")
             combinedRes
           } else {
@@ -651,8 +663,6 @@ abstract class MultiFileCloudPartitionReaderBase(
           }
 
           TrampolineUtil.incBytesRead(inputMetrics, fileBufsAndMeta.bytesRead)
-
-          // TODO - we can't do combining when inputfile is set - fix later
 
           // if we replaced the path with Alluxio, set it to the original filesystem file
           // since Alluxio replacement is supposed to be transparent to the user
