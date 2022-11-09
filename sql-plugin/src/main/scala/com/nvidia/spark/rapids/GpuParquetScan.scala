@@ -1310,7 +1310,6 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       out: OutputStream,
       blocks: Seq[BlockMetaData],
       schema: MessageType): Unit = {
-    // logWarning("blocks are: " + blocks.mkString(","))
     val fileMeta = new FileMetaData(schema, Collections.emptyMap[String, String],
       ParquetPartitionReader.PARQUET_CREATOR)
     val metadataConverter = new ParquetMetadataConverter
@@ -1326,7 +1325,6 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       copyBuffer: Array[Byte]): Unit = {
     var readTime = 0L
     var writeTime = 0L
-    logWarning(s"copy data range in posotion is ${in.getPos} range ${range.offset}")
     if (in.getPos != range.offset) {
       in.seek(range.offset)
     }
@@ -1339,7 +1337,6 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       val mid = System.nanoTime()
       out.write(copyBuffer, 0, readLength)
       val end = System.nanoTime()
-      // logWarning(s"write length is $readLength")
 
       readTime += (mid - start)
       writeTime += (end - mid)
@@ -1357,7 +1354,6 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       copyBuffer: Array[Byte]): Unit = {
     var readTime = 0L
     var writeTime = 0L
-    logWarning(s"copy data range in posotion is ${in.getPos} range ${range.offset}")
     if (in.getPos != range.offset) {
       in.seek(range.offset)
     }
@@ -1370,7 +1366,6 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
       val mid = System.nanoTime()
       out.write(copyBuffer, 0, readLength)
       val end = System.nanoTime()
-      // logWarning(s"write length is $readLength")
 
       readTime += (mid - start)
       writeTime += (end - mid)
@@ -1504,20 +1499,17 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
         closeOnExcept(HostMemoryBuffer.allocate(estTotalSize)) { hmb =>
           val out = new HostMemoryOutputStream(hmb)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
-          logWarning(s"after writing header location: ${out.getPos} taskid: $tid")
           val outputBlocks = copyBlocksData(in, out, blocks, out.getPos)
           val footerPos = out.getPos
           val startFooter = System.nanoTime()
           writeFooter(out, outputBlocks, clippedSchema)
           BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
-          logWarning(s"writing footer took ${System.nanoTime() - startFooter}ns taskid: $tid")
           // check we didn't go over memory
           if (out.getPos > estTotalSize) {
             throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is to " +
               s"small, actual written: ${out.getPos}")
           }
-          // logWarning(s"reading file actual size is ${out.getPos}")
           (hmb, out.getPos, footerPos, outputBlocks)
         }
       }
@@ -1535,20 +1527,17 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
         closeOnExcept(HostMemoryBuffer.allocate(estTotalSize)) { hmb =>
           val out = new HostMemoryOutputStream(hmb)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
-          logWarning(s"after writing header location: ${out.getPos}")
           val outputBlocks = copyBlocksData(in, out, blocks, out.getPos)
           val footerPos = out.getPos
           val startFooter = System.nanoTime()
           writeFooter(out, outputBlocks, clippedSchema)
           BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
           out.write(ParquetPartitionReader.PARQUET_MAGIC)
-          logWarning(s"writing footer took ${System.nanoTime() - startFooter}ns")
           // check we didn't go over memory
           if (out.getPos > estTotalSize) {
             throw new QueryExecutionException(s"Calculated buffer size $estTotalSize is to " +
               s"small, actual written: ${out.getPos}")
           }
-          // logWarning(s"reading file actual size is ${out.getPos}")
           (hmb, out.getPos, footerPos, outputBlocks)
         }
       }
@@ -2008,7 +1997,6 @@ class MultiFileCloudParquetPartitionReader(
 
     val footerSize = calculateParquetFooterSize(allBlocks,
       results.head.memBuffersAndSizes.head.schema)
-    logWarning(s"footer estimated size was: ${footerSize}")
 
     val extraMemory = {
       // we want to add extra memory because the ColumnChunks saved in the Footer have 2 fields
@@ -2110,7 +2098,6 @@ class MultiFileCloudParquetPartitionReader(
         withResource(new HostMemoryOutputStream(footerHmbSlice)) { footerOut =>
           // logWarning(s" going to write footer Tom, location: $lenLeft initial: $initTotalSize")
           writeFooter(footerOut, allOutputBlocks, currentSchema)
-          logWarning(s"footer actual size was: ${footerOut.getPos} estimated was  $footerSize")
           BytesUtils.writeIntLittleEndian(footerOut, footerOut.getPos.toInt)
           footerOut.write(ParquetPartitionReader.PARQUET_MAGIC)
           offset += footerOut.getPos
@@ -2128,7 +2115,7 @@ class MultiFileCloudParquetPartitionReader(
         throw new Exception("type of results should have been HostMemoryBuffersWithMetaData")
       }
       val meta = results(0).asInstanceOf[HostMemoryBuffersWithMetaData]
-      logWarning(s"combined files to total size $offset  initial $initTotalSize")
+      // logWarning(s"combined files to total size $offset  initial $initTotalSize")
       val newHmbBufferInfo = HostMemoryBufferInfo(newHmb, offset, allPartValues.map(_._1).sum,
         Seq.empty, currentSchema, footerOutPos, Seq.empty)
       HostMemoryBuffersWithMetaData(
@@ -2247,7 +2234,7 @@ class MultiFileCloudParquetPartitionReader(
             fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema, fileBlockMeta.readSchema, 0)
         } else {
           blockChunkIter = fileBlockMeta.blocks.iterator.buffered
-          logWarning(s"file has number blocks: ${fileBlockMeta.blocks.size} taskid: $tid")
+           // logWarning(s"file has number blocks: ${fileBlockMeta.blocks.size} taskid: $tid")
           if (isDone) {
             val bytesRead = fileSystemBytesRead() - startingBytesRead
             // got close before finishing
@@ -2297,7 +2284,6 @@ class MultiFileCloudParquetPartitionReader(
           hostBuffers.foreach(_.hmb.safeClose())
           throw e
       } finally {
-        logWarning("done closing reuse parquet stream")
         if (reuseParquetStream != null) {
           reuseParquetStream.close()
         }

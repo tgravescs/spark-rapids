@@ -124,13 +124,12 @@ private final class GpuSemaphore(tasksPerGpu: Int) extends Logging with Arm {
       val taskAttemptId = context.taskAttemptId()
       val refs = activeTasks.get(taskAttemptId)
       if (refs == null || refs.count.getValue == 0) {
-        logWarning(s"Task $taskAttemptId acquiring GPU")
+        logDebug(s"Task $taskAttemptId acquiring GPU")
         semaphore.acquire()
         if (refs != null) {
           refs.count.increment()
         } else {
           // first time this task has been seen
-          logWarning(s"Task $taskAttemptId active")
           activeTasks.put(
             taskAttemptId,
             TaskInfo(new MutableInt(1), Thread.currentThread()))
@@ -148,7 +147,7 @@ private final class GpuSemaphore(tasksPerGpu: Int) extends Logging with Arm {
       val refs = activeTasks.get(taskAttemptId)
       if (refs != null && refs.count.getValue > 0) {
         if (refs.count.decrementAndGet() == 0) {
-          logWarning(s"Task $taskAttemptId releasing GPU")
+          logDebug(s"Task $taskAttemptId releasing GPU")
           semaphore.release()
         }
       }
@@ -164,7 +163,7 @@ private final class GpuSemaphore(tasksPerGpu: Int) extends Logging with Arm {
       throw new IllegalStateException(s"Completion of unknown task $taskAttemptId")
     }
     if (refs.count.getValue > 0) {
-      logWarning(s"complete Task $taskAttemptId releasing GPU")
+      logDebug(s"complete Task $taskAttemptId releasing GPU")
       semaphore.release()
     }
   }

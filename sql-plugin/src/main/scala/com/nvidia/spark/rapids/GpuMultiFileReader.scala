@@ -644,11 +644,11 @@ abstract class MultiFileCloudPartitionReaderBase(
           }
 
           val fileBufsAndMeta = if (results.size > 1) {
-            logWarning(s"combining results, size: ${results.size}")
+            // logWarning(s"combining results, size: ${results.size}")
             val startCombineTime = System.currentTimeMillis()
             val combinedRes = combineHMBs(results)
-            logWarning(s"took ${(System.currentTimeMillis() - startCombineTime)} " +
-              s"ms to do combine")
+           //  logWarning(s"took ${(System.currentTimeMillis() - startCombineTime)} " +
+            //   s"ms to do combine")
             combinedRes
           } else {
             require(results.size == 1)
@@ -659,7 +659,7 @@ abstract class MultiFileCloudPartitionReaderBase(
             s"sent is: $numBatchesSent of ${results.size}")
 
           val blockedTime = System.nanoTime() - startTime
-          logWarning(s"blocked time is $blockedTime")
+          // logWarning(s"blocked time is $blockedTime")
           metrics.get(FILTER_TIME).foreach {
             _ += (blockedTime * fileBufsAndMeta.getFilterTimePct).toLong
           }
@@ -1154,21 +1154,17 @@ abstract class MultiFileCoalescingPartitionReaderBase(
             val secondSize = two._2.map(_.getBlockSize).sum
             firstSize > secondSize
           }.toMap
-          logWarning("num files sorted are: " + filesAndBlocksSorted.size)
 
           filesAndBlocksSorted.foreach { case (file, blocks) =>
             val fileBlockSize = blocks.map(_.getBlockSize).sum
-            logWarning(s"files size is: $fileBlockSize num blocks ${blocks.size}")
             // use a single buffer and slice it up for different files if we need
             val outLocal = hmb.slice(offset, fileBlockSize)
-            logWarning(s"slicing at offset $offset $fileBlockSize")
             // Third, copy the blocks for each file in parallel using background threads
             tasks.add(threadPool.submit(
               getBatchRunner(tc, file, outLocal, blocks, offset, batchContext)))
             // fetching largest first but what about getting something done quickly???
             // fcs.submit(
             //  getBatchRunner(tc, file, outLocal, blocks, offset, batchContext))
-            logWarning(s"starting thread for file: $file")
             offset += fileBlockSize
             // logWarning(s"new offset is $offset")
           }
@@ -1176,14 +1172,12 @@ abstract class MultiFileCoalescingPartitionReaderBase(
           for (future <- tasks.asScala) {
           // for (future <- 0 until filesAndBlocksSorted.size) {
             val (blocks, bytesRead) = future.get()
-            logWarning(s"took for thread for file: ${}")
 
             allOutputBlocks ++= blocks
             TrampolineUtil.incBytesRead(inputMetrics, bytesRead)
           }
 
           // Fourth, calculate the final buffer size
-          logWarning(s"offset is $offset")
           val finalBufferSize = calculateFinalBlocksOutputSize(offset, allOutputBlocks,
             batchContext)
 
