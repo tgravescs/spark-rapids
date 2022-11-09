@@ -130,7 +130,7 @@ object MultiFileReaderThreadPool extends Logging {
   private def initThreadPool(
       maxThreads: Int,
       keepAliveSeconds: Long = 60): ThreadPoolExecutor = synchronized {
-    val pool = if (threadPool.isEmpty) {
+
       val threadFactory = new ThreadFactoryBuilder()
           .setNameFormat("multithreaded file reader worker-%d")
           .setDaemon(true)
@@ -147,12 +147,9 @@ object MultiFileReaderThreadPool extends Logging {
       logWarning(s"Using $maxThreads for the multithreaded reader thread pool")
       // threadPool = Some(threadPoolExecutor)
       threadPoolExecutor
-    } else {
-      threadPool.get
-    }
 
     //threadPool.get
-    pool
+    threadPoolExecutor
   }
 
   /**
@@ -160,7 +157,7 @@ object MultiFileReaderThreadPool extends Logging {
    * @note The thread number will be ignored if the thread pool is already created.
    */
   def getOrCreateThreadPool(numThreads: Int): ThreadPoolExecutor = {
-    threadPool.getOrElse(initThreadPool(numThreads))
+    initThreadPool(numThreads)
   }
 }
 
@@ -752,7 +749,9 @@ abstract class MultiFileCloudPartitionReaderBase(
     closeCurrentFileHostBuffers()
     batch.foreach(_.close())
     batch = None
-    threadPoolLocal.shutdown()
+    if (threadPoolLocal != null) {
+      threadPoolLocal.shutdown()
+    }
     // TODO clean up with completion service?
     tasks.asScala.foreach { task =>
       if (task.isDone()) {
