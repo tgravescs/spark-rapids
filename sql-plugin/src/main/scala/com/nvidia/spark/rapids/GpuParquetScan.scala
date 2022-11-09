@@ -2224,13 +2224,13 @@ class MultiFileCloudParquetPartitionReader(
       var fileIn: FSDataInputStream = null
       val tid = TaskContext.get().taskAttemptId()
       val result = try {
+        logWarning(s"in do read for file $file taskid: $tid")
         val filePath = new Path(new URI(file.filePath))
         val stat = filePath.getFileSystem(conf).getFileStatus(filePath)
         fileIn = filePath.getFileSystem(conf).open(filePath)
         reuseParquetStream =
           new ParquetStream(fileIn, file.start, file.length, stat.getLen)
         val filterStartTime = System.nanoTime()
-        // logWarning(s"in do read for file $file taskid: $tid")
         val fileBlockMeta = filterFunc(file, reuseParquetStream)
         filterTime = System.nanoTime() - filterStartTime
         if (filterTime > (10L * 1000L * 1000L * 1000L)) {
