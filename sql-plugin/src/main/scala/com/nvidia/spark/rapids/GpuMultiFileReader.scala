@@ -129,10 +129,11 @@ object MultiFileReaderThreadPool extends Logging {
 
   private def initThreadPool(
       maxThreads: Int,
-      keepAliveSeconds: Long = 60): ThreadPoolExecutor = synchronized {
+      keepAliveSeconds: Long = 60,
+      tcId: Long = 0): ThreadPoolExecutor = synchronized {
 
       val threadFactory = new ThreadFactoryBuilder()
-          .setNameFormat("multithreaded file reader worker-%d")
+          .setNameFormat(s"multithreaded file reader worker-%d-$tcId")
           .setDaemon(true)
           .build()
 
@@ -156,8 +157,8 @@ object MultiFileReaderThreadPool extends Logging {
    * Get the existing thread pool or create one with the given thread count if it does not exist.
    * @note The thread number will be ignored if the thread pool is already created.
    */
-  def getOrCreateThreadPool(numThreads: Int): ThreadPoolExecutor = {
-    initThreadPool(numThreads)
+  def getOrCreateThreadPool(numThreads: Int, tcId: Long = 0): ThreadPoolExecutor = {
+    initThreadPool(numThreads, tcId = tcId)
   }
 }
 
@@ -497,7 +498,7 @@ abstract class MultiFileCloudPartitionReaderBase(
     val tc = TaskContext.get
     synchronized {
       if (fcs == null) {
-        val threadPoolLocal = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
+        val threadPoolLocal = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads, tc.taskAttemptId())
         fcs = new ExecutorCompletionService[HostMemoryBuffersWithMetaDataBase](threadPoolLocal)
       }
     }
