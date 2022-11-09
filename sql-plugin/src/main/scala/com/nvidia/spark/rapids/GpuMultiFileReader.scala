@@ -146,7 +146,7 @@ object MultiFileReaderThreadPool extends Logging {
       threadPoolExecutor.allowCoreThreadTimeOut(true)
       logWarning(s"Using $maxThreads for the multithreaded reader thread pool")
       // threadPool = Some(threadPoolExecutor)
-      threadPoolExecutor
+      // threadPoolExecutor
 
     //threadPool.get
     threadPoolExecutor
@@ -686,7 +686,9 @@ abstract class MultiFileCloudPartitionReaderBase(
           } else {
             val file = fileBufsAndMeta.partitionedFile.filePath
             batch = try {
-              readBatch(fileBufsAndMeta)
+              val res = readBatch(fileBufsAndMeta)
+              logWarning(s"done read batch taskid: ${TaskContext.get.taskAttemptId()}")
+              res
             } catch {
               case e @ (_: RuntimeException | _: IOException) if ignoreCorruptFiles =>
                 logWarning(s"Skipped the corrupted file: ${file}", e)

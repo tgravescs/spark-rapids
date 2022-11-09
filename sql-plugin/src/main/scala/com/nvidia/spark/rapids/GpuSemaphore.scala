@@ -124,7 +124,7 @@ private final class GpuSemaphore(tasksPerGpu: Int) extends Logging with Arm {
       val taskAttemptId = context.taskAttemptId()
       val refs = activeTasks.get(taskAttemptId)
       if (refs == null || refs.count.getValue == 0) {
-        logDebug(s"Task $taskAttemptId acquiring GPU")
+        logWarning(s"Task $taskAttemptId acquiring GPU")
         semaphore.acquire()
         if (refs != null) {
           refs.count.increment()
