@@ -1967,18 +1967,35 @@ class MultiFileCloudParquetPartitionReader(
     val allBlocks = results.flatMap(_.memBuffersAndSizes.flatMap(_.blockMeta))
     if (allBlocks.isEmpty) {
       // we don't have any actual blocks just combine metadata
-      val meta = results(0)
+      // TODO check before casting
+      val allEmptyMeta = results.map(_.asInstanceOf[HostMemoryEmptyMetaData])
+      val meta = allEmptyMeta(0)
       val allPartValues = new ArrayBuffer[(Long, InternalRow)]()
       results.foreach { hbWithMeta =>
         val totalNumRows = hbWithMeta.memBuffersAndSizes.map(_.numRows).sum
         val partValues = hbWithMeta.partitionedFile.partitionValues
         allPartValues.append((totalNumRows, partValues))
       }
-      // TODO handle without return
-      return HostMemoryBuffersWithMetaData(
+      val combinedMemBuffsAndSizes = results.flatMap { hmbInfo =>
+        hmbInfo.memBuffersAndSizes
+      }
+      // TODO handle without return and need to be HostMemoryEmptyMetaData
+      return HostMemoryEmptyMetaData(meta.partitionedFile, // just pick one since not used
+        meta.origPartitionedFile,
+        allEmptyMeta.map(_.bufferSize).sum,
+        allEmptyMeta.map(_.bytesRead).sum,
+        meta.isCorrectRebaseMode, // TODO - need to add checks for these to see if different?
+        meta.isCorrectInt96RebaseMode, // TODO - need to add checks for these to see if different?
+        meta.hasInt96Timestamps,
+        meta.clippedSchema,
+        meta.readSchema,
+        allEmptyMeta.map(_.numRows).sum,
+        Some(allPartValues)
+      )
+      /* return HostMemoryBuffersWithMetaData(
         meta.partitionedFile, // just pick one since not used
         meta.origPartitionedFile, // not used
-        Array.empty,
+        combinedMemBuffsAndSizes.toArray,
         0,
         meta.isCorrectRebaseMode, // TODO - need to add checks for these to see if different?
         meta.isCorrectInt96RebaseMode, // TODO - need to add checks for these to see if different?
@@ -1986,7 +2003,7 @@ class MultiFileCloudParquetPartitionReader(
         meta.clippedSchema,
         meta.readSchema,
         Some(allPartValues))
-
+*/
     }
 
     val footerSize = calculateParquetFooterSize(allBlocks,
@@ -2139,7 +2156,9 @@ class MultiFileCloudParquetPartitionReader(
       hasInt96Timestamps: Boolean,
       clippedSchema: MessageType,
       readSchema: StructType,
-      numRows: Long) extends HostMemoryBuffersWithMetaDataBase {
+      numRows: Long,
+      override val allPartValues: Option[ArrayBuffer[(Long, InternalRow)]] = None)
+    extends HostMemoryBuffersWithMetaDataBase {
     override def memBuffersAndSizes: Array[HostMemoryBufferInfo] =
       Array(HostMemoryBufferInfo(null.asInstanceOf[HostMemoryBuffer], bufferSize,
         numRows, Seq.empty, null, 0, Seq.empty))
@@ -2343,7 +2362,17 @@ class MultiFileCloudParquetPartitionReader(
             GpuColumnVector.fromNull(rows, f.dataType).asInstanceOf[SparkVector])
           new ColumnarBatch(nullColumns, rows)
         }
-        addPartitionValues(Some(batch), meta.partitionedFile.partitionValues, partitionSchema)
+        if (meta.allPartValues.isDefined) {
+          // we have to add partition values here for this batch, we already verified that
+          // its not different for all the blocks in this batch
+          val rowsPerPartition = meta.allPartValues.get.map(_._1).toArray
+          val allPartInternalRows = meta.allPartValues.get.map(_._2).toArray
+          addAllPartitionValues(Some(batch), allPartInternalRows, rowsPerPartition, partitionSchema)
+        } else {
+          // we have to add partition values here for this batch, we already verified that
+          // its not different for all the blocks in this batch
+          addPartitionValues(Some(batch), meta.partitionedFile.partitionValues, partitionSchema)
+        }
 
       case buffer: HostMemoryBuffersWithMetaData =>
         val memBuffersAndSize = buffer.memBuffersAndSizes
