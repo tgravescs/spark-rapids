@@ -1964,8 +1964,31 @@ class MultiFileCloudParquetPartitionReader(
       hbWithMeta.memBuffersAndSizes.map(_.bytes).sum
     }.sum
 
-    // TODO - also check to make have buffers
     val allBlocks = results.flatMap(_.memBuffersAndSizes.flatMap(_.blockMeta))
+    if (allBlocks.isEmpty) {
+      // we don't have any actual blocks just combine metadata
+      val meta = results(0)
+      val allPartValues = new ArrayBuffer[(Long, InternalRow)]()
+      results.foreach { hbWithMeta =>
+        val totalNumRows = hbWithMeta.memBuffersAndSizes.map(_.numRows).sum
+        val partValues = hbWithMeta.partitionedFile.partitionValues
+        allPartValues.append((totalNumRows, partValues))
+      }
+      // TODO handle without return
+      return HostMemoryBuffersWithMetaData(
+        meta.partitionedFile, // just pick one since not used
+        meta.origPartitionedFile, // not used
+        Array.empty,
+        0,
+        meta.isCorrectRebaseMode, // TODO - need to add checks for these to see if different?
+        meta.isCorrectInt96RebaseMode, // TODO - need to add checks for these to see if different?
+        meta.hasInt96Timestamps,
+        meta.clippedSchema,
+        meta.readSchema,
+        Some(allPartValues))
+
+    }
+
     val footerSize = calculateParquetFooterSize(allBlocks,
       results.head.memBuffersAndSizes.head.schema)
     logWarning(s"footer estimated size was: ${footerSize}")
@@ -1984,9 +2007,9 @@ class MultiFileCloudParquetPartitionReader(
     // TODO - check this estimation
     val initTotalSize = tmpTotalSize + footerSize + extraMemory
 
-    // TODO handle empty
-    val anyEmpty = results.exists(_.isInstanceOf[HostMemoryEmptyMetaData])
-    if (initTotalSize == 0 || anyEmpty) {
+    // TODO handle mix of empty with some with data
+    // shouldn't hit total size 0 now
+    if (initTotalSize == 0) {
       throw new Exception("trying to combine empty metadata")
     }
 
@@ -1997,7 +2020,6 @@ class MultiFileCloudParquetPartitionReader(
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
         out.getPos
       }
-      // val out = new HostMemoryOutputStream(newHmb)
       var currentSchema: MessageType = null
       val allPartValues = new ArrayBuffer[(Long, InternalRow)]()
       val allOutputBlocks = new ArrayBuffer[BlockMetaData]()
@@ -2093,8 +2115,8 @@ class MultiFileCloudParquetPartitionReader(
       val newHmbBufferInfo = HostMemoryBufferInfo(newHmb, offset, allPartValues.map(_._1).sum,
         Seq.empty, currentSchema, footerOutPos, Seq.empty)
       HostMemoryBuffersWithMetaData(
-        meta.partitionedFile, // TODO - this is wrong since could be multiple files
-        meta.origPartitionedFile, // TODO - this is wrong since could be multiple files - not used for alluxio since aleady read ?
+        meta.partitionedFile, // just pick one
+        meta.origPartitionedFile, // alluxio won't use at this point
         Array(newHmbBufferInfo),
         offset,
         meta.isCorrectRebaseMode, // TODO - need to add checks for these to see if different?
