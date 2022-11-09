@@ -130,7 +130,7 @@ object MultiFileReaderThreadPool extends Logging {
   private def initThreadPool(
       maxThreads: Int,
       keepAliveSeconds: Long = 60): ThreadPoolExecutor = synchronized {
-    if (threadPool.isEmpty) {
+    val pool = if (threadPool.isEmpty) {
       val threadFactory = new ThreadFactoryBuilder()
           .setNameFormat("multithreaded file reader worker-%d")
           .setDaemon(true)
@@ -145,10 +145,14 @@ object MultiFileReaderThreadPool extends Logging {
         threadFactory)
       threadPoolExecutor.allowCoreThreadTimeOut(true)
       logWarning(s"Using $maxThreads for the multithreaded reader thread pool")
-      threadPool = Some(threadPoolExecutor)
+      // threadPool = Some(threadPoolExecutor)
+      threadPoolExecutor
+    } else {
+      threadPool.get
     }
 
-    threadPool.get
+    //threadPool.get
+    pool
   }
 
   /**
@@ -342,7 +346,8 @@ abstract class MultiFilePartitionReaderFactoryBase(
 
     if (useMultiThread(filePaths)) {
       logInfo("Using the multi-threaded multi-file " + getFileFormatShortName + " reader, " +
-        s"files: ${filePaths.mkString(",")} task attemptid: ${TaskContext.get.taskAttemptId()}")
+        s"numFiles: ${filePaths.length} files: ${filePaths.mkString(",")} task attemptid: " +
+        s"${TaskContext.get.taskAttemptId()}")
       buildBaseColumnarReaderForCloud(files, conf)
     } else {
       logInfo("Using the coalesce multi-file " + getFileFormatShortName + " reader, files: " +
@@ -459,6 +464,7 @@ abstract class MultiFileCloudPartitionReaderBase(
   private[this] val inputMetrics = Option(TaskContext.get).map(_.taskMetrics().inputMetrics)
       .getOrElse(TrampolineUtil.newInputMetrics())
   private var fcs: ExecutorCompletionService[HostMemoryBuffersWithMetaDataBase] = null
+  private var threadPoolLocal: ThreadPoolExecutor = null
 
   private val files: Array[PartitionedFileInfoOptAlluxio] = {
     if (alluxioPathReplacementMap.nonEmpty) {
@@ -494,8 +500,8 @@ abstract class MultiFileCloudPartitionReaderBase(
     val tc = TaskContext.get
     synchronized {
       if (fcs == null) {
-        val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
-        fcs = new ExecutorCompletionService[HostMemoryBuffersWithMetaDataBase](threadPool)
+        val threadPoolLocal = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
+        fcs = new ExecutorCompletionService[HostMemoryBuffersWithMetaDataBase](threadPoolLocal)
       }
     }
     for (i <- 0 until limit) {
@@ -722,7 +728,7 @@ abstract class MultiFileCloudPartitionReaderBase(
   private def addNextTaskIfNeeded(): Unit = {
     if (tasksToRun.nonEmpty && !isDone) {
       val runner = tasksToRun.dequeue()
-      val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
+      // val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
       // tasks.add(threadPool.submit(runner))
       fcs.submit(runner)
     }
@@ -746,6 +752,7 @@ abstract class MultiFileCloudPartitionReaderBase(
     closeCurrentFileHostBuffers()
     batch.foreach(_.close())
     batch = None
+    threadPoolLocal.shutdown()
     // TODO clean up with completion service?
     tasks.asScala.foreach { task =>
       if (task.isDone()) {

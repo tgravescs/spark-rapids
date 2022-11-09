@@ -539,7 +539,6 @@ case class GpuFileSourceScanExec(
       partition.files.flatMap { file =>
         // getPath() is very expensive so we only want to call it once in this block:
         val filePath = file.getPath
-        logWarning(s"file length is ${file.getLen}")
         val isSplitable = relation.fileFormat.isSplitable(
           relation.sparkSession, relation.options, filePath)
         PartitionedFileUtil.splitFiles(
