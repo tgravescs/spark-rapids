@@ -2228,7 +2228,7 @@ class MultiFileCloudParquetPartitionReader(
                 HostMemoryEmptyMetaData(file, origPartitionedFile, numRows, bytesRead,
                   fileBlockMeta.isCorrectedRebaseMode, fileBlockMeta.isCorrectedInt96RebaseMode,
                   fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema,
-                  fileBlockMeta.readSchema)
+                  fileBlockMeta.readSchema, numRows, None)
               } else {
                 val filePath = new Path(new URI(file.filePath))
                 while (blockChunkIter.hasNext) {
@@ -2239,7 +2239,9 @@ class MultiFileCloudParquetPartitionReader(
                   val (dataBuffer, dataSize, footerPos, blockMeta) =
                     readPartFileInputFile(blocksToRead, fileBlockMeta.schema, filePath,
                       reuseParquetInputFile)
-                  hostBuffers += ((dataBuffer, dataSize))
+                  val numRows = blocksToRead.map(_.getRowCount).sum.toInt
+                  hostBuffers += HostMemoryBufferInfo(dataBuffer, dataSize,
+                    numRows, blockMeta, fileBlockMeta.schema)
                 }
                 val bytesRead = fileSystemBytesRead() - startingBytesRead
                 if (isDone) {
@@ -2248,13 +2250,12 @@ class MultiFileCloudParquetPartitionReader(
                   HostMemoryEmptyMetaData(file, origPartitionedFile, 0, bytesRead,
                     fileBlockMeta.isCorrectedRebaseMode, fileBlockMeta.isCorrectedInt96RebaseMode,
                     fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema,
-                    fileBlockMeta.readSchema)
+                    fileBlockMeta.readSchema, 0, None)
                 } else {
-
                   HostMemoryBuffersWithMetaData(file, origPartitionedFile, hostBuffers.toArray,
                     bytesRead, fileBlockMeta.isCorrectedRebaseMode,
                     fileBlockMeta.isCorrectedInt96RebaseMode, fileBlockMeta.hasInt96Timestamps,
-                    fileBlockMeta.schema, fileBlockMeta.readSchema)
+                    fileBlockMeta.schema, fileBlockMeta.readSchema, None)
                 }
               }
             }
