@@ -447,6 +447,7 @@ def test_parquet_partitioned_read_just_partitions(spark_tmp_path, v1_enabled_lis
             lambda spark : spark.read.parquet(data_path).select("key"),
             conf=all_confs)
 
+@ignore_order
 @pytest.mark.parametrize('reader_confs', reader_opt_confs)
 @pytest.mark.parametrize('v1_enabled_list', ["", "parquet"])
 def test_parquet_read_schema_missing_cols(spark_tmp_path, v1_enabled_list, reader_confs):
