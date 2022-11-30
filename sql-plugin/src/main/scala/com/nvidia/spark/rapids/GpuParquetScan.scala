@@ -1884,17 +1884,16 @@ class MultiFileCloudParquetPartitionReader(
           hbWithMeta.memBuffersAndSizes.map { hmbInfo =>
             // results are mixed with some empty and some with data
             if (hmbInfo.schema != null) {
-              // logError("schema is null!!!")
+              if (currentSchema != null && !hmbInfo.schema.equals(currentSchema)) {
+                throw new Exception(s"schema is different current: ${currentSchema} " +
+                  s"new is: ${hmbInfo.schema}")
+              }
               currentSchema = hmbInfo.schema
             }
 
             // can't use size in hbmInfo because that includes footers
             // val sizeOfBlockData = hmbInfo.blockMeta.map(_.getTotalByteSize).sum
             // val footerPos = hmbInfo.footerPos
-            if (currentSchema != null && hmbInfo.schema != currentSchema) {
-              throw new Exception(s"schema is different current: ${currentSchema} " +
-                s"new is: ${hmbInfo.schema}")
-            }
 
             /*
             def checkIfNeedToSplitDataBlock(currentBlockInfo: SingleDataBlockInfo,
@@ -2097,7 +2096,7 @@ class MultiFileCloudParquetPartitionReader(
         if (fileBlockMeta.blocks.isEmpty) {
           val bytesRead = fileSystemBytesRead() - startingBytesRead
           // no blocks so return null buffer and size 0
-          logWarning("do read has no blocks so empty meta")
+          logWarning(s"do read has no blocks so empty meta file $fileBlockMeta")
           HostMemoryEmptyMetaData(file, origPartitionedFile, 0, bytesRead,
             fileBlockMeta.isCorrectedRebaseMode, fileBlockMeta.isCorrectedInt96RebaseMode,
             fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema, fileBlockMeta.readSchema, 0)
