@@ -674,20 +674,27 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
               waitTimeStart = System.nanoTime()
               val isDone = futures.find(_.isDone)
               if (isDone.isDefined) {
-                logWarning(s"going to wait futures some are done ${isDone.get}, queued size is ${queued.size()}")
+                logWarning(s"going to wait futures some are done ${isDone.isDefined}, queued size is ${queued.size()}")
               } else {
                 logWarning(s"going to wait futures none are done, queued size is ${queued.size()}")
               }
-              val pending = futures.dequeue().get // wait for one future
-              waitTime += System.nanoTime() - waitTimeStart
-              logWarning(s"done wait futures, time: $waitTime")
+              if (!futures.head.isDone && queued.size() > 0) {
+                // don't wait here because some are ready to be processed
+                logWarning("futures head not done but queued size > 0 so skip waiting")
+              } else {
+                val pending = futures.head.get // wait for one future
 
-              // if the future returned a block state, we have more work to do
-              pending match {
-                case Some(leftOver@BlockState(_, _)) =>
-                  logWarning(s"future dequeueed ${leftOver.blockId}")
-                  pendingIts.enqueue(leftOver)
-                case _ => // done
+                waitTime += System.nanoTime() - waitTimeStart
+                logWarning(s"done wait futures, time: $waitTime")
+
+                // if the future returned a block state, we have more work to do
+                pending match {
+                  case Some(leftOver@BlockState(_, _)) =>
+                    logWarning(s"future dequeueed ${leftOver.blockId}")
+                    pendingIts.enqueue(leftOver)
+                  case _ => // done
+                }
+
               }
             }
           }
