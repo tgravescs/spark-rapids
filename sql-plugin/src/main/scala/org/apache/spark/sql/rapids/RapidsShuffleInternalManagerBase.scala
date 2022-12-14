@@ -821,12 +821,13 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
             // something to return.
             // TODO - this kicks fetcher to get max in flight as well
             val fiResultCount = fetcherIterator.resultCount
-            var amountToDrain = if (queued.size > 0 && fiResultCount < 1) {
+            var amountToDrain = if (queued.size > 0 && fiResultCount == 0) {
               logWarning("fetcher results not ready but have queued data don't wait")
               0
             } else {
               Math.max(fiResultCount, 1)
             }
+
             val fetchTimeStart = System.nanoTime()
 
             // We drain fetched results. That is, we push decode tasks
