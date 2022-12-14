@@ -1088,7 +1088,7 @@ final class RapidsShuffleBlockFetcherIterator(
       onCompleteCallback.onComplete(context))
   }
 
-  private def fetchUpToMaxBytes(): Unit = {
+  def fetchUpToMaxBytes(): Unit = {
     if (isNettyOOMOnShuffle.get()) {
       if (reqsInFlight > 0) {
         // Return immediately if Netty is still OOMed and there're ongoing fetch requests
@@ -1255,11 +1255,11 @@ final class RapidsShuffleBlockFetcherIterator(
   }
 
   def resultCount: Int = {
-    val res = results.size()
-    if (res == 0) {
-      fetchUpToMaxBytes
-    }
-    res
+    results.size()
+  }
+
+  def fetchMoreIfNeeded: Unit = {
+    fetchUpToMaxBytes
   }
 }
 

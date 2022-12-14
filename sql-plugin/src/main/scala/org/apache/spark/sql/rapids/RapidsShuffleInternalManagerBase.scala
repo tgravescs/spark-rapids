@@ -672,31 +672,23 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
           if (futures.nonEmpty) {
             withResource(new NvtxRange("BatchWait", NvtxColor.CYAN)) { _ =>
               waitTimeStart = System.nanoTime()
-              val isDone = futures.find(_.isDone)
-              if (isDone.isDefined) {
-                logWarning(s"going to wait futures some are done ${isDone.isDefined} head is done ${futures.head.isDone}, queued size is ${queued.size()}")
-              } else {
-                logWarning(s"going to wait futures none are done, queued size is ${queued.size()}")
-              }
-              val pendingPre = if (!futures.head.isDone && isDone.isDefined) {
-                // don't wait here because some are ready to be processed
+              val anyDone = futures.find(_.isDone)
+              val pendingFuture = if (!futures.head.isDone && anyDone.isDefined) {
+                // the first one might not be ready but if any are ready
                 logWarning("futures head not done another is done")
-                val index = futures.indexOf(isDone.get)
-                futures.remove(index)
+                anyDone.get
               } else {
                 logWarning("futures head is done")
-                futures.remove(0) // wait for one future
+                futures.head
               }
 
-              if (!pendingPre.isDone && queued.size > 0) {
-
-                logWarning("pending is not done by queued size > 0, skpping")
-              } else {
-
-                val pending = pendingPre.get()
+              // this will wait so only do it if we don't have anything else
+              // ready to be processed or the future is ready for us to process
+              if (pendingFuture.isDone || queued.size == 0) {
+                val index = futures.indexOf(pendingFuture)
+                futures.remove(index)
+                val pending = pendingFuture.get()
                 waitTime += System.nanoTime() - waitTimeStart
-
-                logWarning(s"done wait futures, time: $waitTime")
 
                 // if the future returned a block state, we have more work to do
                 pending match {
@@ -819,10 +811,12 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
             // we are trying to get a batch and we haven't received any results
             // yet, we need to block on the fetch for this case so we have
             // something to return.
-            // TODO - this kicks fetcher to get max in flight as well
             val fiResultCount = fetcherIterator.resultCount
             var amountToDrain = if (queued.size > 0 && fiResultCount == 0) {
               logWarning("fetcher results not ready but have queued data don't wait")
+              // make sure we are actively fetching more because we are skipping the
+              // fetchIterator.next() call which would normally do this
+              fetcherIterator.fetchUpToMaxBytes
               0
             } else {
               Math.max(fiResultCount, 1)
