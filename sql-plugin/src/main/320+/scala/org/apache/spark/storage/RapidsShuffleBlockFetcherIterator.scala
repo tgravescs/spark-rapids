@@ -956,8 +956,8 @@ final class RapidsShuffleBlockFetcherIterator(
               numBlocksToFetch -= 1
               // Update total number of blocks to fetch, reflecting the multiple local shuffle
               // chunks.
-              numBlocksToFetch += bufs.size
-              bufs.zipWithIndex.foreach { case (buf, chunkId) =>
+              numBlocksToFetch += bufsf.size
+              bufs.zipWithIndex.foreach { case (buf, cfhunkId) =>
                 buf.retain()
                 val shuffleChunkId = ShuffleBlockChunkId(shuffleId, shuffleMergeId, reduceId,
                   chunkId)
@@ -1266,8 +1266,12 @@ final class RapidsShuffleBlockFetcherIterator(
   }
 
   def resultCount: Int = {
-    fetchUpToMaxBytes
-    results.size()
+    val resSize = results.size()
+    // TODO - what size here?
+    if (resSize <= 1) {
+      fetchUpToMaxBytes
+    }
+    resSize
   }
 }
 
