@@ -1266,8 +1266,11 @@ final class RapidsShuffleBlockFetcherIterator(
   }
 
   def resultCount: Int = {
-    fetchUpToMaxBytes
-    results.size()
+    val res = results.size()
+    if (res < 1) {
+      fetchUpToMaxBytes
+    }
+    res
   }
 }
 
