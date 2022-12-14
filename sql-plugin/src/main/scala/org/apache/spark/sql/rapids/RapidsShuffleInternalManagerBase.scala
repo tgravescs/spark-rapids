@@ -756,24 +756,24 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
       val running = numRunning.incrementAndGet()
       logWarning(s"adding ${blockState.blockId} task id: ${TaskContext.get().taskAttemptId()} running: ${running}")
       futures += RapidsShuffleInternalManagerBase.queueReadTask(slot, () => {
-        logWarning(s"read task queued ${blockState.blockId} task id: ${TaskContext.get().taskAttemptId()}")
+        logWarning(s"read task queued ${blockState.blockId} ")
         var currentBatchSize = blockState.getNextBatchSize
         var didFit = true
         while (blockState.hasNext && didFit) {
           val batch = blockState.next()
-          logWarning(s"batch got next  ${blockState.blockId} task id: ${TaskContext.get().taskAttemptId()}")
+          logWarning(s"batch got next  ${blockState.blockId}")
           queued.offer(batch)
           // peek at the next batch
           currentBatchSize = blockState.getNextBatchSize
           didFit = limiter.acquire(currentBatchSize)
         }
         if (!didFit) {
-          logWarning(s"read task not all fit id: ${TaskContext.get().taskAttemptId()} " +
+          logWarning(s"read task not all fit " +
             s"numRunning: ${numRunning.get()}")
           numRunning.decrementAndGet()
           Some(blockState)
         } else {
-          logWarning(s"read task all fit id: ${TaskContext.get().taskAttemptId()} " +
+          logWarning(s"read task all fit " +
             s"numRunning: ${numRunning.get()}")
           numRunning.decrementAndGet()
           None // no further batches
