@@ -674,9 +674,9 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
               waitTimeStart = System.nanoTime()
               val isDone = futures.find(_.isDone)
               if (isDone.isDefined) {
-                logWarning(s"going to wait futures some are done ${isDone.get}")
+                logWarning(s"going to wait futures some are done ${isDone.get}, queued size is ${queued.size()}")
               } else {
-                logWarning(s"going to wait futures none are done")
+                logWarning(s"going to wait futures none are done, queued size is ${queued.size()}")
               }
               val pending = futures.dequeue().get // wait for one future
               waitTime += System.nanoTime() - waitTimeStart
