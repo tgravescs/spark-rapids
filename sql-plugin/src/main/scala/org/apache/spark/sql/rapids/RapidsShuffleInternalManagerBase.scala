@@ -672,14 +672,17 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
           if (futures.nonEmpty) {
             withResource(new NvtxRange("BatchWait", NvtxColor.CYAN)) { _ =>
               waitTimeStart = System.nanoTime()
-              val anyDone = futures.find(_.isDone)
-              val pendingFuture = if (!futures.head.isDone && anyDone.isDefined) {
-                // the first one might not be ready but if any are ready
-                logWarning("futures head not done another is done")
-                anyDone.get
-              } else {
-                logWarning("futures head is done")
+              val pendingFuture = if (futures.head.isDone) {
                 futures.head
+              } else {
+                // check if anything in futures list is done
+                val anyDone = futures.find(_.isDone)
+                if (anyDone.isDefined) {
+                  anyDone.get
+                } else {
+                  // nothing is done so just take head
+                  futures.head
+                }
               }
 
               // this will wait so only do it if we don't have anything else
@@ -812,7 +815,8 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
             // yet, we need to block on the fetch for this case so we have
             // something to return.
             val fiResultCount = fetcherIterator.resultCount
-            var amountToDrain = if (queued.size > 0 && fiResultCount == 0) {
+            var amountToDrain = Math.max(fiResultCount, 1)
+            /* if (queued.size > 0 && fiResultCount == 0) {
               logWarning("fetcher results not ready but have queued data don't wait")
               // make sure we are actively fetching more because we are skipping the
               // fetchIterator.next() call which would normally do this
@@ -820,7 +824,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
               0
             } else {
               Math.max(fiResultCount, 1)
-            }
+            } */
 
             val fetchTimeStart = System.nanoTime()
 
