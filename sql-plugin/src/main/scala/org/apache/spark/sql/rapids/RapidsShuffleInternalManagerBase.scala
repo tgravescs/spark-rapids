@@ -572,7 +572,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
   }
 
   class BytesInFlightLimiter(maxBytesInFlight: Long) {
-    private var inFlight: Long = 0L
+    var inFlight: Long = 0L
 
     def acquire(sz: Long): Boolean = {
       if (sz == 0) {
@@ -581,8 +581,10 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
         synchronized {
           if (inFlight == 0 || sz + inFlight < maxBytesInFlight) {
             inFlight += sz
+            logWarning(s"acquired inflight is ${inFlight}")
             true
           } else {
+            logWarning(s"did not acquire inflight is ${inFlight}")
             false
           }
         }
@@ -605,6 +607,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
     private var fetchTime: Long = 0L
     private var waitTime: Long = 0L
     private val limiter = new BytesInFlightLimiter(maxBytesInFlight)
+    private var numRunning = new AtomicLong()
     private val fallbackIter: Iterator[(Any, Any)] = if (numReaderThreads == 1) {
       // this is the non-optimized case, where we add metrics to capture the blocked
       // time and the deserialization time as part of the shuffle read time.
@@ -669,11 +672,20 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
           if (futures.nonEmpty) {
             withResource(new NvtxRange("BatchWait", NvtxColor.CYAN)) { _ =>
               waitTimeStart = System.nanoTime()
+              val isDone = futures.find(_.isDone)
+              if (isDone.isDefined) {
+                logWarning(s"going to wait futures some are done ${isDone.get}")
+              } else {
+                logWarning(s"going to wait futures none are done")
+              }
               val pending = futures.dequeue().get // wait for one future
               waitTime += System.nanoTime() - waitTimeStart
+              logWarning(s"done wait futures, time: $waitTime")
+
               // if the future returned a block state, we have more work to do
               pending match {
                 case Some(leftOver@BlockState(_, _)) =>
+                  logWarning(s"future dequeueed ${leftOver.blockId}")
                   pendingIts.enqueue(leftOver)
                 case _ => // done
               }
@@ -690,15 +702,18 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
           // for our futures to finish. Either way, it's safe to block
           // here while we wait.
           waitTimeStart = System.nanoTime()
+          logWarning("about to take queued")
           val res = queued.take()
           res match {
             case (_, cb: ColumnarBatch) =>
-              limiter.release(SerializedTableColumn.getMemoryUsed(cb))
+              val mem = SerializedTableColumn.getMemoryUsed(cb)
+              limiter.release(mem)
+              logWarning(s"released $mem total is inflight is ${limiter.inFlight}")
               popFetchedIfAvailable()
             case _ => 0 // TODO: do we need to handle other types here?
           }
-
           waitTime += System.nanoTime() - waitTimeStart
+          logWarning(s"queued time wait is $waitTime")
           res
         }
 
@@ -731,19 +746,29 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
 
     private def deserializeTask(blockState: BlockState): Unit = {
       val slot = RapidsShuffleInternalManagerBase.getNextReaderSlot
+      val running = numRunning.incrementAndGet()
+      logWarning(s"adding ${blockState.blockId} task id: ${TaskContext.get().taskAttemptId()} running: ${running}")
       futures += RapidsShuffleInternalManagerBase.queueReadTask(slot, () => {
+        logWarning(s"read task queued ${blockState.blockId} task id: ${TaskContext.get().taskAttemptId()}")
         var currentBatchSize = blockState.getNextBatchSize
         var didFit = true
         while (blockState.hasNext && didFit) {
           val batch = blockState.next()
+          logWarning(s"batch got next  ${blockState.blockId} task id: ${TaskContext.get().taskAttemptId()}")
           queued.offer(batch)
           // peek at the next batch
           currentBatchSize = blockState.getNextBatchSize
           didFit = limiter.acquire(currentBatchSize)
         }
         if (!didFit) {
+          logWarning(s"read task not all fit id: ${TaskContext.get().taskAttemptId()} " +
+            s"numRunning: ${numRunning.get()}")
+          numRunning.decrementAndGet()
           Some(blockState)
         } else {
+          logWarning(s"read task all fit id: ${TaskContext.get().taskAttemptId()} " +
+            s"numRunning: ${numRunning.get()}")
+          numRunning.decrementAndGet()
           None // no further batches
         }
       })
@@ -753,6 +778,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
       // If fetcherIterator is not exhausted, we try and get as many
       // ready results.
       if (pendingIts.nonEmpty) {
+        logWarning(s"pending its size is ${pendingIts.size}")
         var continue = true
         while(pendingIts.nonEmpty && continue) {
           val blockState = pendingIts.head
@@ -760,8 +786,10 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
           if (limiter.acquire(blockState.getNextBatchSize)) {
             // kick off deserialization task
             pendingIts.dequeue()
+            logWarning("limiter acquired pop")
             deserializeTask(blockState)
           } else {
+            logWarning("limiter not acquired pop continue false")
             continue = false
           }
         }
@@ -784,6 +812,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
             var didFit = true
             while (amountToDrain > 0 && fetcherIterator.hasNext && didFit) {
               amountToDrain -= 1
+              logWarning(s"draining 1,total: ${fetcherIterator.resultCount}")
               // fetch block time accounts for time spent waiting for streams.next()
               val readBlockedStart = System.nanoTime()
               val (blockId: BlockId, inputStream) = fetcherIterator.next()
@@ -796,10 +825,13 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
               if (limiter.acquire(blockState.getNextBatchSize)) {
                 // we can fit at least the first batch in this block
                 // kick off a deserialization task
+                logWarning("fit fetching acquired")
+
                 deserializeTask(blockState)
               } else {
                 // first batch didn't fit, put iterator aside and stop asking for results
                 // from the fetcher
+                logWarning("didn't fit fetching didn't acquire")
                 pendingIts.enqueue(blockState)
                 didFit = false
               }
