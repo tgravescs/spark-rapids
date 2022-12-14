@@ -678,18 +678,27 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
               } else {
                 logWarning(s"going to wait futures none are done, queued size is ${queued.size()}")
               }
-              val pending = if (!futures.head.isDone && isDone.isDefined) {
+              val pendingPre = if (!futures.head.isDone && isDone.isDefined) {
                 // don't wait here because some are ready to be processed
                 logWarning("futures head not done another is done")
                 val index = futures.indexOf(isDone.get)
-                futures.remove(index).get
+                futures.remove(index)
               } else {
                 logWarning("futures head is done")
-                val f = futures.remove(0).get // wait for one future
+                futures.remove(0) // wait for one future
               }
 
-                waitTime += System.nanoTime() - waitTimeStart
-                logWarning(s"done wait futures, time: $waitTime")
+              if (!pendingPre.isDone && queued.size > 0) {
+
+                logWarning("pending is not done by queued size > 0")
+              } else {
+                logWarning("pending is done")
+
+              }
+              val pending = pendingPre.get()
+              waitTime += System.nanoTime() - waitTimeStart
+
+              logWarning(s"done wait futures, time: $waitTime")
 
                 // if the future returned a block state, we have more work to do
                 pending match {
