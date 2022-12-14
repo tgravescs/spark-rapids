@@ -819,7 +819,14 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
             // we are trying to get a batch and we haven't received any results
             // yet, we need to block on the fetch for this case so we have
             // something to return.
-            var amountToDrain = Math.max(fetcherIterator.resultCount, 1)
+            // TODO - this kicks fetcher to get max in flight as well
+            val fiResultCount = fetcherIterator.resultCount
+            var amountToDrain = if (queued.size > 0 && fiResultCount < 1) {
+              logWarning("fetcher results not ready but have queued data don't wait")
+              0
+            } else {
+              Math.max(fiResultCount, 1)
+            }
             val fetchTimeStart = System.nanoTime()
 
             // We drain fetched results. That is, we push decode tasks
@@ -834,6 +841,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
               val readBlockedStart = System.nanoTime()
               val (blockId: BlockId, inputStream) = fetcherIterator.next()
               readBlockedTime += System.nanoTime() - readBlockedStart
+              logWarning(s"read block time as $readBlockedTime")
 
               val deserStream = serializerInstance.deserializeStream(inputStream)
               val batchIter = deserStream.asKeyValueIterator.asInstanceOf[SerializedBatchIterator]

@@ -755,6 +755,7 @@ final class RapidsShuffleBlockFetcherIterator(
 
       result match {
         case r @ SuccessFetchResult(blockId, mapIndex, address, size, buf, isNetworkReqDone) =>
+          logWarning("success fetch result")
           if (address != blockManager.blockManagerId) {
             if (hostLocalBlocks.contains(blockId -> mapIndex) ||
               pushBasedFetchHelper.isLocalPushMergedBlockAddress(address)) {
@@ -894,6 +895,8 @@ final class RapidsShuffleBlockFetcherIterator(
           }
 
         case FailureFetchResult(blockId, mapIndex, address, e) =>
+          logWarning("failed fetch result")
+
           var errorMsg: String = null
           // NOTE: using OutOfMemoryError instead of OutOfDirectMemoryError due to the later being
           // shaded in databricks.
@@ -905,6 +908,8 @@ final class RapidsShuffleBlockFetcherIterator(
           throwFetchFailedException(blockId, mapIndex, address, e, Some(errorMsg))
 
         case DeferFetchRequestResult(request) =>
+          logWarning("defered fetch result")
+
           val address = request.address
           numBlocksInFlightPerAddress(address) =
             numBlocksInFlightPerAddress(address) - request.blocks.size
@@ -917,6 +922,8 @@ final class RapidsShuffleBlockFetcherIterator(
           result = null
 
         case FallbackOnPushMergedFailureResult(blockId, address, size, isNetworkReqDone) =>
+          logWarning("FallbackOnPushMergedFailureResult fetch result")
+
           // We get this result in 3 cases:
           // 1. Failure to fetch the data of a remote shuffle chunk. In this case, the
           //    blockId is a ShuffleBlockChunkId.
@@ -973,6 +980,8 @@ final class RapidsShuffleBlockFetcherIterator(
 
         case PushMergedRemoteMetaFetchResult(
           shuffleId, shuffleMergeId, reduceId, blockSize, bitmaps, address) =>
+          logWarning("PushMergedRemoteMetaFetchResult fetch result")
+
           // The original meta request is processed so we decrease numBlocksToFetch and
           // numBlocksInFlightPerAddress by 1. We will collect new shuffle chunks request and the
           // count of this is added to numBlocksToFetch in collectFetchReqsFromMergedBlocks.
@@ -988,6 +997,8 @@ final class RapidsShuffleBlockFetcherIterator(
 
         case PushMergedRemoteMetaFailedFetchResult(
           shuffleId, shuffleMergeId, reduceId, address) =>
+          logWarning("PushMergedRemoteMetaFailedFetchResult fetch result")
+
           // The original meta request failed so we decrease numBlocksInFlightPerAddress by 1.
           numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
           // If we fail to fetch the meta of a push-merged block, we fall back to fetching the
@@ -1254,7 +1265,10 @@ final class RapidsShuffleBlockFetcherIterator(
     removedChunkIds
   }
 
-  def resultCount: Int = results.size()
+  def resultCount: Int = {
+    fetchUpToMaxBytes
+    results.size()
+  }
 }
 
 /**
