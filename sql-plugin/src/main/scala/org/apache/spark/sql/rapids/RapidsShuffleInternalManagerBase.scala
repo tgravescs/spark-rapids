@@ -601,7 +601,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
       serializer: GpuColumnarBatchSerializer)
     extends Iterator[(Any, Any)] with Arm {
     private val queued = new LinkedBlockingQueue[(Any, Any)]
-    private val futures = new mutable.Queue[Future[Option[BlockState]]]()
+    private val futures = new mutable.ListBuffer[Future[Option[BlockState]]]()
     private val serializerInstance = serializer.newInstance()
     private var readBlockedTime: Long = 0L
     private var fetchTime: Long = 0L
@@ -678,11 +678,14 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
               } else {
                 logWarning(s"going to wait futures none are done, queued size is ${queued.size()}")
               }
-              if (!futures.head.isDone && queued.size() > 0) {
+              val pending = if (!futures.head.isDone && isDone.isDefined) {
                 // don't wait here because some are ready to be processed
-                logWarning("futures head not done but queued size > 0 so skip waiting")
+                logWarning("futures head not done another is done")
+                val index = futures.indexOf(isDone.get)
+                futures.remove(index).get
               } else {
-                val pending = futures.head.get // wait for one future
+                val f = futures.remove(0).get // wait for one future
+              }
 
                 waitTime += System.nanoTime() - waitTimeStart
                 logWarning(s"done wait futures, time: $waitTime")
@@ -695,7 +698,6 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
                   case _ => // done
                 }
 
-              }
             }
           }
 
