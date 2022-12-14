@@ -684,6 +684,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
                 val index = futures.indexOf(isDone.get)
                 futures.remove(index).get
               } else {
+                logWarning("futures head is done")
                 val f = futures.remove(0).get // wait for one future
               }
 
