@@ -690,15 +690,13 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
 
               if (!pendingPre.isDone && queued.size > 0) {
 
-                logWarning("pending is not done by queued size > 0")
+                logWarning("pending is not done by queued size > 0, skpping")
               } else {
-                logWarning("pending is done")
 
-              }
-              val pending = pendingPre.get()
-              waitTime += System.nanoTime() - waitTimeStart
+                val pending = pendingPre.get()
+                waitTime += System.nanoTime() - waitTimeStart
 
-              logWarning(s"done wait futures, time: $waitTime")
+                logWarning(s"done wait futures, time: $waitTime")
 
                 // if the future returned a block state, we have more work to do
                 pending match {
@@ -707,7 +705,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
                     pendingIts.enqueue(leftOver)
                   case _ => // done
                 }
-
+              }
             }
           }
 
