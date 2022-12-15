@@ -669,13 +669,18 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
           if (futures.nonEmpty) {
             withResource(new NvtxRange("BatchWait", NvtxColor.CYAN)) { _ =>
               waitTimeStart = System.nanoTime()
-              val pending = futures.dequeue().get // wait for one future
-              waitTime += System.nanoTime() - waitTimeStart
-              // if the future returned a block state, we have more work to do
-              pending match {
-                case Some(leftOver@BlockState(_, _)) =>
-                  pendingIts.enqueue(leftOver)
-                case _ => // done
+              if (!futures.head.isDone && queued.size() > 0) {
+                // skip
+                logWarning("skipping pending")
+              } else {
+                val pending = futures.dequeue() //.get // wait for one future
+                waitTime += System.nanoTime() - waitTimeStart
+                // if the future returned a block state, we have more work to do
+                pending match {
+                  case Some(leftOver@BlockState(_, _)) =>
+                    pendingIts.enqueue(leftOver)
+                  case _ => // done
+                }
               }
             }
           }
