@@ -673,7 +673,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
                 // skip
                 logWarning("skipping pending")
               } else {
-                val pending = futures.dequeue() //.get // wait for one future
+                val pending = futures.dequeue().get // wait for one future
                 waitTime += System.nanoTime() - waitTimeStart
                 // if the future returned a block state, we have more work to do
                 pending match {
