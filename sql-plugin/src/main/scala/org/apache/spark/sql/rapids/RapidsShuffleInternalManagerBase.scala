@@ -580,9 +580,11 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
       } else {
         synchronized {
           if (inFlight == 0 || sz + inFlight < maxBytesInFlight) {
+            logWarning(s"limiter acquired $sz inflight $inFlight")
             inFlight += sz
             true
           } else {
+            logWarning(s"limiter NOT acquired $sz inflight $inFlight")
             false
           }
         }
@@ -590,6 +592,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
     }
 
     def release(sz: Long): Unit = synchronized {
+      logWarning(s"limiter release $sz inflight $inFlight")
       inFlight -= sz
     }
   }
@@ -599,7 +602,8 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
       serializer: GpuColumnarBatchSerializer)
     extends Iterator[(Any, Any)] with Arm {
     private val queued = new LinkedBlockingQueue[(Any, Any)]
-    private val futures = new mutable.Queue[Future[Option[BlockState]]]()
+    // private val futures = new mutable.Queue[Future[Option[BlockState]]]()
+    private val futures = new mutable.ListBuffer[Future[Option[BlockState]]]()
     private val serializerInstance = serializer.newInstance()
     private var readBlockedTime: Long = 0L
     private var fetchTime: Long = 0L
@@ -669,12 +673,28 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
           if (futures.nonEmpty) {
             withResource(new NvtxRange("BatchWait", NvtxColor.CYAN)) { _ =>
               waitTimeStart = System.nanoTime()
-              if (!futures.head.isDone && queued.size() > 0) {
-                // skip
-                logWarning("skipping pending")
+              val pendingFuture = if (futures.head.isDone) {
+                futures.head
               } else {
-                val pending = futures.dequeue().get // wait for one future
+                // check if anything in futures list is done
+                val anyDone = futures.find(_.isDone)
+                if (anyDone.isDefined) {
+                  anyDone.get
+                } else {
+                  // nothing is done so just take head
+                  futures.head
+                }
+              }
+              if (!pendingFuture.isDone && queued.size() > 0) {
+                // skip
+                logWarning(s"skipping pending queeud size ${queued.size} " +
+                  s"task ${TaskContext.get().taskAttemptId()}")
+              } else {
+                val index = futures.indexOf(futures.head)
+                val pending = futures.remove(index).get
                 waitTime += System.nanoTime() - waitTimeStart
+                logWarning(s"futures dequeue waited $waitTime")
+
                 // if the future returned a block state, we have more work to do
                 pending match {
                   case Some(leftOver@BlockState(_, _)) =>
@@ -695,6 +715,8 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
           // for our futures to finish. Either way, it's safe to block
           // here while we wait.
           waitTimeStart = System.nanoTime()
+          logWarning(s"about to take queued size ${queued.size} " +
+            s"task ${TaskContext.get().taskAttemptId()}")
           val res = queued.take()
           res match {
             case (_, cb: ColumnarBatch) =>
@@ -763,7 +785,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
           val blockState = pendingIts.head
           // check if we can handle the head batch now
           if (limiter.acquire(blockState.getNextBatchSize)) {
-            // kick off deserialization task
+            // kick off deserialization taqueuedsk
             pendingIts.dequeue()
             deserializeTask(blockState)
           } else {
