@@ -692,6 +692,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
               } else {
                 val index = futures.indexOf(futures.head)
                 val pending = futures.remove(index).get
+                logWarning(s"removed futures size is ${futures.size}")
                 waitTime += System.nanoTime() - waitTimeStart
                 logWarning(s"futures dequeue waited $waitTime")
 
@@ -705,10 +706,7 @@ abstract class RapidsShuffleThreadedReaderBase[K, C](
             }
           }
 
-          if (pendingIts.nonEmpty) {
-            // if we had pending iterators, we should try to see if now one can be handled
-            popFetchedIfAvailable()
-          }
+          popFetchedIfAvailable()
 
           // We either have added futures and so will have items queued
           // or we already exhausted the fetchIterator and are just waiting
