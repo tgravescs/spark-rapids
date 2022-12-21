@@ -543,6 +543,12 @@ object RapidsConf {
       .booleanConf
       .createWithDefault(true)
 
+  val SKEW_JOIN_BROADCAST_ENABLED =
+    conf("spark.rapids.sql.adaptive.skewJoin.broadcast.enabled")
+      .doc("")
+      .booleanConf
+      .createWithDefault(true)
+
   val STABLE_SORT = conf("spark.rapids.sql.stableSort.enabled")
       .doc("Enable or disable stable sorting. Apache Spark's sorting is typically a stable " +
           "sort, but sort stability cannot be guaranteed in distributed work loads because the " +
@@ -1913,6 +1919,8 @@ class RapidsConf(conf: Map[String, String]) extends Logging {
   lazy val exportColumnarRdd: Boolean = get(EXPORT_COLUMNAR_RDD)
 
   lazy val shuffledHashJoinOptimizeShuffle: Boolean = get(SHUFFLED_HASH_JOIN_OPTIMIZE_SHUFFLE)
+
+  lazy val skewJoinBroadcastEnabled: Boolean = get(SKEW_JOIN_BROADCAST_ENABLED)
 
   lazy val stableSort: Boolean = get(STABLE_SORT)
 

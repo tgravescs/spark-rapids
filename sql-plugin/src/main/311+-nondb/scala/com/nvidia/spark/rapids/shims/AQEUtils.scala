@@ -17,7 +17,10 @@
 package com.nvidia.spark.rapids.shims
 
 import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.plans.physical.{ClusteredDistribution, Distribution, HashPartitioning, UnspecifiedDistribution}
+import org.apache.spark.sql.execution.{CollectMetricsExec, DeserializeToObjectExec, FilterExec, ProjectExec, SortExec, SparkPlan}
 import org.apache.spark.sql.execution.adaptive.{QueryStageExec, ShuffleQueryStageExec}
+import org.apache.spark.sql.execution.exchange.{REPARTITION_BY_COL, REPARTITION_BY_NUM, ShuffleExchangeExec}
 import org.apache.spark.sql.internal.SQLConf
 
 /** Utility methods for manipulating Catalyst classes involved in Adaptive Query Execution */
@@ -28,4 +31,40 @@ object AQEUtils {
   }
 
   def isAdaptiveExecutionSupportedInSparkVersion(conf: SQLConf): Boolean = true
+
+  // Analyze the given plan and calculate the required distribution of this plan w.r.t. the
+  // user-specified repartition.
+  def getRequiredDistribution(p: SparkPlan): Option[Distribution] = p match {
+    // User-specified repartition is only effective when it's the root node, or under
+    // Project/Filter/LocalSort/CollectMetrics.
+    // Note: we only care about `HashPartitioning` as `EnsureRequirements` can only optimize out
+    // user-specified repartition with `HashPartitioning`.
+    case ShuffleExchangeExec(h: HashPartitioning, _, shuffleOrigin)
+      if shuffleOrigin == REPARTITION_BY_COL || shuffleOrigin == REPARTITION_BY_NUM =>
+      val numPartitions = if (shuffleOrigin == REPARTITION_BY_NUM) {
+        Some(h.numPartitions)
+      } else {
+        None
+      }
+      Some(ClusteredDistribution(h.expressions, requiredNumPartitions = numPartitions))
+    case f: FilterExec => getRequiredDistribution(f.child)
+    case s: SortExec if !s.global => getRequiredDistribution(s.child)
+    case c: CollectMetricsExec => getRequiredDistribution(c.child)
+    case d: DeserializeToObjectExec => getRequiredDistribution(d.child)
+    case p: ProjectExec =>
+      getRequiredDistribution(p.child).flatMap {
+        case h: ClusteredDistribution =>
+          if (h.clustering.forall(e => p.projectList.exists(_.semanticEquals(e)))) {
+            Some(h)
+          } else {
+            // It's possible that the user-specified repartition is effective but the output
+            // partitioning is not retained, e.g. `df.repartition(a, b).select(c)`. We can't
+            // handle this case with required distribution. Here we return None and later on
+            // `EnsureRequirements` will skip optimizing out the user-specified repartition.
+            None
+          }
+        case other => Some(other)
+      }
+    case _ => Some(UnspecifiedDistribution)
+  }
 }
