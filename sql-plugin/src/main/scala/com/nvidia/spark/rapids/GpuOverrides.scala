@@ -4270,7 +4270,7 @@ case class GpuQueryStagePrepOverrides() extends Rule[SparkPlan] with Logging {
     val ensureRequirements =
       EnsureRequirements(requiredDistribution.isDefined, requiredDistribution)
     val optimizedPlan = OptimizeSkewedJoinRapids(ensureRequirements).apply(plan)
-    logWarning("after  running optimize skew join rapids plan ")
+    logWarning("after  running optimize skew join rapids plan is: " + optimizedPlan)
 
     // Note that we disregard the GPU plan returned here and instead rely on side effects of
     // tagging the underlying SparkPlan.
