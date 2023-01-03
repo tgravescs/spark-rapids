@@ -408,12 +408,19 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
 
       if (rapidsConf.skewJoinBroadcastEnabled) {
         val (newLeft, newRight) = if (buildSide == BuildRight) {
-          if (left.asInstanceOf[ShuffleQueryStageExec].isMaterialized) {
-            logWarning("RIGHT is broadcast")
-            // right side is broadcast side, left is shuffle
-            val (newLeft, newRight) = tryOptimizeBroadcastJoinChildren2(left.asInstanceOf[ShuffleQueryStageExec],
-              right, joinType, buildSide)
-            (newLeft, newRight)
+          if (left.isInstanceOf[ShuffleQueryStageExec]) {
+            if (left.asInstanceOf[ShuffleQueryStageExec].isMaterialized) {
+              logWarning("RIGHT is broadcast")
+              // right side is broadcast side, left is shuffle
+              val (newLeft, newRight) = tryOptimizeBroadcastJoinChildren2(left.asInstanceOf[ShuffleQueryStageExec],
+                right, joinType, buildSide)
+              (newLeft, newRight)
+            } else {
+              logWarning("LEFT IS NOT MATERIALIZED class is: " + left.getClass)
+              // not materialized but we have to change the broadcast number of partitions and
+              // the real exchange should be materialized above it so we should be able to compute
+              (None, None)
+            }
           } else {
             logWarning("LEFT IS NOT MATERIALIZED class is: " + left.getClass)
             // not materialized but we have to change the broadcast number of partitions and
@@ -422,10 +429,14 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
           }
         } else {
           logWarning("in else builsside left")
-          if (right.asInstanceOf[ShuffleQueryStageExec].isMaterialized) {
-            val (newLeft, newRight) = tryOptimizeBroadcastJoinChildren(left,
-              right.asInstanceOf[ShuffleQueryStageExec], joinType, buildSide)
-            (newLeft, newRight)
+          if (right.isInstanceOf[ShuffleQueryStageExec]) {
+            if (right.asInstanceOf[ShuffleQueryStageExec].isMaterialized) {
+              val (newLeft, newRight) = tryOptimizeBroadcastJoinChildren(left,
+                right.asInstanceOf[ShuffleQueryStageExec], joinType, buildSide)
+              (newLeft, newRight)
+            } else {
+              (None, None)
+            }
           } else {
             (None, None)
           }
