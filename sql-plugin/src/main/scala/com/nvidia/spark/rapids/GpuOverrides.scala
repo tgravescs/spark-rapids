@@ -4266,14 +4266,17 @@ case class GpuQueryStagePrepOverrides() extends Rule[SparkPlan] with Logging {
     }
 
        */
+    logWarning("before running optimize skew join rapids")
     val ensureRequirements =
       EnsureRequirements(requiredDistribution.isDefined, requiredDistribution)
-    OptimizeSkewedJoinRapids(ensureRequirements)
+    val optimizedPlan = OptimizeSkewedJoinRapids(ensureRequirements).apply(plan)
+    logWarning("after  running optimize skew join rapids plan ")
+
     // Note that we disregard the GPU plan returned here and instead rely on side effects of
     // tagging the underlying SparkPlan.
-    GpuOverrides().applyWithContext(plan, Some("AQE Query Stage Prep"))
+    GpuOverrides().applyWithContext(optimizedPlan, Some("AQE Query Stage Prep"))
     // return the original plan which is now modified as a side-effect of invoking GpuOverrides
-    plan
+    optimizedPlan
   }(sparkPlan)
 }
 

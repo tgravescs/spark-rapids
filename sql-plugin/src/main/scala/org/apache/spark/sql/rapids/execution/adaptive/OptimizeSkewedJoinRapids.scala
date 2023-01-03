@@ -61,6 +61,8 @@ import org.apache.spark.util.Utils
 case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
   extends Rule[SparkPlan] {
 
+  logWarning("optimized skew join installed TOM")
+
   /**
    * A partition is considered as a skewed partition if its size is larger than the median
    * partition size * SKEW_JOIN_SKEWED_PARTITION_FACTOR and also larger than
@@ -215,7 +217,7 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
     val canSplitLeft = canSplitLeftSide(joinType)
     if (!canSplitLeft && !canSplitRight) return (None, None)
 
-    logInfo(
+    logWarning(
       s"""
          |Broadcast Optimizing skewed join.
       """.stripMargin)
@@ -243,7 +245,7 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
             val skewSpecs = ShufflePartitionsUtil.createSkewPartitionSpecs(
               right.mapStats.get.shuffleId, partitionIndex, rightTargetSize)
             if (skewSpecs.isDefined) {
-              logInfo(s"Right side partition $partitionIndex " +
+              logWarning(s"Right side partition $partitionIndex " +
                 s"(${FileUtils.byteCountToDisplaySize(rightSize)}) is skewed, " +
                 s"split it into ${skewSpecs.get.length} parts.")
               numSkewedRight += 1
@@ -265,9 +267,12 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
 
     logWarning(s"number of skewed partitions: left $numSkewedLeft, right $numSkewedRight")
     if (numSkewedLeft > 0) {
-     (Some(SkewJoinChildWrapper(AQEShuffleReadExec(left, leftSidePartitions.toSeq))),
+      logWarning("skew left number " + leftSidePartitions.size)
+
+      (Some(SkewJoinChildWrapper(AQEShuffleReadExec(left, leftSidePartitions.toSeq))),
        None)
     } else if (numSkewedRight > 0) {
+      logWarning("skew right number " + rightSidePartitions.size)
       (None,
         Some(SkewJoinChildWrapper(AQEShuffleReadExec(right, rightSidePartitions.toSeq))))
     } else {
@@ -286,7 +291,7 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
     val canSplitLeft = canSplitLeftSide(joinType)
     if (!canSplitLeft && !canSplitRight) return (None, None)
 
-    logInfo(
+    logWarning(
       s"""
          |Broadcast Optimizing skewed join.
     """.stripMargin)
@@ -404,6 +409,7 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
       if (rapidsConf.skewJoinBroadcastEnabled) {
         val (newLeft, newRight) = if (buildSide == BuildRight) {
           if (left.asInstanceOf[ShuffleQueryStageExec].isMaterialized) {
+            logWarning("RIGHT is broadcast")
             // right side is broadcast side, left is shuffle
             val (newLeft, newRight) = tryOptimizeBroadcastJoinChildren2(left.asInstanceOf[ShuffleQueryStageExec],
               right, joinType, buildSide)
@@ -415,7 +421,7 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
             (None, None)
           }
         } else {
-
+          logWarning("in else builsside left")
           if (right.asInstanceOf[ShuffleQueryStageExec].isMaterialized) {
             val (newLeft, newRight) = tryOptimizeBroadcastJoinChildren(left,
               right.asInstanceOf[ShuffleQueryStageExec], joinType, buildSide)
@@ -441,6 +447,7 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
 
   override def apply(plan: SparkPlan): SparkPlan = {
     logWarning("in optimize skew join tom")
+
     if (!conf.getConf(SQLConf.SKEW_JOIN_ENABLED)) {
       return plan
     }
