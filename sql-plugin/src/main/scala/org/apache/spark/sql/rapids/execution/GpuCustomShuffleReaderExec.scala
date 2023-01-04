@@ -18,6 +18,7 @@ package org.apache.spark.sql.rapids.execution
 import com.nvidia.spark.rapids.{CoalesceGoal, GpuExec, GpuMetric}
 import com.nvidia.spark.rapids.shims.ShimUnaryExecNode
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
@@ -36,8 +37,12 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  */
 case class GpuCustomShuffleReaderExec(
     child: SparkPlan,
-    partitionSpecs: Seq[ShufflePartitionSpec]) extends ShimUnaryExecNode with GpuExec  {
+    partitionSpecs: Seq[ShufflePartitionSpec]) extends ShimUnaryExecNode with GpuExec
+  with Logging  {
   import GpuMetric._
+
+  logWarning(s"TOM creating GpuCustomShuffleReaderExec partitions spec " +
+    s"size: ${partitionSpecs.size} args are ${stringArgs.mkString(",")}")
 
   /**
    * We intentionally override metrics in this case rather than overriding additionalMetrics so
