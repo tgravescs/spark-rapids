@@ -66,9 +66,11 @@ case class GpuCustomShuffleReaderExec(
             partitionSpecs.length) {
       child match {
         case sqse: ShuffleQueryStageExec if sqse.plan.isInstanceOf[ShuffleExchangeLike] =>
+          logWarning("ShuffleQueryStageExec shuffleexchangelike")
           sqse.plan.asInstanceOf[ShuffleExchangeLike].child.outputPartitioning
         case sqse: ShuffleQueryStageExec if sqse.plan.isInstanceOf[ReusedExchangeExec] =>
           val reused = sqse.plan.asInstanceOf[ReusedExchangeExec]
+          logWarning("ReusedExchangeExec")
           reused.child match {
             case sel: ShuffleExchangeLike => sel.child.outputPartitioning match {
               case e: Expression => reused.updateAttr(e).asInstanceOf[Partitioning]
@@ -79,6 +81,7 @@ case class GpuCustomShuffleReaderExec(
           throw new IllegalStateException("operating on canonicalization plan")
       }
     } else {
+      logWarning("UnknownPartitioning")
       UnknownPartitioning(partitionSpecs.length)
     }
   }
