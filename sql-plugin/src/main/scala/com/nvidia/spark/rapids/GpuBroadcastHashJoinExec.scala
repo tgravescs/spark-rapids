@@ -114,6 +114,9 @@ case class GpuBroadcastHashJoinExec(
     right: SparkPlan) extends ShimBinaryExecNode with GpuHashJoin {
   import GpuMetric._
 
+  logWarning(s"creating gpu broadcast hash join left keys: ${leftKeys.mkString(",")} " +
+    s"right keys: ${rightKeys.mkString(",")}")
+
   override val outputRowsLevel: MetricsLevel = ESSENTIAL_LEVEL
   override val outputBatchesLevel: MetricsLevel = MODERATE_LEVEL
   override lazy val additionalMetrics: Map[String, GpuMetric] = Map(
