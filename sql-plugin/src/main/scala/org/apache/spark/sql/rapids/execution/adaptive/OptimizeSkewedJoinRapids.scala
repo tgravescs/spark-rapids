@@ -228,6 +228,8 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
     var numSkewedLeft = 0
     buildSide match {
       case BuildLeft =>
+        logWarning("build left")
+
         val rightSizes = right.mapStats.get.bytesByPartitionId
         val numPartitions = rightSizes.length
         // We use the median size of the original shuffle partitions to detect skewed partitions.
@@ -261,7 +263,9 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
             rightSidePartitions += rightSidePartition
           }
         }
-      case _ => (None, None)
+      case _ =>
+        logWarning("not build left = none")
+        (None, None)
 
     }
 
@@ -302,6 +306,7 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
     var numSkewedLeft = 0
     buildSide match {
       case BuildRight =>
+        logWarning("build right")
       val leftSizes = left.mapStats.get.bytesByPartitionId
       val numPartitions = leftSizes.length
       // We use the median size of the original shuffle partitions to detect skewed partitions.
@@ -335,7 +340,10 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
           leftSidePartitions += leftSidePartition
         }
       }
-    case _ => (None, None)
+    case _ =>
+      logWarning("not build right = none")
+
+      (None, None)
 
 
     }
@@ -430,14 +438,20 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
         } else {
           logWarning("in else builsside left")
           if (right.isInstanceOf[ShuffleQueryStageExec]) {
+            logWarning("Left instance ShuffleQueryStageExec")
+
             if (right.asInstanceOf[ShuffleQueryStageExec].isMaterialized) {
               val (newLeft, newRight) = tryOptimizeBroadcastJoinChildren(left,
                 right.asInstanceOf[ShuffleQueryStageExec], joinType, buildSide)
               (newLeft, newRight)
             } else {
+              logWarning("Left not materialized")
+
               (None, None)
             }
           } else {
+            logWarning("Left not instance ShuffleQueryStageExec")
+
             (None, None)
           }
         }
@@ -450,6 +464,7 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
           bhjno
         }
       } else {
+        logWarning("skewed bhj not enabled")
         bhjno
       }
 
