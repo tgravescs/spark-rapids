@@ -457,10 +457,13 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
         }
 
         if (newLeft.isDefined) {
+          logWarning("copying new left")
           bhjno.copy(left = newLeft.get) // , isSkewed = true)
         } else if (newRight.isDefined) {
+          logWarning("copying new right")
           bhjno.copy(right = newRight.get) //, isSkewed = true)
         } else {
+          logWarning("not copying")
           bhjno
         }
       } else {
@@ -490,14 +493,19 @@ case class OptimizeSkewedJoinRapids(ensureRequirements: EnsureRequirements)
       ValidateRequirements.validate(optimized)
     }
     val res = if (requirementSatisfied) {
+      logWarning("requirement satisfied")
+
       optimized.transform {
         case SkewJoinChildWrapper(child) => child
       }
     } else if (conf.getConf(SQLConf.ADAPTIVE_FORCE_OPTIMIZE_SKEWED_JOIN)) {
+      logWarning("requirement force satisfied")
+
       ensureRequirements.apply(optimized).transform {
         case SkewJoinChildWrapper(child) => child
       }
     } else {
+      logWarning("requirement not satisfied")
       plan
     }
     res
