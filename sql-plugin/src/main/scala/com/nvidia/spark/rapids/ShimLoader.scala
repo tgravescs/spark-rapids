@@ -333,7 +333,7 @@ object ShimLoader extends Logging {
     loader.loadClass(className)
   }
 
-  private def newInstanceOf[T](className: String): T = {
+  def newInstanceOf[T](className: String): T = {
     instantiateClass(loadClass(className)).asInstanceOf[T]
   }
 

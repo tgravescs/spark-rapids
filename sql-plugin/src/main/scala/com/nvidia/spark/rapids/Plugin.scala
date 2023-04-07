@@ -174,10 +174,7 @@ object RapidsPluginUtils extends Logging {
   private def loadExtensions[T <: AnyRef](extClass: Class[T], classes: Seq[String]): Seq[T] = {
     classes.flatMap { name =>
       try {
-        val klass = TrampolineUtil.classForName[T](name)
-        require(extClass.isAssignableFrom(klass),
-          s"$name is not a subclass of ${extClass.getName()}.")
-        Some(klass.getConstructor().newInstance())
+        Some(ShimLoader.newInstanceOf(name))
       } catch {
         case _: NoSuchMethodException =>
           throw new NoSuchMethodException(
