@@ -695,7 +695,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
         GpuParquetPartitionReaderFactoryBase.isCorrectedRebaseMode(
           footer.getFileMetaData.getKeyValueMetaData.get, isCorrectedRebase)
 
-      if (isCorrectedRebaseForThisFile == true) {
+      if (isCorrectedRebaseForThisFile == false) {
         throw new Exception(s"is isCorrectedRebaseForThisFile: $isCorrectedRebaseForThisFile file is $file")
       }
 
@@ -703,7 +703,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
         GpuParquetPartitionReaderFactoryBase.isCorrectedInt96RebaseMode(
           footer.getFileMetaData.getKeyValueMetaData.get, isInt96CorrectedRebase)
 
-      if (isCorrectedInt96RebaseForThisFile == true) {
+      if (isCorrectedInt96RebaseForThisFile == false) {
         throw new Exception(s"is isCorrectedInt96RebaseForThisFile: $isCorrectedInt96RebaseForThisFile file is $file")
       }
 
@@ -1949,7 +1949,7 @@ class MultiFileCloudParquetPartitionReader(
       val newHmbBufferInfo = SingleHMBAndMeta(buf, offset,
         combinedMeta.allPartValues.map(_._1).sum, Seq.empty, schemaToUse)
       if (metaToUse.isCorrectRebaseMode != true || metaToUse.isCorrectInt96RebaseMode != true ) {
-        throw new Exception(s" corrected or int96rebase not true file ${metaToUse.partitionedFile}")
+        throw new Exception(s"1 corrected or int96rebase not true file ${metaToUse.partitionedFile}")
       }
       val newHmbMeta = HostMemoryBuffersWithMetaData(
         metaToUse.partitionedFile,
@@ -2191,7 +2191,7 @@ class MultiFileCloudParquetPartitionReader(
                   fileBlockMeta.readSchema, 0)
               } else {
                 if (fileBlockMeta.isCorrectedRebaseMode != true || fileBlockMeta.isCorrectedInt96RebaseMode != true ) {
-                  throw new Exception(s" corrected or int96rebase not true file ${file}")
+                  throw new Exception(s"2 corrected or int96rebase not true file ${file}")
                 }
                 HostMemoryBuffersWithMetaData(file, origPartitionedFile, hostBuffers.toArray,
                   bytesRead, fileBlockMeta.isCorrectedRebaseMode,
