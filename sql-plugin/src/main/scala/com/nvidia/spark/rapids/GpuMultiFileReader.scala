@@ -703,8 +703,10 @@ abstract class MultiFileCloudPartitionReaderBase(
 
   private def getNextBuffersAndMeta(): HostMemoryBuffersWithMetaDataBase = {
     if (canUseCombine) {
+      logWarning("using combine mode")
       getNextBuffersAndMetaAndCombine()
     } else {
+      logWarning("not using combine mode")
       getNextBuffersAndMetaSingleFile()
     }
   }
@@ -750,11 +752,13 @@ abstract class MultiFileCloudPartitionReaderBase(
       batchIter = EmptyGpuColumnarBatchIterator
       // if we have batch left from the last file read return it
       if (currentFileHostBuffers.isDefined) {
+        logWarning(s"using current file host buffers ${currentFileHostBuffers.get}")
         readBuffersToBatch(currentFileHostBuffers.get, false)
       } else if (combineLeftOverFiles.isDefined) {
         // this means we already grabbed some while combining but something between
         // files was incompatible and couldn't be combined.
         val fileBufsAndMeta = handleLeftOverCombineFiles()
+        logWarning(s"using left over combine files ${fileBufsAndMeta}")
         readBuffersToBatch(fileBufsAndMeta, true)
       } else {
         if (filesToRead > 0 && !isDone) {
@@ -782,6 +786,7 @@ abstract class MultiFileCloudPartitionReaderBase(
             inputFileToSet.filePath.toString(),
             inputFileToSet.start,
             inputFileToSet.length)
+          logWarning(s"normal $fileBufsAndMeta")
           readBuffersToBatch(fileBufsAndMeta, true)
         } else {
           isDone = true

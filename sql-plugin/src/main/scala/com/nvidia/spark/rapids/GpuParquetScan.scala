@@ -162,12 +162,17 @@ object GpuParquetScan {
       val col = table.getColumn(i)
       // if col is a day
       if (!isCorrectedDateTimeRebase && RebaseHelper.isDateRebaseNeededInRead(col)) {
+        logWarning(s"failing is correctedDatTime: $isCorrectedDateTimeRebase")
         throw DataSourceUtils.newRebaseExceptionInRead("Parquet")
       }
       // if col is a time
       else if (hasInt96Timestamps && !isCorrectedInt96Rebase ||
           !hasInt96Timestamps && !isCorrectedDateTimeRebase) {
         if (RebaseHelper.isTimeRebaseNeededInRead(col)) {
+          logWarning(s"failing hasInt96: $hasInt96Timestamps, iscorrectint96:" +
+            s" $isCorrectedInt96Rebase," +
+            s" is correctedDatTime: $isCorrectedDateTimeRebase")
+
           throw DataSourceUtils.newRebaseExceptionInRead("Parquet")
         }
       }
@@ -690,9 +695,17 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
         GpuParquetPartitionReaderFactoryBase.isCorrectedRebaseMode(
           footer.getFileMetaData.getKeyValueMetaData.get, isCorrectedRebase)
 
+      if (isCorrectedRebaseForThisFile == true) {
+        throw new Exception(s"is isCorrectedRebaseForThisFile: $isCorrectedRebaseForThisFile file is $file")
+      }
+
       val isCorrectedInt96RebaseForThisFile =
         GpuParquetPartitionReaderFactoryBase.isCorrectedInt96RebaseMode(
           footer.getFileMetaData.getKeyValueMetaData.get, isInt96CorrectedRebase)
+
+      if (isCorrectedInt96RebaseForThisFile == true) {
+        throw new Exception(s"is isCorrectedInt96RebaseForThisFile: $isCorrectedInt96RebaseForThisFile file is $file")
+      }
 
       val blocks = if (pushedFilters.isDefined) {
         withResource(new NvtxRange("getBlocksWithFilter", NvtxColor.CYAN)) { _ =>
@@ -1935,6 +1948,9 @@ class MultiFileCloudParquetPartitionReader(
       }
       val newHmbBufferInfo = SingleHMBAndMeta(buf, offset,
         combinedMeta.allPartValues.map(_._1).sum, Seq.empty, schemaToUse)
+      if (metaToUse.isCorrectRebaseMode != true || metaToUse.isCorrectInt96RebaseMode != true ) {
+        throw new Exception(s" corrected or int96rebase not true file ${metaToUse.partitionedFile}")
+      }
       val newHmbMeta = HostMemoryBuffersWithMetaData(
         metaToUse.partitionedFile,
         metaToUse.origPartitionedFile, // this doesn't matter since already read
@@ -2174,6 +2190,9 @@ class MultiFileCloudParquetPartitionReader(
                   fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema,
                   fileBlockMeta.readSchema, 0)
               } else {
+                if (fileBlockMeta.isCorrectedRebaseMode != true || fileBlockMeta.isCorrectedInt96RebaseMode != true ) {
+                  throw new Exception(s" corrected or int96rebase not true file ${file}")
+                }
                 HostMemoryBuffersWithMetaData(file, origPartitionedFile, hostBuffers.toArray,
                   bytesRead, fileBlockMeta.isCorrectedRebaseMode,
                   fileBlockMeta.isCorrectedInt96RebaseMode, fileBlockMeta.hasInt96Timestamps,
@@ -2255,6 +2274,9 @@ class MultiFileCloudParquetPartitionReader(
     case buffer: HostMemoryBuffersWithMetaData =>
       val memBuffersAndSize = buffer.memBuffersAndSizes
       val hmbAndInfo = memBuffersAndSize.head
+      logWarning(s"buffer isCorrectRebaseMode: ${buffer.isCorrectRebaseMode} correctint96:" +
+        s" ${buffer.isCorrectInt96RebaseMode} has int96time: ${buffer.hasInt96Timestamps} " +
+        s"for buffer: ${buffer.partitionedFile}")
       val batchIter = readBufferToBatches(buffer.isCorrectRebaseMode,
         buffer.isCorrectInt96RebaseMode, buffer.hasInt96Timestamps, buffer.clippedSchema,
         buffer.readSchema, buffer.partitionedFile, hmbAndInfo.hmb, hmbAndInfo.bytes,
