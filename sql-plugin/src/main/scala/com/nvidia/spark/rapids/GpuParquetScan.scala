@@ -334,10 +334,19 @@ object GpuParquetPartitionReaderFactoryBase {
       // Files written by Spark 3.1 and latter may also need the rebase if they were written with
       // the "LEGACY" rebase mode.
       if (version >= "3.1.0") {
-        lookupFileMeta(SPARK_LEGACY_INT96) == null
+        val ret = lookupFileMeta(SPARK_LEGACY_INT96) == null
+        if (ret == false) {
+          throw new Exception("int96 mode and SPARK_LEGACY_INT96 not null")
+        }
+        ret
       } else if (version >= "3.0.0") {
-        lookupFileMeta(SPARK_LEGACY_DATETIME) == null
+        val ret = lookupFileMeta(SPARK_LEGACY_DATETIME) == null
+        if (ret == false) {
+          throw new Exception("int96 mode and SPARK_LEGACY_DATETIME not null")
+        }
+        ret
       } else {
+        throw new Exception("INT96 version < 3.0")
         false
       }
     }.getOrElse(isCorrectedInt96ModeConfig)
@@ -709,7 +718,12 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
           footer.getFileMetaData.getKeyValueMetaData.get, isInt96CorrectedRebase)
 
       if (isCorrectedInt96RebaseForThisFile == false) {
-        throw new Exception(s"is isCorrectedInt96RebaseForThisFile: $isCorrectedInt96RebaseForThisFile file is $file")
+        val lookup = footer.getFileMetaData.getKeyValueMetaData.get
+
+        throw new Exception(s"is isCorrectedInt96RebaseForThisFile: $isCorrectedInt96RebaseForThisFile " +
+          s"CONFIG $isInt96CorrectedRebase file meta is: " +
+          s"${lookup("org.apache.spark.legacyINT96")} " +
+          s"file is $file")
       }
 
       val blocks = if (pushedFilters.isDefined) {
