@@ -335,17 +335,17 @@ object GpuParquetPartitionReaderFactoryBase {
       if (version >= "3.1.0") {
         val ret = lookupFileMeta(SPARK_LEGACY_INT96) == null
         if (ret == false) {
-          throw new Exception("int96 mode and SPARK_LEGACY_INT96 not null")
+          //throw new Exception("int96 mode and SPARK_LEGACY_INT96 not null")
         }
         ret
       } else if (version >= "3.0.0") {
         val ret = lookupFileMeta(SPARK_LEGACY_DATETIME) == null
         if (ret == false) {
-          throw new Exception("int96 mode and SPARK_LEGACY_DATETIME not null")
+          //throw new Exception("int96 mode and SPARK_LEGACY_DATETIME not null")
         }
         ret
       } else {
-        throw new Exception("INT96 version < 3.0")
+        //throw new Exception("INT96 version < 3.0")
         false
       }
     }.getOrElse(isCorrectedInt96ModeConfig)
@@ -704,22 +704,22 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
         GpuParquetPartitionReaderFactoryBase.isCorrectedRebaseMode(
           footer.getFileMetaData.getKeyValueMetaData.get, isCorrectedRebase)
 
-      if (isCorrectedRebaseForThisFile == false) {
+      /*if (isCorrectedRebaseForThisFile == false) {
         throw new Exception(s"is isCorrectedRebaseForThisFile: $isCorrectedRebaseForThisFile " +
           s"CONFIG $isCorrectedRebase file meta is: " +
           s"file is $file")
-      }
+      }*/
 
       val isCorrectedInt96RebaseForThisFile =
         GpuParquetPartitionReaderFactoryBase.isCorrectedInt96RebaseMode(
           footer.getFileMetaData.getKeyValueMetaData.get, isInt96CorrectedRebase)
 
-      if (isCorrectedInt96RebaseForThisFile == false) {
+     /* if (isCorrectedInt96RebaseForThisFile == false) {
 
         throw new Exception(s"is isCorrectedInt96RebaseForThisFile: $isCorrectedInt96RebaseForThisFile " +
           s"CONFIG $isInt96CorrectedRebase file meta is: " +
           s"file is $file")
-      }
+      }*/
 
       val blocks = if (pushedFilters.isDefined) {
         withResource(new NvtxRange("getBlocksWithFilter", NvtxColor.CYAN)) { _ =>
