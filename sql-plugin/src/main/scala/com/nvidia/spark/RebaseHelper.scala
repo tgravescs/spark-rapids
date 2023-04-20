@@ -55,7 +55,11 @@ object RebaseHelper extends Arm {
         Scalar.timestampFromLong(DType.TIMESTAMP_MICROSECONDS, startTs)) { minGood =>
         withResource(column.lessThan(minGood)) { hasBad =>
           withResource(hasBad.any()) { a =>
-            a.isValid && a.getBoolean
+            val res = a.isValid && a.getBoolean
+            if (res == false) {
+              throw new Exception(s"time base int96 micros and has a bad date, datattype: $dtype")
+            }
+            res
           }
         }
       }
