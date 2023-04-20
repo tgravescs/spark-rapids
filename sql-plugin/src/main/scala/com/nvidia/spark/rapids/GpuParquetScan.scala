@@ -33,7 +33,6 @@ import scala.math.max
 import ai.rapids.cudf._
 import com.nvidia.spark.RebaseHelper
 import com.nvidia.spark.rapids.GpuMetric._
-import com.nvidia.spark.rapids.GpuParquetPartitionReaderFactoryBase.SPARK_LEGACY_DATETIME
 import com.nvidia.spark.rapids.ParquetPartitionReader.CopyRange
 import com.nvidia.spark.rapids.RapidsConf.ParquetFooterReaderType
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
@@ -706,10 +705,8 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
           footer.getFileMetaData.getKeyValueMetaData.get, isCorrectedRebase)
 
       if (isCorrectedRebaseForThisFile == false) {
-        val lookup = footer.getFileMetaData.getKeyValueMetaData.get
         throw new Exception(s"is isCorrectedRebaseForThisFile: $isCorrectedRebaseForThisFile " +
           s"CONFIG $isCorrectedRebase file meta is: " +
-          s"${lookup("org.apache.spark.legacyDateTime")} " +
           s"file is $file")
       }
 
@@ -718,11 +715,9 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
           footer.getFileMetaData.getKeyValueMetaData.get, isInt96CorrectedRebase)
 
       if (isCorrectedInt96RebaseForThisFile == false) {
-        val lookup = footer.getFileMetaData.getKeyValueMetaData.get
 
         throw new Exception(s"is isCorrectedInt96RebaseForThisFile: $isCorrectedInt96RebaseForThisFile " +
           s"CONFIG $isInt96CorrectedRebase file meta is: " +
-          s"${lookup("org.apache.spark.legacyINT96")} " +
           s"file is $file")
       }
 
