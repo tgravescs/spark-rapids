@@ -60,6 +60,7 @@ object RebaseHelper extends Arm {
         }
       }
     } else {
+      throw new Exception(s"time base int96 needed but doesn't have a time resolution, datattype: $dtype")
       false
     }
   }
