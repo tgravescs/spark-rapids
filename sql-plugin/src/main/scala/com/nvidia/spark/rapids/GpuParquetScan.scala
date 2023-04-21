@@ -78,20 +78,20 @@ import org.apache.spark.util.SerializableConfiguration
  * Base GpuParquetScan used for common code across Spark versions. Gpu version of
  * Spark's 'ParquetScan'.
  *
- * @param sparkSession SparkSession.
- * @param hadoopConf Hadoop configuration.
- * @param fileIndex File index of the relation.
- * @param dataSchema Schema of the data.
- * @param readDataSchema Schema to read.
+ * @param sparkSession        SparkSession.
+ * @param hadoopConf          Hadoop configuration.
+ * @param fileIndex           File index of the relation.
+ * @param dataSchema          Schema of the data.
+ * @param readDataSchema      Schema to read.
  * @param readPartitionSchema Partition schema.
- * @param pushedFilters Filters on non-partition columns.
- * @param options Parquet option settings.
- * @param partitionFilters Filters on partition columns.
- * @param dataFilters File source metadata filters.
- * @param rapidsConf Rapids configuration.
- * @param queryUsesInputFile This is a parameter to easily allow turning it
- *                               off in GpuTransitionOverrides if InputFileName,
- *                               InputFileBlockStart, or InputFileBlockLength are used
+ * @param pushedFilters       Filters on non-partition columns.
+ * @param options             Parquet option settings.
+ * @param partitionFilters    Filters on partition columns.
+ * @param dataFilters         File source metadata filters.
+ * @param rapidsConf          Rapids configuration.
+ * @param queryUsesInputFile  This is a parameter to easily allow turning it
+ *                            off in GpuTransitionOverrides if InputFileName,
+ *                            InputFileBlockStart, or InputFileBlockLength are used
  */
 case class GpuParquetScan(
     sparkSession: SparkSession,
@@ -129,8 +129,8 @@ case class GpuParquetScan(
   override def equals(obj: Any): Boolean = obj match {
     case p: GpuParquetScan =>
       super.equals(p) && dataSchema == p.dataSchema && options == p.options &&
-          equivalentFilters(pushedFilters, p.pushedFilters) && rapidsConf == p.rapidsConf &&
-          queryUsesInputFile == p.queryUsesInputFile
+        equivalentFilters(pushedFilters, p.pushedFilters) && rapidsConf == p.rapidsConf &&
+        queryUsesInputFile == p.queryUsesInputFile
     case _ => false
   }
 
@@ -167,7 +167,7 @@ object GpuParquetScan extends Logging {
       }
       // if col is a time
       else if (hasInt96Timestamps && !isCorrectedInt96Rebase ||
-          !hasInt96Timestamps && !isCorrectedDateTimeRebase) {
+        !hasInt96Timestamps && !isCorrectedDateTimeRebase) {
         if (RebaseHelper.isTimeRebaseNeededInRead(col)) {
           logWarning(s"failing hasInt96: $hasInt96Timestamps, iscorrectint96:" +
             s" $isCorrectedInt96Rebase," +
@@ -204,10 +204,12 @@ object GpuParquetScan extends Logging {
     val schemaHasTimestamps = readSchema.exists { field =>
       TrampolineUtil.dataTypeExistsRecursively(field.dataType, _.isInstanceOf[TimestampType])
     }
-    def isTsOrDate(dt: DataType) : Boolean = dt match {
+
+    def isTsOrDate(dt: DataType): Boolean = dt match {
       case TimestampType | DateType => true
       case _ => false
     }
+
     val schemaMightNeedNestedRebase = readSchema.exists { field =>
       if (DataTypeUtils.isNestedType(field.dataType)) {
         TrampolineUtil.dataTypeExistsRecursively(field.dataType, isTsOrDate)
@@ -232,13 +234,13 @@ object GpuParquetScan extends Logging {
     sqlConf.get(SparkShimImpl.int96ParquetRebaseReadKey) match {
       case "EXCEPTION" => if (schemaMightNeedNestedRebase) {
         meta.willNotWorkOnGpu("Nested timestamp and date values are not supported when " +
-            s"${SparkShimImpl.int96ParquetRebaseReadKey} is EXCEPTION")
+          s"${SparkShimImpl.int96ParquetRebaseReadKey} is EXCEPTION")
       }
       case "CORRECTED" => // Good
       case "LEGACY" => // really is EXCEPTION for us...
         if (schemaMightNeedNestedRebase) {
           meta.willNotWorkOnGpu("Nested timestamp and date values are not supported when " +
-              s"${SparkShimImpl.int96ParquetRebaseReadKey} is LEGACY")
+            s"${SparkShimImpl.int96ParquetRebaseReadKey} is LEGACY")
         }
       case other =>
         meta.willNotWorkOnGpu(s"$other is not a supported read rebase mode")
@@ -247,13 +249,13 @@ object GpuParquetScan extends Logging {
     sqlConf.get(SparkShimImpl.parquetRebaseReadKey) match {
       case "EXCEPTION" => if (schemaMightNeedNestedRebase) {
         meta.willNotWorkOnGpu("Nested timestamp and date values are not supported when " +
-            s"${SparkShimImpl.parquetRebaseReadKey} is EXCEPTION")
+          s"${SparkShimImpl.parquetRebaseReadKey} is EXCEPTION")
       }
       case "CORRECTED" => // Good
       case "LEGACY" => // really is EXCEPTION for us...
         if (schemaMightNeedNestedRebase) {
           meta.willNotWorkOnGpu("Nested timestamp and date values are not supported when " +
-              s"${SparkShimImpl.parquetRebaseReadKey} is LEGACY")
+            s"${SparkShimImpl.parquetRebaseReadKey} is LEGACY")
         }
       case other =>
         meta.willNotWorkOnGpu(s"$other is not a supported read rebase mode")
@@ -382,7 +384,7 @@ private case class BlockMetaWithPartFile(meta: ParquetFileInfoWithBlockMeta, fil
 class HMBSeekableInputStream(
     val hmb: HostMemoryBuffer,
     val hmbLength: Long) extends SeekableInputStream
-    with HostMemoryInputStreamMixIn {
+  with HostMemoryInputStreamMixIn {
   private val temp = new Array[Byte](8192)
 
   override def seek(offset: Long): Unit = {
@@ -478,7 +480,7 @@ class HMBSeekableInputStream(
     }
     if (bytesRead < 0 && buf.remaining > 0) {
       throw new EOFException("Reached the end of stream with " +
-          buf.remaining + " bytes left to read")
+        buf.remaining + " bytes left to read")
     }
   }
 }
@@ -513,9 +515,9 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
 
   def isParquetTimeInInt96(parquetType: Type): Boolean = {
     parquetType match {
-      case p:PrimitiveType =>
+      case p: PrimitiveType =>
         p.getPrimitiveTypeName == PrimitiveTypeName.INT96
-      case g:GroupType => //GroupType
+      case g: GroupType => //GroupType
         g.getFields.asScala.exists(t => isParquetTimeInInt96(t))
       case _ => false
     }
@@ -551,7 +553,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
 
   def readAndFilterFooter(
       file: PartitionedFile,
-      conf : Configuration,
+      conf: Configuration,
       readDataSchema: StructType,
       filePath: Path): ParquetFooter = {
     val footerSchema = convertToFooterSchema(readDataSchema)
@@ -586,7 +588,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
         val footerIndex = footerLengthIndex - footerLength
         if (footerIndex < MAGIC.length || footerIndex >= footerLengthIndex) {
           throw new RuntimeException(s"corrupted file: the footer index is not within " +
-              s"the file: $footerIndex")
+            s"the file: $footerIndex")
         }
         inputStream.seek(footerIndex)
         closeOnExcept(HostMemoryBuffer.allocate(footerLength, false)) { outBuffer =>
@@ -622,7 +624,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
   )
   def readAndSimpleFilterFooter(
       file: PartitionedFile,
-      conf : Configuration,
+      conf: Configuration,
       filePath: Path): ParquetMetadata = {
     //noinspection ScalaDeprecation
     withResource(new NvtxRange("readFooter", NvtxColor.YELLOW)) { _ =>
@@ -653,17 +655,17 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
           case ParquetFooterReaderType.NATIVE =>
             val serialized = withResource(readAndFilterFooter(file, conf,
               readDataSchema, filePath)) { tableFooter =>
-                if (tableFooter.getNumColumns <= 0) {
-                  // Special case because java parquet reader does not like having 0 columns.
-                  val numRows = tableFooter.getNumRows
-                  val block = new BlockMetaData()
-                  block.setRowCount(numRows)
-                  val schema = new MessageType("root")
-                  return ParquetFileInfoWithBlockMeta(filePath, Seq(block), file.partitionValues,
-                    schema, readDataSchema, false, false, false)
-                }
+              if (tableFooter.getNumColumns <= 0) {
+                // Special case because java parquet reader does not like having 0 columns.
+                val numRows = tableFooter.getNumRows
+                val block = new BlockMetaData()
+                block.setRowCount(numRows)
+                val schema = new MessageType("root")
+                return ParquetFileInfoWithBlockMeta(filePath, Seq(block), file.partitionValues,
+                  schema, readDataSchema, false, false, false)
+              }
 
-                tableFooter.serializeThriftFile()
+              tableFooter.serializeThriftFile()
             }
             withResource(serialized) { serialized =>
               withResource(new NvtxRange("readFilteredFooter", NvtxColor.YELLOW)) { _ =>
@@ -722,7 +724,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
 
 
       }
-      
+
        */
 
       val blocks = if (pushedFilters.isDefined) {
@@ -766,19 +768,19 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
    * The function only accepts top-level schemas, which means structures of root columns. Based
    * on this assumption, it can infer root types from input schemas.
    *
-   * @param fileType input file's Parquet schema
-   * @param readType spark type read from Parquet file
+   * @param fileType      input file's Parquet schema
+   * @param readType      spark type read from Parquet file
    * @param errorCallback call back function to throw exception if type mismatch
-   * @param rootFileType file type of each root column
-   * @param rootReadType read type of each root column
+   * @param rootFileType  file type of each root column
+   * @param rootReadType  read type of each root column
    */
   private def checkSchemaCompat(fileType: Type,
-                                readType: DataType,
-                                errorCallback: (Type, DataType) => Unit,
-                                isCaseSensitive: Boolean,
-                                useFieldId: Boolean,
-                                rootFileType: Option[Type] = None,
-                                rootReadType: Option[DataType] = None): Unit = {
+      readType: DataType,
+      errorCallback: (Type, DataType) => Unit,
+      isCaseSensitive: Boolean,
+      useFieldId: Boolean,
+      rootFileType: Option[Type] = None,
+      rootReadType: Option[DataType] = None): Unit = {
     readType match {
       case struct: StructType =>
         val fileFieldMap = fileType.asGroupType().getFields.asScala
@@ -789,13 +791,14 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
         val fieldIdToFieldMap = ParquetSchemaClipShims.fieldIdToFieldMap(useFieldId, fileType)
 
         def getParquetType(f: StructField): Option[Type] = {
-          if(useFieldId && ParquetSchemaClipShims.hasFieldId(f)) {
+          if (useFieldId && ParquetSchemaClipShims.hasFieldId(f)) {
             // use field ID and Spark schema specified field ID
             fieldIdToFieldMap.get(ParquetSchemaClipShims.getFieldId(f))
           } else {
             fileFieldMap.get(if (isCaseSensitive) f.name else f.name.toLowerCase(Locale.ROOT))
           }
         }
+
         struct.fields.foreach { f =>
           getParquetType(f).foreach { fieldType =>
             checkSchemaCompat(fieldType,
@@ -850,15 +853,15 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
    */
   @scala.annotation.nowarn("msg=method getDecimalMetadata in class PrimitiveType is deprecated")
   private def checkPrimitiveCompat(pt: PrimitiveType,
-                                   dt: DataType,
-                                   errorCallback: () => Unit): Unit = {
+      dt: DataType,
+      errorCallback: () => Unit): Unit = {
     pt.getPrimitiveTypeName match {
       case PrimitiveTypeName.BOOLEAN if dt == DataTypes.BooleanType =>
         return
 
       case PrimitiveTypeName.INT32 =>
         if (dt == DataTypes.IntegerType || GpuTypeShims.isSupportedYearMonthType(dt)
-            || canReadAsIntDecimal(pt, dt)) {
+          || canReadAsIntDecimal(pt, dt)) {
           // Year-month interval type is stored as int32 in parquet
           return
         }
@@ -866,14 +869,14 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
         if (dt == DataTypes.LongType && pt.getOriginalType == OriginalType.UINT_32) {
           return
         }
-         if (dt == DataTypes.ByteType || dt == DataTypes.ShortType || dt == DataTypes.DateType) {
-           return
-         }
+        if (dt == DataTypes.ByteType || dt == DataTypes.ShortType || dt == DataTypes.DateType) {
+          return
+        }
 
       case PrimitiveTypeName.INT64 =>
         if (dt == DataTypes.LongType || GpuTypeShims.isSupportedDayTimeType(dt) ||
-            // Day-time interval type is stored as int64 in parquet
-            canReadAsLongDecimal(pt, dt)) {
+          // Day-time interval type is stored as int64 in parquet
+          canReadAsLongDecimal(pt, dt)) {
           return
         }
         // TODO: After we deprecate Spark 3.1, replace OriginalType with LogicalTypeAnnotation
@@ -900,7 +903,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
 
       case PrimitiveTypeName.BINARY | PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
         if canReadAsIntDecimal(pt, dt) || canReadAsLongDecimal(pt, dt) ||
-            canReadAsBinaryDecimal(pt, dt) =>
+          canReadAsBinaryDecimal(pt, dt) =>
         return
 
       case _ =>
@@ -912,8 +915,8 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
   }
 
   private def throwTypeIncompatibleError(parquetType: Type,
-                                         sparkType: DataType,
-                                         filePath: String): Unit = {
+      sparkType: DataType,
+      filePath: String): Unit = {
     val exception = new SchemaColumnConvertNotSupportedException(
       parquetType.getName,
       parquetType.toString,
@@ -954,7 +957,7 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
   // TODO: After we deprecate Spark 3.1, fetch decimal meta with DecimalLogicalTypeAnnotation
   @scala.annotation.nowarn("msg=class DecimalMetadata in package schema is deprecated")
   private def isDecimalTypeMatched(metadata: DecimalMetadata,
-                                   sparkType: DataType): Boolean = {
+      sparkType: DataType): Boolean = {
     if (metadata == null) {
       false
     } else {
@@ -1007,7 +1010,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   // make sure the Alluxio path replacement also handles setting the input file name to
   // the non-Alluxio path like the multi-threaded reader does.
   override val canUseCoalesceFilesReader: Boolean =
-    rapidsConf.isParquetCoalesceFileReadEnabled && !(queryUsesInputFile || ignoreCorruptFiles)
+  rapidsConf.isParquetCoalesceFileReadEnabled && !(queryUsesInputFile || ignoreCorruptFiles)
 
   override val canUseMultiThreadReader: Boolean = rapidsConf.isParquetMultiThreadReadEnabled
 
@@ -1210,12 +1213,13 @@ case class GpuParquetPartitionReaderFactory(
 }
 
 trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
-    with MultiFileReaderFunctions {
+  with MultiFileReaderFunctions {
   // the size of Parquet magic (at start+end) and footer length values
   val PARQUET_META_SIZE: Long = 4 + 4 + 4
 
   // Configuration
   def conf: Configuration
+
   def execMetrics: Map[String, GpuMetric]
 
   def isSchemaCaseSensitive: Boolean
@@ -1271,7 +1275,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
    * assume max size of those would be 8 bytes worst case. So we probably allocate to much here
    * but it shouldn't be by a huge amount and its better then having to realloc and copy.
    *
-   * @param numCols the number of columns
+   * @param numCols   the number of columns
    * @param numBlocks the total number of blocks to be combined
    * @return amount of extra memory to allocate
    */
@@ -1346,8 +1350,8 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
    * Computes new block metadata to reflect where the blocks and columns will appear in the
    * computed Parquet file.
    *
-   * @param blocks block metadata from the original file(s) that will appear in the computed file
-   * @param realStartOffset starting file offset of the first block
+   * @param blocks             block metadata from the original file(s) that will appear in the computed file
+   * @param realStartOffset    starting file offset of the first block
    * @param copyRangesToUpdate optional buffer to update with ranges of column data to copy
    * @return updated block metadata
    */
@@ -1419,9 +1423,9 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
    * metadata but with the file offsets updated to reflect the new position of the column data
    * as written to the output.
    *
-   * @param in  the input stream for the original Parquet file
-   * @param out the output stream to receive the data
-   * @param blocks block metadata from the original file that will appear in the computed file
+   * @param in              the input stream for the original Parquet file
+   * @param out             the output stream to receive the data
+   * @param blocks          block metadata from the original file that will appear in the computed file
    * @param realStartOffset starting file offset of the first block
    * @return updated block metadata corresponding to the output
    */
@@ -1493,6 +1497,7 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
         }
       }
     }
+
     readNextBatch()
     logDebug(s"Loaded $numRows rows from Parquet. Parquet bytes read: $numParquetBytes. " +
       s"Estimated GPU bytes: $numBytes")
@@ -1504,11 +1509,10 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
    * before sending parquet-formatted buffer to cudf.
    * Also clips the column names if `useFieldId` is true.
    *
-   * @param readDataSchema Spark schema to read
-   * @param fileSchema the schema of the dumped parquet-formatted buffer, already removed unmatched
-   *
+   * @param readDataSchema  Spark schema to read
+   * @param fileSchema      the schema of the dumped parquet-formatted buffer, already removed unmatched
    * @param isCaseSensitive if it is case sensitive
-   * @param useFieldId if enabled `spark.sql.parquet.fieldId.read.enabled`
+   * @param useFieldId      if enabled `spark.sql.parquet.fieldId.read.enabled`
    * @return a sequence of tuple of column names following the order of readDataSchema
    */
   protected def toCudfColumnNames(
@@ -1536,8 +1540,8 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
 
     // excludes unmatched columns
     val clippedReadFields = readDataSchema.fields.filter(f => !(useFieldId &&
-        ParquetSchemaClipShims.hasFieldId(f) &&
-        !fieldIdToNameMap.contains(ParquetSchemaClipShims.getFieldId(f))))
+      ParquetSchemaClipShims.hasFieldId(f) &&
+      !fieldIdToNameMap.contains(ParquetSchemaClipShims.getFieldId(f))))
 
     if (!isCaseSensitive) {
       val fields = fileSchema.asGroupType().getFields.asScala.map(_.getName).toSet
@@ -1574,9 +1578,9 @@ trait ParquetPartitionReaderBase extends Logging with Arm with ScanWithMetrics
     val includeColumns = toCudfColumnNames(readDataSchema, clippedSchema,
       isSchemaCaseSensitive, useFieldId)
     ParquetOptions.builder()
-        .withTimeUnit(DType.TIMESTAMP_MICROSECONDS)
-        .includeColumn(includeColumns : _*)
-        .build()
+      .withTimeUnit(DType.TIMESTAMP_MICROSECONDS)
+      .includeColumn(includeColumns: _*)
+      .build()
   }
 }
 
@@ -1588,7 +1592,9 @@ private case class ParquetSchemaWrapper(schema: MessageType) extends SchemaBase 
 // Parquet BlockMetaData wrapper
 private case class ParquetDataBlock(dataBlock: BlockMetaData) extends DataBlockBase {
   override def getRowCount: Long = dataBlock.getRowCount
+
   override def getReadDataSize: Long = dataBlock.getTotalByteSize
+
   override def getBlockSize: Long = dataBlock.getColumns.asScala.map(_.getTotalSize).sum
 }
 
@@ -1598,12 +1604,12 @@ class ParquetExtraInfo(val isCorrectedRebaseMode: Boolean,
 
 // contains meta about a single block in a file
 private case class ParquetSingleDataBlockMeta(
-  filePath: Path,
-  dataBlock: ParquetDataBlock,
-  partitionValues: InternalRow,
-  schema: ParquetSchemaWrapper,
-  readSchema: StructType,
-  extraInfo: ParquetExtraInfo) extends SingleDataBlockInfo
+    filePath: Path,
+    dataBlock: ParquetDataBlock,
+    partitionValues: InternalRow,
+    schema: ParquetSchemaWrapper,
+    readSchema: StructType,
+    extraInfo: ParquetExtraInfo) extends SingleDataBlockInfo
 
 /**
  * A PartitionReader that can read multiple Parquet files up to the certain size. It will
@@ -1614,19 +1620,19 @@ private case class ParquetSingleDataBlockMeta(
  * in memory that contains just the column chunks that are needed. This avoids sending
  * unnecessary data to the GPU and saves GPU memory.
  *
- * @param conf the Hadoop configuration
- * @param splits the partitioned files to read
- * @param clippedBlocks the block metadata from the original Parquet file that has been clipped
- *                      to only contain the column chunks to be read
+ * @param conf                  the Hadoop configuration
+ * @param splits                the partitioned files to read
+ * @param clippedBlocks         the block metadata from the original Parquet file that has been clipped
+ *                              to only contain the column chunks to be read
  * @param isSchemaCaseSensitive whether schema is case sensitive
- * @param debugDumpPrefix a path prefix to use for dumping the fabricated Parquet data or null
- * @param maxReadBatchSizeRows soft limit on the maximum number of rows the reader reads per batch
+ * @param debugDumpPrefix       a path prefix to use for dumping the fabricated Parquet data or null
+ * @param maxReadBatchSizeRows  soft limit on the maximum number of rows the reader reads per batch
  * @param maxReadBatchSizeBytes soft limit on the maximum number of bytes the reader reads per batch
- * @param execMetrics metrics
- * @param partitionSchema Schema of partitions.
- * @param numThreads the size of the threadpool
- * @param ignoreMissingFiles Whether to ignore missing files
- * @param ignoreCorruptFiles Whether to ignore corrupt files
+ * @param execMetrics           metrics
+ * @param partitionSchema       Schema of partitions.
+ * @param numThreads            the size of the threadpool
+ * @param ignoreMissingFiles    Whether to ignore missing files
+ * @param ignoreCorruptFiles    Whether to ignore corrupt files
  */
 class MultiFileParquetPartitionReader(
     override val conf: Configuration,
@@ -1646,7 +1652,7 @@ class MultiFileParquetPartitionReader(
     useFieldId: Boolean)
   extends MultiFileCoalescingPartitionReaderBase(conf, clippedBlocks,
     partitionSchema, maxReadBatchSizeRows, maxReadBatchSizeBytes, numThreads, execMetrics)
-  with ParquetPartitionReaderBase {
+    with ParquetPartitionReaderBase {
 
   // Some implicits to convert the base class to the sub-class and vice versa
   implicit def toMessageType(schema: SchemaBase): MessageType =
@@ -1692,7 +1698,7 @@ class MultiFileParquetPartitionReader(
           (Seq.empty, 0)
         // Throw FileNotFoundException even if `ignoreCorruptFiles` is true
         case e: FileNotFoundException if !ignoreMissingFiles => throw e
-        case e @ (_: RuntimeException | _: IOException) if ignoreCorruptFiles =>
+        case e@(_: RuntimeException | _: IOException) if ignoreCorruptFiles =>
           logWarning(
             s"Skipped the rest of the content in the corrupted file: ${file.toString}", e)
           // It leave the empty hole for the re-composed parquet file if we skip
@@ -1800,29 +1806,29 @@ class MultiFileParquetPartitionReader(
  * in memory that contains just the column chunks that are needed. This avoids sending
  * unnecessary data to the GPU and saves GPU memory.
  *
- * @param conf the Hadoop configuration
- * @param files the partitioned files to read
- * @param filterFunc a function to filter the necessary blocks from a given file
- * @param isSchemaCaseSensitive whether schema is case sensitive
- * @param debugDumpPrefix a path prefix to use for dumping the fabricated Parquet data or null
- * @param maxReadBatchSizeRows soft limit on the maximum number of rows the reader reads per batch
- * @param maxReadBatchSizeBytes soft limit on the maximum number of bytes the reader reads per batch
- * @param execMetrics metrics
- * @param partitionSchema Schema of partitions.
- * @param numThreads the size of the threadpool
- * @param maxNumFileProcessed the maximum number of files to read on the CPU side and waiting to be
- *                            processed on the GPU. This affects the amount of host memory used.
- * @param ignoreMissingFiles Whether to ignore missing files
- * @param ignoreCorruptFiles Whether to ignore corrupt files
- * @param useFieldId Whether to use field id for column matching
- * @param alluxioPathReplacementMap Map containing mapping of DFS scheme to Alluxio scheme
+ * @param conf                       the Hadoop configuration
+ * @param files                      the partitioned files to read
+ * @param filterFunc                 a function to filter the necessary blocks from a given file
+ * @param isSchemaCaseSensitive      whether schema is case sensitive
+ * @param debugDumpPrefix            a path prefix to use for dumping the fabricated Parquet data or null
+ * @param maxReadBatchSizeRows       soft limit on the maximum number of rows the reader reads per batch
+ * @param maxReadBatchSizeBytes      soft limit on the maximum number of bytes the reader reads per batch
+ * @param execMetrics                metrics
+ * @param partitionSchema            Schema of partitions.
+ * @param numThreads                 the size of the threadpool
+ * @param maxNumFileProcessed        the maximum number of files to read on the CPU side and waiting to be
+ *                                   processed on the GPU. This affects the amount of host memory used.
+ * @param ignoreMissingFiles         Whether to ignore missing files
+ * @param ignoreCorruptFiles         Whether to ignore corrupt files
+ * @param useFieldId                 Whether to use field id for column matching
+ * @param alluxioPathReplacementMap  Map containing mapping of DFS scheme to Alluxio scheme
  * @param alluxioReplacementTaskTime Whether the Alluxio replacement algorithm is set to task time
- * @param combineThresholdSize The size to combine to when combining small files
- * @param combineWaitTime The amount of time to wait for other files to be ready to see if we
- *                        can combine them before sending them to the GPU
- * @param queryUsesInputFile Whether the query requires the input file name functionality
- * @param keepReadsInOrder Whether to require the files to be read in the same order as Spark.
- *                         Defaults to true for formats that don't explicitly handle this.
+ * @param combineThresholdSize       The size to combine to when combining small files
+ * @param combineWaitTime            The amount of time to wait for other files to be ready to see if we
+ *                                   can combine them before sending them to the GPU
+ * @param queryUsesInputFile         Whether the query requires the input file name functionality
+ * @param keepReadsInOrder           Whether to require the files to be read in the same order as Spark.
+ *                                   Defaults to true for formats that don't explicitly handle this.
  */
 class MultiFileCloudParquetPartitionReader(
     override val conf: Configuration,
@@ -1966,9 +1972,9 @@ class MultiFileCloudParquetPartitionReader(
       }
       val newHmbBufferInfo = SingleHMBAndMeta(buf, offset,
         combinedMeta.allPartValues.map(_._1).sum, Seq.empty, schemaToUse)
-      if (metaToUse.isCorrectRebaseMode != true || metaToUse.isCorrectInt96RebaseMode != true ) {
+      /*if (metaToUse.isCorrectRebaseMode != true || metaToUse.isCorrectInt96RebaseMode != true) {
         throw new Exception(s"1 corrected or int96rebase not true file ${metaToUse.partitionedFile}")
-      }
+      }*/
       val newHmbMeta = HostMemoryBuffersWithMetaData(
         metaToUse.partitionedFile,
         metaToUse.origPartitionedFile, // this doesn't matter since already read
@@ -2145,7 +2151,7 @@ class MultiFileCloudParquetPartitionReader(
             null, 0)
         // Throw FileNotFoundException even if `ignoreCorruptFiles` is true
         case e: FileNotFoundException if !ignoreMissingFiles => throw e
-        case e @ (_: RuntimeException | _: IOException) if ignoreCorruptFiles =>
+        case e@(_: RuntimeException | _: IOException) if ignoreCorruptFiles =>
           logWarning(
             s"Skipped the rest of the content in the corrupted file: ${file.filePath}", e)
           HostMemoryEmptyMetaData(file, origPartitionedFile, 0, 0, false, false, false, null,
@@ -2208,9 +2214,11 @@ class MultiFileCloudParquetPartitionReader(
                   fileBlockMeta.hasInt96Timestamps, fileBlockMeta.schema,
                   fileBlockMeta.readSchema, 0)
               } else {
-                if (fileBlockMeta.isCorrectedRebaseMode != true || fileBlockMeta.isCorrectedInt96RebaseMode != true ) {
+             /*   if (fileBlockMeta.isCorrectedRebaseMode != true || fileBlockMeta.isCorrectedInt96RebaseMode != true) {
                   throw new Exception(s"2 corrected or int96rebase not true file ${file}")
                 }
+
+              */
                 HostMemoryBuffersWithMetaData(file, origPartitionedFile, hostBuffers.toArray,
                   bytesRead, fileBlockMeta.isCorrectedRebaseMode,
                   fileBlockMeta.isCorrectedInt96RebaseMode, fileBlockMeta.hasInt96Timestamps,
@@ -2371,7 +2379,7 @@ object MakeParquetTableProducer extends Arm {
       buffer: HostMemoryBuffer,
       offset: Long,
       len: Long,
-      metrics : Map[String, GpuMetric],
+      metrics: Map[String, GpuMetric],
       isCorrectedInt96RebaseMode: Boolean,
       isCorrectedRebaseMode: Boolean,
       hasInt96Timestamps: Boolean,
@@ -2401,7 +2409,7 @@ object MakeParquetTableProducer extends Arm {
             case None => ""
           }
           throw new IOException("Error when processing file " +
-              s"[path: $path, range: $offset-${offset + len}]", e)
+            s"[path: $path, range: $offset-${offset + len}]", e)
       }
       closeOnExcept(table) { _ =>
         GpuParquetScan.throwIfNeeded(table, isCorrectedInt96RebaseMode, isCorrectedRebaseMode,
@@ -2412,10 +2420,10 @@ object MakeParquetTableProducer extends Arm {
           filePath match {
             case Some(path) =>
               throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
-                  s"but read ${table.getNumberOfColumns} from $path")
+                s"but read ${table.getNumberOfColumns} from $path")
             case None =>
               throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
-                  s"but read ${table.getNumberOfColumns}")
+                s"but read ${table.getNumberOfColumns}")
           }
         }
       }
@@ -2434,7 +2442,7 @@ case class ParquetTableReader(
     buffer: HostMemoryBuffer,
     offset: Long,
     len: Long,
-    metrics : Map[String, GpuMetric],
+    metrics: Map[String, GpuMetric],
     isCorrectedInt96RebaseMode: Boolean,
     isCorrectedRebaseMode: Boolean,
     hasInt96Timestamps: Boolean,
@@ -2463,10 +2471,10 @@ case class ParquetTableReader(
         filePath match {
           case Some(path) =>
             throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
-                s"but read ${table.getNumberOfColumns} from $path")
+              s"but read ${table.getNumberOfColumns} from $path")
           case None =>
             throw new QueryExecutionException(s"Expected ${readDataSchema.length} columns " +
-                s"but read ${table.getNumberOfColumns}")
+              s"but read ${table.getNumberOfColumns}")
         }
       }
     }
@@ -2488,15 +2496,15 @@ case class ParquetTableReader(
  * in memory that contains just the column chunks that are needed. This avoids sending
  * unnecessary data to the GPU and saves GPU memory.
  *
- * @param conf the Hadoop configuration
- * @param split the file split to read
- * @param filePath the path to the Parquet file
- * @param clippedBlocks the block metadata from the original Parquet file that has been clipped
- *                      to only contain the column chunks to be read
+ * @param conf                 the Hadoop configuration
+ * @param split                the file split to read
+ * @param filePath             the path to the Parquet file
+ * @param clippedBlocks        the block metadata from the original Parquet file that has been clipped
+ *                             to only contain the column chunks to be read
  * @param clippedParquetSchema the Parquet schema from the original Parquet file that has been
  *                             clipped to contain only the columns to be read
- * @param readDataSchema the Spark schema describing what will be read
- * @param debugDumpPrefix a path prefix to use for dumping the fabricated Parquet data or null
+ * @param readDataSchema       the Spark schema describing what will be read
+ * @param debugDumpPrefix      a path prefix to use for dumping the fabricated Parquet data or null
  */
 class ParquetPartitionReader(
     override val conf: Configuration,
@@ -2518,7 +2526,7 @@ class ParquetPartitionReader(
     useFieldId: Boolean) extends FilePartitionReaderBase(conf, execMetrics)
   with ParquetPartitionReaderBase {
 
-  private val blockIterator:  BufferedIterator[BlockMetaData] = clippedBlocks.iterator.buffered
+  private val blockIterator: BufferedIterator[BlockMetaData] = clippedBlocks.iterator.buffered
 
   override def next(): Boolean = {
     if (batchIter.hasNext) {
@@ -2616,7 +2624,7 @@ object ParquetPartitionReader {
    * Build a new BlockMetaData
    *
    * @param rowCount the number of rows in this block
-   * @param columns the new column chunks to reference in the new BlockMetaData
+   * @param columns  the new column chunks to reference in the new BlockMetaData
    * @return the new BlockMetaData
    */
   private[rapids] def newParquetBlock(
