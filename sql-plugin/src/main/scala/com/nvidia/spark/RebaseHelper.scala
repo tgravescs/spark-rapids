@@ -64,8 +64,24 @@ object RebaseHelper extends Arm {
         }
       }
     } else {
+      // treat LEGACY like EXCEPTION mode. First check if < regardless of timezone.
+      // INT96 based
+      withResource(
+        Scalar.timestampFromLong(DType.TIMESTAMP_MICROSECONDS, startTs)) { minGood =>
+        withResource(column.lessThan(minGood)) { hasBad =>
+          withResource(hasBad.any()) { a =>
+            val res = a.isValid && a.getBoolean
+            if (res == false) {
+              throw new Exception(s"time base int96 micros and has a bad date for INT96 LEGACY, datattype: $dtype")
+            }
+            res
+          }
+        }
+      }
+      /*
       throw new Exception(s"time base int96 needed but doesn't have a time resolution, datattype: $dtype")
       false
+       */
     }
   }
 
