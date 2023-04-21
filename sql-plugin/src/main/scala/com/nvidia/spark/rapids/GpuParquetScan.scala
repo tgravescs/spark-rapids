@@ -153,11 +153,13 @@ object GpuParquetScan {
     tagSupport(scan.sparkSession, schema, scanMeta)
   }
 
+
   def throwIfNeeded(
       table: Table,
       isCorrectedInt96Rebase: Boolean,
       isCorrectedDateTimeRebase: Boolean,
-      hasInt96Timestamps: Boolean): Unit = {
+      hasInt96Timestamps: Boolean,
+      filePath: Option[Path] = None): Unit = {
     (0 until table.getNumberOfColumns).foreach { i =>
       val col = table.getColumn(i)
       // if col is a day
@@ -168,7 +170,8 @@ object GpuParquetScan {
       else if (hasInt96Timestamps && !isCorrectedInt96Rebase ||
           !hasInt96Timestamps && !isCorrectedDateTimeRebase) {
         if (RebaseHelper.isTimeRebaseNeededInRead(col)) {
-          throw DataSourceUtils.newRebaseExceptionInRead("Parquet")
+          throw new Exception(s"failed correct file ${filePath.getOrElse("")}",
+            DataSourceUtils.newRebaseExceptionInRead("Parquet"))
         }
       }
     }
@@ -2365,7 +2368,7 @@ object MakeParquetTableProducer extends Arm {
       }
       closeOnExcept(table) { _ =>
         GpuParquetScan.throwIfNeeded(table, isCorrectedInt96RebaseMode, isCorrectedRebaseMode,
-          hasInt96Timestamps)
+          hasInt96Timestamps, filePath)
         val actualSize = GpuColumnVector.getTotalDeviceMemoryUsed(table)
         onTableSize(actualSize)
         if (readDataSchema.length < table.getNumberOfColumns) {
@@ -2416,7 +2419,7 @@ case class ParquetTableReader(
 
     closeOnExcept(table) { _ =>
       GpuParquetScan.throwIfNeeded(table, isCorrectedInt96RebaseMode, isCorrectedRebaseMode,
-        hasInt96Timestamps)
+        hasInt96Timestamps, filePath)
       val actualSize = GpuColumnVector.getTotalDeviceMemoryUsed(table)
       onTableSize(actualSize)
       if (readDataSchema.length < table.getNumberOfColumns) {
