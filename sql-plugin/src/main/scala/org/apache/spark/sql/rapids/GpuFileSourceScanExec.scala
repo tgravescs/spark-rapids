@@ -543,7 +543,7 @@ case class GpuFileSourceScanExec(
     getFinalRDD(readFile, filePartitions)
   }
 
-  def maxSplitBytes(
+  def maxSplitBytesGPU(
       sparkSession: SparkSession,
       selectedPartitions: Seq[PartitionDirectory]): Long = {
     val rapidsConf = new RapidsConf(sparkSession.sessionState.conf)
@@ -573,7 +573,7 @@ case class GpuFileSourceScanExec(
       selectedPartitions: Array[PartitionDirectory],
       fsRelation: HadoopFsRelation): RDD[InternalRow] = {
     val openCostInBytes = fsRelation.sparkSession.sessionState.conf.filesOpenCostInBytes
-    val maxSplitBytes = maxSplitBytes(fsRelation.sparkSession, selectedPartitions)
+    val maxSplitBytes = maxSplitBytesGPU(fsRelation.sparkSession, selectedPartitions)
     logInfo(s"Planning scan with bin packing, max size: $maxSplitBytes bytes, " +
       s"open cost is considered as scanning $openCostInBytes bytes.")
 
