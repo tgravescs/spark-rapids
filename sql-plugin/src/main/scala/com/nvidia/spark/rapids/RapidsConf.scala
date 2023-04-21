@@ -1856,6 +1856,13 @@ object RapidsConf {
       .booleanConf
       .createWithDefault(true)
 
+  val GPU_FILES_MAX_PARTITION_BYTES = conf("spark.rapids.sql.files.maxPartitionBytes")
+    .doc("The maximum number of bytes to pack into a single partition when reading files. " +
+      "This configuration is effective only when using file-based sources such as Parquet, JSON " +
+      "and ORC.")
+    .bytesConf(ByteUnit.BYTE)
+    .createOptional
+
   private def printSectionHeader(category: String): Unit =
     println(s"\n### $category")
 
