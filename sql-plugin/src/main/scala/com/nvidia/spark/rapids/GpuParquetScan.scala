@@ -714,11 +714,16 @@ private case class GpuParquetFileFilterHandler(@transient sqlConf: SQLConf) exte
         GpuParquetPartitionReaderFactoryBase.isCorrectedInt96RebaseMode(
           footer.getFileMetaData.getKeyValueMetaData.get, isInt96CorrectedRebase)
 
+      /*
      if (isCorrectedInt96RebaseForThisFile == false && hasInt96Timestamps == true) {
         throw new Exception(s"is isCorrectedInt96RebaseForThisFile and has int96: $isCorrectedInt96RebaseForThisFile " +
           s"CONFIG $isInt96CorrectedRebase file meta is: " +
           s"file is $file")
+
+
       }
+      
+       */
 
       val blocks = if (pushedFilters.isDefined) {
         withResource(new NvtxRange("getBlocksWithFilter", NvtxColor.CYAN)) { _ =>
