@@ -2131,6 +2131,8 @@ class MultiFileCloudParquetPartitionReader(
       var bufferStartTime = 0L
       val result = try {
         val filterStartTime = System.nanoTime()
+        com.databricks.unity.UnityCredentialScope.setupScope(scope)
+        logWarning(s"setup scope to $scope")
         val fileBlockMeta = filterFunc(file)
         filterTime = System.nanoTime() - filterStartTime
 
