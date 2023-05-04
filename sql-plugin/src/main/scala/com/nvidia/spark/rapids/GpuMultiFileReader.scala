@@ -542,6 +542,12 @@ abstract class MultiFileCloudPartitionReaderBase(
     // them all to be large
     for (i <- 0 until limit) {
       val file = files(i)
+      val scope = com.databricks.unity.UCSExecutor.currentScope
+      if (scope != null) {
+        logWarning(s"current scope is ${scope}")
+      } else {
+        logWarning(s"scope is null")
+      }
       logDebug(s"MultiFile reader using file ${file.toRead}, orig file is ${file.original}")
       if (!keepReadsInOrder) {
         val futureRunner = fcs.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters))
@@ -551,7 +557,7 @@ abstract class MultiFileCloudPartitionReaderBase(
         // Add these in the order as we got them so that we can make sure
         // we process them in the same order as CPU would.
         val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
-        tasks.add(threadPool.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters)))
+        tasks.add(threadPool.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters, scope)))
       }
     }
     // queue up any left to add once others finish
@@ -589,7 +595,8 @@ abstract class MultiFileCloudPartitionReaderBase(
       file: PartitionedFile,
       origFile: Option[PartitionedFile],
       conf: Configuration,
-      filters: Array[Filter]): Callable[HostMemoryBuffersWithMetaDataBase]
+      filters: Array[Filter],
+      scope: com.databricks.unity.UnityCredentialScope): Callable[HostMemoryBuffersWithMetaDataBase]
 
   /**
    * Decode HostMemoryBuffers in GPU

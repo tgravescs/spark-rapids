@@ -2089,7 +2089,8 @@ class MultiFileCloudParquetPartitionReader(
       file: PartitionedFile,
       origPartitionedFile: Option[PartitionedFile],
       filterFunc: PartitionedFile => ParquetFileInfoWithBlockMeta,
-      taskContext: TaskContext) extends Callable[HostMemoryBuffersWithMetaDataBase] with Logging {
+      taskContext: TaskContext,
+      scope: com.databricks.unity.UnityCredentialScope) extends Callable[HostMemoryBuffersWithMetaDataBase] with Logging {
 
     private var blockChunkIter: BufferedIterator[BlockMetaData] = null
 
@@ -2102,6 +2103,7 @@ class MultiFileCloudParquetPartitionReader(
      * Note that the TaskContext is not set in these threads and should not be used.
      */
     override def call(): HostMemoryBuffersWithMetaDataBase = {
+      com.databricks.unity.UnityCredentialScope.setupScope(scope)
       TrampolineUtil.setTaskContext(taskContext)
       try {
         doRead()
@@ -2208,8 +2210,9 @@ class MultiFileCloudParquetPartitionReader(
       file: PartitionedFile,
       origFile: Option[PartitionedFile],
       conf: Configuration,
-      filters: Array[Filter]): Callable[HostMemoryBuffersWithMetaDataBase] = {
-    new ReadBatchRunner(file, origFile, filterFunc, tc)
+      filters: Array[Filter],
+      scope: com.databricks.unity.UnityCredentialScope): Callable[HostMemoryBuffersWithMetaDataBase] = {
+    new ReadBatchRunner(file, origFile, filterFunc, tc,scope)
   }
 
   /**
