@@ -2103,7 +2103,7 @@ class MultiFileCloudParquetPartitionReader(
      * Note that the TaskContext is not set in these threads and should not be used.
      */
     override def call(): HostMemoryBuffersWithMetaDataBase = {
-      com.databricks.unity.UnityCredentialScope.setupScope(scope)
+      com.databricks.unity.UCSExecutor.setupScope(scope)
       TrampolineUtil.setTaskContext(taskContext)
       try {
         doRead()
