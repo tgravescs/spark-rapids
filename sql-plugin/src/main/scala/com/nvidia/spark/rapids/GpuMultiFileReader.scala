@@ -550,7 +550,7 @@ abstract class MultiFileCloudPartitionReaderBase(
       }
       logDebug(s"MultiFile reader using file ${file.toRead}, orig file is ${file.original}")
       if (!keepReadsInOrder) {
-        val futureRunner = fcs.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters))
+        val futureRunner = fcs.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters, scope))
         tasks.add(futureRunner)
       } else {
         getThreadLocals()
@@ -563,7 +563,8 @@ abstract class MultiFileCloudPartitionReaderBase(
     // queue up any left to add once others finish
     for (i <- limit until files.length) {
       val file = files(i)
-      tasksToRun.enqueue(getBatchRunner(tc, file.toRead, file.original, conf, filters))
+      val scope = com.databricks.unity.UCSExecutor.currentScope
+      tasksToRun.enqueue(getBatchRunner(tc, file.toRead, file.original, conf, filters, scope))
     }
     isInitted = true
     filesToRead = files.length
