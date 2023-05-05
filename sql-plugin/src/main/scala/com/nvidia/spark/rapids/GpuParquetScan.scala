@@ -2103,6 +2103,8 @@ class MultiFileCloudParquetPartitionReader(
      * Note that the TaskContext is not set in these threads and should not be used.
      */
     override def call(): HostMemoryBuffersWithMetaDataBase = {
+      val scopeorig = com.databricks.unity.UCSExecutor.currentScope
+      logWarning(s"scope original was $scopeorig")
       com.databricks.unity.UCSExecutor.setupScope(scope)
       val scopeback = com.databricks.unity.UCSExecutor.currentScope
       logWarning(s"scope got back fis $scopeback")
