@@ -2104,8 +2104,6 @@ class MultiFileCloudParquetPartitionReader(
      */
     override def call(): HostMemoryBuffersWithMetaDataBase = {
       com.databricks.unity.UCSExecutor.setupScope(scope)
-      val scopeback = com.databricks.unity.UCSExecutor.currentScope
-      logWarning(s"scope got back fis $scopeback")
       TrampolineUtil.setTaskContext(taskContext)
       try {
         doRead()
