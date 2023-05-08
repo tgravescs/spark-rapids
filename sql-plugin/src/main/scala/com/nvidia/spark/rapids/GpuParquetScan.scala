@@ -992,7 +992,12 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       files: Array[PartitionedFile],
       conf: Configuration): PartitionReader[ColumnarBatch] = {
     val filterFunc = (file: PartitionedFile) => {
-      filterHandler.filterBlocks(footerReadType, file, conf,
+      val fs = new Path(file.filePath).getFileSystem(conf)
+      val confFs = fs.getConf
+      logWarning(s"hadoop filesystem conf after get is $confFs")
+      val sam = com.databricks.unity.SAMRegistry.getSAM
+      logWarning(s"same is $sam")
+      filterHandler.filterBlocks(footerReadType, file, confFs,
         filters, readDataSchema)
     }
     new MultiFileCloudParquetPartitionReader(conf, files, filterFunc, isCaseSensitive,
