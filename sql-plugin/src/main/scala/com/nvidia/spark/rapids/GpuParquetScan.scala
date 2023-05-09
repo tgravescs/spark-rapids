@@ -991,12 +991,19 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   override def buildBaseColumnarReaderForCloud(
       files: Array[PartitionedFile],
       conf: Configuration): PartitionReader[ColumnarBatch] = {
+    val confFs = if (files.nonEmpty) {
+      //val fs = new Path(files.head.filePath).getFileSystem(conf)
+      //fs.getConf
+      com.databricks.unity.ClusterDefaultSAM.createDelegateHadoopConf(new Path(files.head.filePath), conf)
+    } else {
+      conf
+    }
     val filterFunc = (file: PartitionedFile) => {
-      val fs = new Path(file.filePath).getFileSystem(conf)
-      val confFs = fs.getConf
-      logWarning(s"hadoop filesystem conf after get is $confFs")
-      val sam = com.databricks.unity.SAMRegistry.getSAM
-      logWarning(s"same is $sam")
+      //val fs = new Path(file.filePath).getFileSystem(conf)
+      //val confFs = fs.getConf
+      // val allConfs = confFs.iterator().asScala
+      //logWarning("hadoop confs are : " + allConfs.mkString(","))
+      //logWarning(s"hadoop filesystem conf after get is $confFs")
       filterHandler.filterBlocks(footerReadType, file, confFs,
         filters, readDataSchema)
     }
@@ -2108,8 +2115,9 @@ class MultiFileCloudParquetPartitionReader(
      * Note that the TaskContext is not set in these threads and should not be used.
      */
     override def call(): HostMemoryBuffersWithMetaDataBase = {
-      com.databricks.unity.UCSExecutor.setupScope(scope)
       TrampolineUtil.setTaskContext(taskContext)
+      // com.databricks.unity.UCSExecutor.setupScope(scope)
+
       try {
         doRead()
       } catch {
@@ -2136,7 +2144,7 @@ class MultiFileCloudParquetPartitionReader(
       var bufferStartTime = 0L
       val result = try {
         val filterStartTime = System.nanoTime()
-        com.databricks.unity.UCSExecutor.setupScope(scope)
+        // com.databricks.unity.UCSExecutor.setupScope(scope)
         logWarning(s"setup scope to $scope")
         val fileBlockMeta = filterFunc(file)
         filterTime = System.nanoTime() - filterStartTime

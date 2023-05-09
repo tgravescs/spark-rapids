@@ -543,8 +543,10 @@ abstract class MultiFileCloudPartitionReaderBase(
     for (i <- 0 until limit) {
       val file = files(i)
       val scope = com.databricks.unity.UCSExecutor.currentScope
+      com.databricks.unity.UCSExecutor.numScopes()
       if (scope != null) {
         logWarning(s"current scope is ${scope}")
+
       } else {
         logWarning(s"scope is null")
       }
