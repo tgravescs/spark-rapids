@@ -30,6 +30,7 @@ import ai.rapids.cudf.{ColumnVector, HostMemoryBuffer, NvtxColor, NvtxRange, Tab
 import com.nvidia.spark.rapids.Arm.{closeOnExcept, withResource}
 import com.nvidia.spark.rapids.GpuMetric.{BUFFER_TIME, FILTER_TIME, PEAK_DEVICE_MEMORY}
 import com.nvidia.spark.rapids.RapidsPluginImplicits.AutoCloseableProducingSeq
+import com.nvidia.spark.rapids.shims.ReaderUtils
 import org.apache.commons.io.IOUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
@@ -542,12 +543,13 @@ abstract class MultiFileCloudPartitionReaderBase(
     // them all to be large
     for (i <- 0 until limit) {
       val file = files(i)
-      val unityConf = com.databricks.unity.ClusterDefaultSAM.createDelegateHadoopConf(new Path(file.toRead.filePath), conf)
-
+      // if Alluxio, use the original blobstore path
+      val filePathToRead = file.original.getOrElse(file.toRead).filePath
+      val fileBasedHadoopConf = ReaderUtils.getHadoopConfForReaderThread(filePathToRead, conf)
       logDebug(s"MultiFile reader using file ${file.toRead}, orig file is ${file.original}")
       if (!keepReadsInOrder) {
         val futureRunner =
-          fcs.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters, unityConf))
+          fcs.submit(getBatchRunner(tc, file.toRead, file.original, fileBasedHadoopConf, filters))
         tasks.add(futureRunner)
       } else {
         getThreadLocals()
@@ -555,15 +557,16 @@ abstract class MultiFileCloudPartitionReaderBase(
         // we process them in the same order as CPU would.
         val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
         tasks.add(threadPool.submit(
-          getBatchRunner(tc, file.toRead, file.original, conf, filters, unityConf)))
+          getBatchRunner(tc, file.toRead, file.original, fileBasedHadoopConf, filters)))
       }
     }
     // queue up any left to add once others finish
     for (i <- limit until files.length) {
       val file = files(i)
-      val unityConf = com.databricks.unity.ClusterDefaultSAM.createDelegateHadoopConf(new Path(file.toRead.filePath), conf)
-
-      tasksToRun.enqueue(getBatchRunner(tc, file.toRead, file.original, conf, filters, unityConf))
+      // if Alluxio, use the original blobstore path
+      val filePathToRead = file.original.getOrElse(file.toRead).filePath
+      val fileBasedHadoopConf = ReaderUtils.getHadoopConfForReaderThread(filePathToRead, conf)
+      tasksToRun.enqueue(getBatchRunner(tc, file.toRead, file.original, fileBasedHadoopConf, filters))
     }
     isInitted = true
     filesToRead = files.length
@@ -595,8 +598,7 @@ abstract class MultiFileCloudPartitionReaderBase(
       file: PartitionedFile,
       origFile: Option[PartitionedFile],
       conf: Configuration,
-      filters: Array[Filter],
-      unityConf: Configuration): Callable[HostMemoryBuffersWithMetaDataBase]
+      filters: Array[Filter]): Callable[HostMemoryBuffersWithMetaDataBase]
 
   /**
    * Decode HostMemoryBuffers in GPU

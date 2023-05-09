@@ -1423,9 +1423,9 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       blocks: Seq[BlockMetaData],
       clippedSchema: MessageType,
       filePath: Path,
-      unityConf: Configuration): (HostMemoryBuffer, Long, Seq[BlockMetaData]) = {
+      hadoopConf: Configuration): (HostMemoryBuffer, Long, Seq[BlockMetaData]) = {
     withResource(new NvtxRange("Parquet buffer file split", NvtxColor.YELLOW)) { _ =>
-      withResource(filePath.getFileSystem(unityConf).open(filePath)) { in =>
+      withResource(filePath.getFileSystem(hadoopConf).open(filePath)) { in =>
         val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema, false)
         closeOnExcept(HostMemoryBuffer.allocate(estTotalSize)) { hmb =>
           val out = new HostMemoryOutputStream(hmb)
@@ -2103,7 +2103,7 @@ class MultiFileCloudParquetPartitionReader(
       origPartitionedFile: Option[PartitionedFile],
       filterFunc: (PartitionedFile, Configuration) => ParquetFileInfoWithBlockMeta,
       taskContext: TaskContext,
-      unityConf: Configuration) extends Callable[HostMemoryBuffersWithMetaDataBase] with Logging {
+      hadoopConf: Configuration) extends Callable[HostMemoryBuffersWithMetaDataBase] with Logging {
 
     private var blockChunkIter: BufferedIterator[BlockMetaData] = null
 
@@ -2143,7 +2143,7 @@ class MultiFileCloudParquetPartitionReader(
       var bufferStartTime = 0L
       val result = try {
         val filterStartTime = System.nanoTime()
-        val fileBlockMeta = filterFunc(file, unityConf)
+        val fileBlockMeta = filterFunc(file, hadoopConf)
         filterTime = System.nanoTime() - filterStartTime
 
         bufferStartTime = System.nanoTime()
@@ -2175,7 +2175,7 @@ class MultiFileCloudParquetPartitionReader(
                 val blocksToRead = populateCurrentBlockChunk(blockChunkIter,
                   maxReadBatchSizeRows, maxReadBatchSizeBytes, fileBlockMeta.readSchema)
                 val (dataBuffer, dataSize, blockMeta) =
-                  readPartFile(blocksToRead, fileBlockMeta.schema, filePath, unityConf)
+                  readPartFile(blocksToRead, fileBlockMeta.schema, filePath, hadoopConf)
                 val numRows = blocksToRead.map(_.getRowCount).sum.toInt
                 hostBuffers += SingleHMBAndMeta(dataBuffer, dataSize,
                   numRows, blockMeta, fileBlockMeta.schema)
@@ -2223,8 +2223,8 @@ class MultiFileCloudParquetPartitionReader(
       origFile: Option[PartitionedFile],
       conf: Configuration,
       filters: Array[Filter],
-      unityConf: Configuration): Callable[HostMemoryBuffersWithMetaDataBase] = {
-    new ReadBatchRunner(file, origFile, filterFunc, tc, unityConf)
+      hadoopConf: Configuration): Callable[HostMemoryBuffersWithMetaDataBase] = {
+    new ReadBatchRunner(file, origFile, filterFunc, tc, hadoopConf)
   }
 
   /**
