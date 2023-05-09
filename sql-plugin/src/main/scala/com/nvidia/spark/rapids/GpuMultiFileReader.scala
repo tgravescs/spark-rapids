@@ -550,7 +550,7 @@ abstract class MultiFileCloudPartitionReaderBase(
       } else {
         logWarning(s"scope is null")
       }
-      val unityConf = com.databricks.unity.ClusterDefaultSAM.createDelegateHadoopConf(new Path(file.toRead), conf)
+      val unityConf = com.databricks.unity.ClusterDefaultSAM.createDelegateHadoopConf(new Path(file.toRead.filePath), conf)
 
       logDebug(s"MultiFile reader using file ${file.toRead}, orig file is ${file.original}")
       if (!keepReadsInOrder) {
@@ -568,7 +568,7 @@ abstract class MultiFileCloudPartitionReaderBase(
     for (i <- limit until files.length) {
       val file = files(i)
       val scope = com.databricks.unity.UCSExecutor.currentScope
-      val unityConf = com.databricks.unity.ClusterDefaultSAM.createDelegateHadoopConf(new Path(file.toRead), conf)
+      val unityConf = com.databricks.unity.ClusterDefaultSAM.createDelegateHadoopConf(new Path(file.toRead.filePath), conf)
 
       tasksToRun.enqueue(getBatchRunner(tc, file.toRead, file.original, conf, filters, scope, unityConf))
     }
