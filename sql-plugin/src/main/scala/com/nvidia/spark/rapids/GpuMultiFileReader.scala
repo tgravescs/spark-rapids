@@ -566,7 +566,8 @@ abstract class MultiFileCloudPartitionReaderBase(
       // if Alluxio, use the original blobstore path
       val filePathToRead = file.original.getOrElse(file.toRead).filePath
       val fileBasedHadoopConf = ReaderUtils.getHadoopConfForReaderThread(filePathToRead, conf)
-      tasksToRun.enqueue(getBatchRunner(tc, file.toRead, file.original, fileBasedHadoopConf, filters))
+      tasksToRun.enqueue(
+        getBatchRunner(tc, file.toRead, file.original, fileBasedHadoopConf, filters))
     }
     isInitted = true
     filesToRead = files.length

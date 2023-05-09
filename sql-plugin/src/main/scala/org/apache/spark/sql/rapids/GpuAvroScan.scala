@@ -682,8 +682,7 @@ class GpuMultiFileCloudAvroPartitionReader(
       file: PartitionedFile,
       origFile: Option[PartitionedFile],
       config: Configuration,
-      filters: Array[Filter],
-      unityConf: Configuration): Callable[HostMemoryBuffersWithMetaDataBase] =
+      filters: Array[Filter]): Callable[HostMemoryBuffersWithMetaDataBase] =
     new ReadBatchRunner(tc, file, config, filters)
 
   /** Two utils classes */

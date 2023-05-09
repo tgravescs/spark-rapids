@@ -566,7 +566,7 @@ case class GpuOrcMultiFilePartitionReaderFactory(
     val startTime = System.nanoTime()
     files.map { file =>
       val orcPartitionReaderContext = filterHandler.filterStripes(file, dataSchema,
-        readDataSchema, partitionSchema)
+        readDataSchema, partitionSchema, conf)
       compressionAndStripes.getOrElseUpdate(orcPartitionReaderContext.compressionKind,
         new ArrayBuffer[OrcSingleStripeMeta]) ++=
         orcPartitionReaderContext.blockIterator.map(block =>
@@ -627,8 +627,9 @@ case class GpuOrcPartitionReaderFactory(
 
   override def buildColumnarReader(partFile: PartitionedFile): PartitionReader[ColumnarBatch] = {
     val startTime = System.nanoTime()
+    val conf = broadcastedConf.value.value
     val ctx = filterHandler.filterStripes(partFile, dataSchema, readDataSchema,
-      partitionSchema)
+      partitionSchema, conf)
     metrics.get(FILTER_TIME).foreach {
       _ += (System.nanoTime() - startTime)
     }
@@ -1170,9 +1171,9 @@ private case class GpuOrcFileFilterHandler(
       partFile: PartitionedFile,
       dataSchema: StructType,
       readDataSchema: StructType,
-      partitionSchema: StructType): OrcPartitionReaderContext = {
+      partitionSchema: StructType,
+      conf: Configuration): OrcPartitionReaderContext = {
 
-    val conf = broadcastedConf.value.value
     OrcConf.IS_SCHEMA_EVOLUTION_CASE_SENSITIVE.setBoolean(conf, isCaseSensitive)
 
     val filePath = new Path(new URI(partFile.filePath.toString()))
@@ -1685,7 +1686,7 @@ class MultiFileCloudOrcPartitionReader(
       val hostBuffers = new ArrayBuffer[SingleHMBAndMeta]
       val filterStartTime = System.nanoTime()
       val ctx = filterHandler.filterStripes(partFile, dataSchema, readDataSchema,
-        partitionSchema)
+        partitionSchema, conf)
       val filterTime = System.nanoTime() - filterStartTime
       val bufferTimeStart = System.nanoTime()
       val result = try {
@@ -1755,8 +1756,7 @@ class MultiFileCloudOrcPartitionReader(
       file: PartitionedFile,
       origFile: Option[PartitionedFile],
       conf: Configuration,
-      filters: Array[Filter],
-      unityConf: Configuration): Callable[HostMemoryBuffersWithMetaDataBase] = {
+      filters: Array[Filter]): Callable[HostMemoryBuffersWithMetaDataBase] = {
     new ReadBatchRunner(tc, file, conf, filters)
   }
 

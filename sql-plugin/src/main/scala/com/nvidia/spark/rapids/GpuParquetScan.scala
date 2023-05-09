@@ -2222,9 +2222,8 @@ class MultiFileCloudParquetPartitionReader(
       file: PartitionedFile,
       origFile: Option[PartitionedFile],
       conf: Configuration,
-      filters: Array[Filter],
-      hadoopConf: Configuration): Callable[HostMemoryBuffersWithMetaDataBase] = {
-    new ReadBatchRunner(file, origFile, filterFunc, tc, hadoopConf)
+      filters: Array[Filter]): Callable[HostMemoryBuffersWithMetaDataBase] = {
+    new ReadBatchRunner(file, origFile, filterFunc, tc, conf)
   }
 
   /**
