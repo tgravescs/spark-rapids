@@ -20,11 +20,12 @@ spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids.shims
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkEnv
 
 object ReaderUtils {
   def getHadoopConfForReaderThread(filePath: String, conf: Configuration): Configuration = {
-    val unityEnabled = SparkEnv.get.conf("spark.databricks.unityCatalog.enabled", false)
+    val unityEnabled = SparkEnv.get.conf.get("spark.databricks.unityCatalog.enabled", "false").toBoolean
     if (unityEnabled) {
       com.databricks.unity.ClusterDefaultSAM.createDelegateHadoopConf(new Path (filePath), conf)
     } else {

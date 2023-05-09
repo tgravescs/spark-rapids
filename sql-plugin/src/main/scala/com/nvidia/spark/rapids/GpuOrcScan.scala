@@ -2143,6 +2143,7 @@ class MultiFileOrcPartitionReader(
    * @param blocks blocks meta info to specify which blocks to be read
    * @param offset used as the offset adjustment
    * @param batchContext the batch building context
+   * @param hadoopConf the Configuration parameters
    * @return Callable[(Seq[DataBlockBase], Long)], which will be submitted to a
    *         ThreadPoolExecutor, and the Callable will return a tuple result and
    *         result._1 is block meta info with the offset adjusted
@@ -2154,7 +2155,8 @@ class MultiFileOrcPartitionReader(
       outhmb: HostMemoryBuffer,
       blocks: ArrayBuffer[DataBlockBase],
       offset: Long,
-      batchContext: BatchContext): Callable[(Seq[DataBlockBase], Long)] = {
+      batchContext: BatchContext,
+      hadoopConf: Configuration): Callable[(Seq[DataBlockBase], Long)] = {
     new OrcCopyStripesRunner(tc, file, outhmb, blocks, offset)
   }
 

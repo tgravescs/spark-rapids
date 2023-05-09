@@ -1643,7 +1643,8 @@ class MultiFileParquetPartitionReader(
       file: Path,
       outhmb: HostMemoryBuffer,
       blocks: ArrayBuffer[DataBlockBase],
-      offset: Long)
+      offset: Long,
+      hadoopConf: Configuration)
     extends Callable[(Seq[DataBlockBase], Long)] {
 
     override def call(): (Seq[DataBlockBase], Long) = {
@@ -1652,7 +1653,7 @@ class MultiFileParquetPartitionReader(
         val startBytesRead = fileSystemBytesRead()
         val outputBlocks = withResource(outhmb) { _ =>
           withResource(new HostMemoryOutputStream(outhmb)) { out =>
-            withResource(file.getFileSystem(conf).open(file)) { in =>
+            withResource(file.getFileSystem(hadoopConf).open(file)) { in =>
               copyBlocksData(in, out, blocks, offset)
             }
           }
@@ -1705,8 +1706,9 @@ class MultiFileParquetPartitionReader(
       outhmb: HostMemoryBuffer,
       blocks: ArrayBuffer[DataBlockBase],
       offset: Long,
-      batchContext: BatchContext): Callable[(Seq[DataBlockBase], Long)] = {
-    new ParquetCopyBlocksRunner(taskContext, file, outhmb, blocks, offset)
+      batchContext: BatchContext,
+      hadoopConf: Configuration): Callable[(Seq[DataBlockBase], Long)] = {
+    new ParquetCopyBlocksRunner(taskContext, file, outhmb, blocks, offset, hadoopConf)
   }
 
   override final def getFileFormatShortName: String = "Parquet"
@@ -2201,19 +2203,19 @@ class MultiFileCloudParquetPartitionReader(
   /**
    * File reading logic in a Callable which will be running in a thread pool
    *
-   * @param tc      task context to use
-   * @param file    file to be read
-   * @param conf    configuration
-   * @param filters push down filters
+   * @param tc         task context to use
+   * @param file       file to be read
+   * @param hadoopConf configuration
+   * @param filters    push down filters
    * @return Callable[HostMemoryBuffersWithMetaDataBase]
    */
   override def getBatchRunner(
       tc: TaskContext,
       file: PartitionedFile,
       origFile: Option[PartitionedFile],
-      conf: Configuration,
+      hadoopConf: Configuration,
       filters: Array[Filter]): Callable[HostMemoryBuffersWithMetaDataBase] = {
-    new ReadBatchRunner(file, origFile, filterFunc, tc, conf)
+    new ReadBatchRunner(file, origFile, filterFunc, tc, hadoopConf)
   }
 
   /**

@@ -1048,6 +1048,7 @@ abstract class MultiFileCoalescingPartitionReaderBase(
    * @param blocks blocks meta info to specify which blocks to be read
    * @param offset used as the offset adjustment
    * @param batchContext the batch building context
+   * @param hadoopConf the Configuration parameters
    * @return Callable[(Seq[DataBlockBase], Long)], which will be submitted to a
    *         ThreadPoolExecutor, and the Callable will return a tuple result and
    *         result._1 is block meta info with the offset adjusted
@@ -1059,7 +1060,8 @@ abstract class MultiFileCoalescingPartitionReaderBase(
       outhmb: HostMemoryBuffer,
       blocks: ArrayBuffer[DataBlockBase],
       offset: Long,
-      batchContext: BatchContext): Callable[(Seq[DataBlockBase], Long)]
+      batchContext: BatchContext,
+      hadoopConf: Configuration): Callable[(Seq[DataBlockBase], Long)]
 
   /**
    * File format short name used for logging and other things to uniquely identity
@@ -1273,9 +1275,10 @@ abstract class MultiFileCoalescingPartitionReaderBase(
             val fileBlockSize = blocks.map(_.getBlockSize).sum
             // use a single buffer and slice it up for different files if we need
             val outLocal = hmb.slice(offset, fileBlockSize)
+            val fileBasedHadoopConf = ReaderUtils.getHadoopConfForReaderThread(file.toString, conf)
             // Third, copy the blocks for each file in parallel using background threads
-            tasks.add(threadPool.submit(
-              getBatchRunner(tc, file, outLocal, blocks, offset, batchContext)))
+            tasks.add(threadPool.submit(getBatchRunner(tc, file, outLocal, blocks,
+              offset, batchContext, fileBasedHadoopConf)))
             offset += fileBlockSize
           }
 

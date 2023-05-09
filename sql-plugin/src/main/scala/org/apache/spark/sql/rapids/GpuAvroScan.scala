@@ -958,8 +958,9 @@ class GpuMultiFileAvroPartitionReader(
       outhmb: HostMemoryBuffer,
       blocks: ArrayBuffer[DataBlockBase],
       offset: Long,
-      batchContext: BatchContext): Callable[(Seq[DataBlockBase], Long)] =
-    new AvroCopyBlocksRunner(tc, file, outhmb, blocks, offset, batchContext)
+      batchContext: BatchContext,
+      hadoopConf: Configuration): Callable[(Seq[DataBlockBase], Long)] =
+    new AvroCopyBlocksRunner(tc, file, outhmb, blocks, offset, batchContext, hadoopConf)
 
   // The runner to copy blocks to offset of HostMemoryBuffer
   class AvroCopyBlocksRunner(
@@ -968,7 +969,8 @@ class GpuMultiFileAvroPartitionReader(
       outhmb: HostMemoryBuffer,
       blocks: ArrayBuffer[DataBlockBase],
       offset: Long,
-      batchContext: BatchContext) extends Callable[(Seq[DataBlockBase], Long)] {
+      batchContext: BatchContext,
+      hadoopConf: Configuration) extends Callable[(Seq[DataBlockBase], Long)] {
 
     private val headerSync = Some(batchContext.mergedHeader.sync)
 
@@ -977,7 +979,7 @@ class GpuMultiFileAvroPartitionReader(
       try {
         val startBytesRead = fileSystemBytesRead()
         val res = withResource(outhmb) { _ =>
-          withResource(file.getFileSystem(conf).open(file)) { in =>
+          withResource(file.getFileSystem(hadoopConf).open(file)) { in =>
             withResource(new HostMemoryOutputStream(outhmb)) { out =>
               copyBlocksData(blocks, in, out, headerSync)
             }
