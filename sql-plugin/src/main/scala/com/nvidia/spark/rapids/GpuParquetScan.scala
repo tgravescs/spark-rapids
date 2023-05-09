@@ -1422,9 +1422,10 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
   protected def readPartFile(
       blocks: Seq[BlockMetaData],
       clippedSchema: MessageType,
-      filePath: Path): (HostMemoryBuffer, Long, Seq[BlockMetaData]) = {
+      filePath: Path,
+      unityConf: Configuration): (HostMemoryBuffer, Long, Seq[BlockMetaData]) = {
     withResource(new NvtxRange("Parquet buffer file split", NvtxColor.YELLOW)) { _ =>
-      withResource(filePath.getFileSystem(conf).open(filePath)) { in =>
+      withResource(filePath.getFileSystem(unityConf).open(filePath)) { in =>
         val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema, false)
         closeOnExcept(HostMemoryBuffer.allocate(estTotalSize)) { hmb =>
           val out = new HostMemoryOutputStream(hmb)
@@ -2102,7 +2103,8 @@ class MultiFileCloudParquetPartitionReader(
       origPartitionedFile: Option[PartitionedFile],
       filterFunc: PartitionedFile => ParquetFileInfoWithBlockMeta,
       taskContext: TaskContext,
-      scope: com.databricks.unity.UnityCredentialScope) extends Callable[HostMemoryBuffersWithMetaDataBase] with Logging {
+      scope: com.databricks.unity.UnityCredentialScope,
+      unityConf: Configuration) extends Callable[HostMemoryBuffersWithMetaDataBase] with Logging {
 
     private var blockChunkIter: BufferedIterator[BlockMetaData] = null
 
@@ -2178,7 +2180,7 @@ class MultiFileCloudParquetPartitionReader(
                 val blocksToRead = populateCurrentBlockChunk(blockChunkIter,
                   maxReadBatchSizeRows, maxReadBatchSizeBytes, fileBlockMeta.readSchema)
                 val (dataBuffer, dataSize, blockMeta) =
-                  readPartFile(blocksToRead, fileBlockMeta.schema, filePath)
+                  readPartFile(blocksToRead, fileBlockMeta.schema, filePath, unityConf)
                 val numRows = blocksToRead.map(_.getRowCount).sum.toInt
                 hostBuffers += SingleHMBAndMeta(dataBuffer, dataSize,
                   numRows, blockMeta, fileBlockMeta.schema)
@@ -2226,8 +2228,9 @@ class MultiFileCloudParquetPartitionReader(
       origFile: Option[PartitionedFile],
       conf: Configuration,
       filters: Array[Filter],
-      scope: com.databricks.unity.UnityCredentialScope): Callable[HostMemoryBuffersWithMetaDataBase] = {
-    new ReadBatchRunner(file, origFile, filterFunc, tc,scope)
+      scope: com.databricks.unity.UnityCredentialScope,
+      unityConf: Configuration): Callable[HostMemoryBuffersWithMetaDataBase] = {
+    new ReadBatchRunner(file, origFile, filterFunc, tc,scope, unityConf)
   }
 
   /**
@@ -2545,7 +2548,7 @@ class ParquetPartitionReader(
         } else {
           val parseOpts = getParquetOptions(readDataSchema, clippedParquetSchema, useFieldId)
           val (dataBuffer, dataSize, _) = metrics(BUFFER_TIME).ns {
-            readPartFile(currentChunkedBlocks, clippedParquetSchema, filePath)
+            readPartFile(currentChunkedBlocks, clippedParquetSchema, filePath, conf)
           }
           if (dataSize == 0) {
             dataBuffer.close()

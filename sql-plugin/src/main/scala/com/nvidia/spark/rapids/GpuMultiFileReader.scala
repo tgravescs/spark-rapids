@@ -543,30 +543,34 @@ abstract class MultiFileCloudPartitionReaderBase(
     for (i <- 0 until limit) {
       val file = files(i)
       val scope = com.databricks.unity.UCSExecutor.currentScope
-      com.databricks.unity.UCSExecutor.numScopes()
+      //com.databricks.unity.UCSExecutor.numScopes()
       if (scope != null) {
         logWarning(s"current scope is ${scope}")
 
       } else {
         logWarning(s"scope is null")
       }
+      val unityConf = com.databricks.unity.ClusterDefaultSAM.createDelegateHadoopConf(new Path(file.toRead), conf)
+
       logDebug(s"MultiFile reader using file ${file.toRead}, orig file is ${file.original}")
       if (!keepReadsInOrder) {
-        val futureRunner = fcs.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters, scope))
+        val futureRunner = fcs.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters, scope, unityConf))
         tasks.add(futureRunner)
       } else {
         getThreadLocals()
         // Add these in the order as we got them so that we can make sure
         // we process them in the same order as CPU would.
         val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
-        tasks.add(threadPool.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters, scope)))
+        tasks.add(threadPool.submit(getBatchRunner(tc, file.toRead, file.original, conf, filters, scope, unityConf)))
       }
     }
     // queue up any left to add once others finish
     for (i <- limit until files.length) {
       val file = files(i)
       val scope = com.databricks.unity.UCSExecutor.currentScope
-      tasksToRun.enqueue(getBatchRunner(tc, file.toRead, file.original, conf, filters, scope))
+      val unityConf = com.databricks.unity.ClusterDefaultSAM.createDelegateHadoopConf(new Path(file.toRead), conf)
+
+      tasksToRun.enqueue(getBatchRunner(tc, file.toRead, file.original, conf, filters, scope, unityConf))
     }
     isInitted = true
     filesToRead = files.length
@@ -599,7 +603,8 @@ abstract class MultiFileCloudPartitionReaderBase(
       origFile: Option[PartitionedFile],
       conf: Configuration,
       filters: Array[Filter],
-      scope: com.databricks.unity.UnityCredentialScope): Callable[HostMemoryBuffersWithMetaDataBase]
+      scope: com.databricks.unity.UnityCredentialScope,
+      unityConf: Configuration): Callable[HostMemoryBuffersWithMetaDataBase]
 
   /**
    * Decode HostMemoryBuffers in GPU
