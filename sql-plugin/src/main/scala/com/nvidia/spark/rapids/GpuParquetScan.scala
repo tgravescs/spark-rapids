@@ -998,13 +998,13 @@ case class GpuParquetMultiFilePartitionReaderFactory(
     } else {
       conf
     }
-    val filterFunc = (file: PartitionedFile) => {
+    val filterFunc = (file: PartitionedFile, hadoopConf: Configuration) => {
       //val fs = new Path(file.filePath).getFileSystem(conf)
       //val confFs = fs.getConf
       // val allConfs = confFs.iterator().asScala
       //logWarning("hadoop confs are : " + allConfs.mkString(","))
       //logWarning(s"hadoop filesystem conf after get is $confFs")
-      filterHandler.filterBlocks(footerReadType, file, confFs,
+      filterHandler.filterBlocks(footerReadType, file, hadoopConf,
         filters, readDataSchema)
     }
     new MultiFileCloudParquetPartitionReader(conf, files, filterFunc, isCaseSensitive,
@@ -1810,7 +1810,7 @@ class MultiFileParquetPartitionReader(
 class MultiFileCloudParquetPartitionReader(
     override val conf: Configuration,
     files: Array[PartitionedFile],
-    filterFunc: PartitionedFile => ParquetFileInfoWithBlockMeta,
+    filterFunc: (PartitionedFile, Configuration) => ParquetFileInfoWithBlockMeta,
     override val isSchemaCaseSensitive: Boolean,
     debugDumpPrefix: String,
     maxReadBatchSizeRows: Integer,
@@ -2101,9 +2101,8 @@ class MultiFileCloudParquetPartitionReader(
   private class ReadBatchRunner(
       file: PartitionedFile,
       origPartitionedFile: Option[PartitionedFile],
-      filterFunc: PartitionedFile => ParquetFileInfoWithBlockMeta,
+      filterFunc: (PartitionedFile, Configuration) => ParquetFileInfoWithBlockMeta,
       taskContext: TaskContext,
-      scope: com.databricks.unity.UnityCredentialScope,
       unityConf: Configuration) extends Callable[HostMemoryBuffersWithMetaDataBase] with Logging {
 
     private var blockChunkIter: BufferedIterator[BlockMetaData] = null
@@ -2118,8 +2117,6 @@ class MultiFileCloudParquetPartitionReader(
      */
     override def call(): HostMemoryBuffersWithMetaDataBase = {
       TrampolineUtil.setTaskContext(taskContext)
-      // com.databricks.unity.UCSExecutor.setupScope(scope)
-
       try {
         doRead()
       } catch {
@@ -2146,9 +2143,7 @@ class MultiFileCloudParquetPartitionReader(
       var bufferStartTime = 0L
       val result = try {
         val filterStartTime = System.nanoTime()
-        // com.databricks.unity.UCSExecutor.setupScope(scope)
-        logWarning(s"setup scope to $scope")
-        val fileBlockMeta = filterFunc(file)
+        val fileBlockMeta = filterFunc(file, unityConf)
         filterTime = System.nanoTime() - filterStartTime
 
         bufferStartTime = System.nanoTime()
@@ -2228,9 +2223,8 @@ class MultiFileCloudParquetPartitionReader(
       origFile: Option[PartitionedFile],
       conf: Configuration,
       filters: Array[Filter],
-      scope: com.databricks.unity.UnityCredentialScope,
       unityConf: Configuration): Callable[HostMemoryBuffersWithMetaDataBase] = {
-    new ReadBatchRunner(file, origFile, filterFunc, tc,scope, unityConf)
+    new ReadBatchRunner(file, origFile, filterFunc, tc, unityConf)
   }
 
   /**

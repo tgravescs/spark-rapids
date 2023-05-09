@@ -1756,7 +1756,6 @@ class MultiFileCloudOrcPartitionReader(
       origFile: Option[PartitionedFile],
       conf: Configuration,
       filters: Array[Filter],
-      scope: com.databricks.unity.UnityCredentialScope,
       unityConf: Configuration): Callable[HostMemoryBuffersWithMetaDataBase] = {
     new ReadBatchRunner(tc, file, conf, filters)
   }
