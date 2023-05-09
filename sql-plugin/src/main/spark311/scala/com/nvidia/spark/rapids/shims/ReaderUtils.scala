@@ -34,6 +34,10 @@
 spark-rapids-shim-json-lines ***/
 package com.nvidia.spark.rapids.shims
 
-object ReaderUtils(
-  def getHadoopConfForReaderThread(filePath: String, conf: Configuration): Configuration = conf
+import org.apache.hadoop.conf.Configuration
+
+object ReaderUtils {
+  def getHadoopConfForReaderThread(filePath: String, conf: Configuration): Configuration = {
+    conf
+  }
 }

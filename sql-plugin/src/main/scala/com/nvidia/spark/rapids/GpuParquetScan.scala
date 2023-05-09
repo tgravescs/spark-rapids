@@ -38,7 +38,7 @@ import com.nvidia.spark.rapids.ParquetPartitionReader.CopyRange
 import com.nvidia.spark.rapids.RapidsConf.ParquetFooterReaderType
 import com.nvidia.spark.rapids.RapidsPluginImplicits._
 import com.nvidia.spark.rapids.jni.ParquetFooter
-import com.nvidia.spark.rapids.shims.{GpuParquetCrypto, GpuTypeShims, ParquetLegacyNanoAsLongShims, ParquetSchemaClipShims, ParquetStringPredShims, ShimFilePartitionReaderFactory, SparkShimImpl}
+import com.nvidia.spark.rapids.shims.{GpuParquetCrypto, GpuTypeShims, ParquetLegacyNanoAsLongShims, ParquetSchemaClipShims, ParquetStringPredShims, ReaderUtils, ShimFilePartitionReaderFactory, SparkShimImpl}
 import org.apache.commons.io.IOUtils
 import org.apache.commons.io.output.{CountingOutputStream, NullOutputStream}
 import org.apache.hadoop.conf.Configuration
@@ -991,19 +991,7 @@ case class GpuParquetMultiFilePartitionReaderFactory(
   override def buildBaseColumnarReaderForCloud(
       files: Array[PartitionedFile],
       conf: Configuration): PartitionReader[ColumnarBatch] = {
-    val confFs = if (files.nonEmpty) {
-      //val fs = new Path(files.head.filePath).getFileSystem(conf)
-      //fs.getConf
-      com.databricks.unity.ClusterDefaultSAM.createDelegateHadoopConf(new Path(files.head.filePath), conf)
-    } else {
-      conf
-    }
     val filterFunc = (file: PartitionedFile, hadoopConf: Configuration) => {
-      //val fs = new Path(file.filePath).getFileSystem(conf)
-      //val confFs = fs.getConf
-      // val allConfs = confFs.iterator().asScala
-      //logWarning("hadoop confs are : " + allConfs.mkString(","))
-      //logWarning(s"hadoop filesystem conf after get is $confFs")
       filterHandler.filterBlocks(footerReadType, file, hadoopConf,
         filters, readDataSchema)
     }
@@ -1094,8 +1082,10 @@ case class GpuParquetMultiFilePartitionReaderFactory(
       val tc = TaskContext.get()
       val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
       files.grouped(numFilesFilterParallel).map { fileGroup =>
-        threadPool.submit(
-          new CoalescingFilterRunner(footerReadType, tc, fileGroup, conf, filters, readDataSchema))
+        val filePathToRead = fileGroup.head.filePath
+        val fileBasedHadoopConf = ReaderUtils.getHadoopConfForReaderThread(filePathToRead, conf)
+        threadPool.submit(new CoalescingFilterRunner(footerReadType, tc, fileGroup,
+          fileBasedHadoopConf, filters, readDataSchema))
       }.toArray.flatMap(_.get())
     } else {
       files.map { file =>
