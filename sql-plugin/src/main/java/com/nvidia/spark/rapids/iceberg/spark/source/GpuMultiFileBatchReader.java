@@ -345,7 +345,7 @@ class GpuMultiFileBatchReader extends BaseDataReader<ColumnarBatch> {
       );
     }
 
-    private ParquetFileInfoWithBlockMeta filterParquetBlocks(PartitionedFile file) {
+    private ParquetFileInfoWithBlockMeta filterParquetBlocks(PartitionedFile file, Configuration hadoopConf) {
       FileScanTask fst = files.get(file.filePath());
       FilteredParquetFileInfo filteredInfo = filterParquetBlocks(fst);
       constsSchemaMap.put(file.filePath().toString(),
