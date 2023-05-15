@@ -623,8 +623,8 @@ abstract class MultiFileCloudPartitionReaderBase(
    * threshold size and append to the results ArrayBuffer.
    */
   private def readReadyFiles(
-      initSize: Long = 0,
-      initNumRows: Long = 0,
+      initSize: Long,
+      initNumRows: Long,
       results: ArrayBuffer[HostMemoryBuffersWithMetaDataBase]): Unit = {
     var takeMore = true
     var currSize = initSize
@@ -1189,24 +1189,6 @@ abstract class MultiFileCoalescingPartitionReaderBase(
         withResource(withParts) { _ =>
           finalizeOutputBatch(withParts, currentChunkMeta.extraInfo)
         }
-      }
-    }
-  }
-
-  private def readToTable(
-      currentChunkedBlocks: Seq[(Path, DataBlockBase)],
-      clippedSchema: SchemaBase,
-      readDataSchema: StructType,
-      extraInfo: ExtraInfo): GpuDataProducer[Table] = {
-    if (currentChunkedBlocks.isEmpty) {
-      return EmptyTableReader
-    }
-    val (dataBuffer, dataSize) = readPartFiles(currentChunkedBlocks, clippedSchema)
-    closeOnExcept(dataBuffer) { _ =>
-      if (dataSize == 0) {
-        EmptyTableReader
-      } else {
-        readBufferToTablesAndClose(dataBuffer, dataSize, clippedSchema, readDataSchema, extraInfo)
       }
     }
   }
