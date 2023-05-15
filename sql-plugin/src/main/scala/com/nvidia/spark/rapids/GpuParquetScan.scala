@@ -1531,7 +1531,7 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       blocks: Seq[BlockMetaData],
       realStartOffset: Long,
       metrics: Map[String, GpuMetric],
-      hadoopConf: Configuration): Seq[BlockMetaData] = {
+      threadHadoopConf: Configuration): Seq[BlockMetaData] = {
     val startPos = out.getPos
     val filePathString: String = filePath.toString
     val remoteItems = new ArrayBuffer[CopyRange](blocks.length)
@@ -1542,7 +1542,7 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
           val columnSize = column.getTotalSize
           val outputOffset = totalBytesToCopy + startPos
           val channel = FileCache.get.getDataRangeChannel(filePathString,
-            column.getStartingPos, columnSize, hadoopConf)
+            column.getStartingPos, columnSize, threadHadoopConf)
           if (channel.isDefined) {
             localItems += LocalCopy(channel.get, columnSize, outputOffset)
           } else {
@@ -1557,7 +1557,7 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       }
     }
     copyRemoteBlocksData(remoteItems.asInstanceOf[Seq[CopyRange]], filePath,
-      filePathString, out, metrics)
+      filePathString, out, metrics, threadHadoopConf)
     // fixup output pos after blocks were copied possibly out of order
     out.seek(startPos + totalBytesToCopy)
     computeBlockMetaData(blocks, realStartOffset)
@@ -1568,14 +1568,15 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       filePath: Path,
       filePathString: String,
       out: HostMemoryOutputStream,
-      metrics: Map[String, GpuMetric]): Long = {
+      metrics: Map[String, GpuMetric],
+      threadHadoopConf: Configuration): Long = {
     var totalBytesCopied = 0L
     if (remoteCopies.isEmpty) {
       return totalBytesCopied
     }
     val coalescedRanges = coalesceReads(remoteCopies)
     val copyBuffer: Array[Byte] = new Array[Byte](copyBufferSize)
-    withResource(filePath.getFileSystem(conf).open(filePath)) { in =>
+    withResource(filePath.getFileSystem(threadHadoopConf).open(filePath)) { in =>
       coalescedRanges.foreach { blockCopy =>
         totalBytesCopied += copyDataRange(blockCopy, in, out, copyBuffer)
       }
@@ -1643,13 +1644,14 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       blocks: Seq[BlockMetaData],
       clippedSchema: MessageType,
       filePath: Path,
-      hadoopConf: Configuration): (HostMemoryBuffer, Long, Seq[BlockMetaData]) = {
+      threadHadoopConf: Configuration): (HostMemoryBuffer, Long, Seq[BlockMetaData]) = {
     withResource(new NvtxRange("Parquet buffer file split", NvtxColor.YELLOW)) { _ =>
       val estTotalSize = calculateParquetOutputSize(blocks, clippedSchema, false)
       closeOnExcept(HostMemoryBuffer.allocate(estTotalSize)) { hmb =>
         val out = new HostMemoryOutputStream(hmb)
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
-        val outputBlocks = copyBlocksData(filePath, out, blocks, out.getPos, metrics, hadoopConf)
+        val outputBlocks = copyBlocksData(filePath, out, blocks, out.getPos, metrics,
+          threadHadoopConf)
         val footerPos = out.getPos
         writeFooter(out, outputBlocks, clippedSchema)
         BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
@@ -1872,7 +1874,7 @@ class MultiFileParquetPartitionReader(
       outhmb: HostMemoryBuffer,
       blocks: ArrayBuffer[DataBlockBase],
       offset: Long,
-      hadoopConf: Configuration)
+      threadHadoopConf: Configuration)
     extends Callable[(Seq[DataBlockBase], Long)] {
 
     override def call(): (Seq[DataBlockBase], Long) = {
@@ -1881,7 +1883,7 @@ class MultiFileParquetPartitionReader(
         val startBytesRead = fileSystemBytesRead()
         val outputBlocks = withResource(outhmb) { _ =>
           withResource(new HostMemoryOutputStream(outhmb)) { out =>
-            copyBlocksData(file, out, blocks, offset, metrics, hadoopConf)
+            copyBlocksData(file, out, blocks, offset, metrics, threadHadoopConf)
           }
         }
         val bytesRead = fileSystemBytesRead() - startBytesRead
@@ -2321,7 +2323,7 @@ class MultiFileCloudParquetPartitionReader(
       origPartitionedFile: Option[PartitionedFile],
       filterFunc: (PartitionedFile, Configuration) => ParquetFileInfoWithBlockMeta,
       taskContext: TaskContext,
-      hadoopConf: Configuration) extends Callable[HostMemoryBuffersWithMetaDataBase] with Logging {
+      threadHadoopConf: Configuration) extends Callable[HostMemoryBuffersWithMetaDataBase] with Logging {
 
     private var blockChunkIter: BufferedIterator[BlockMetaData] = null
 
@@ -2393,7 +2395,7 @@ class MultiFileCloudParquetPartitionReader(
                 val blocksToRead = populateCurrentBlockChunk(blockChunkIter,
                   maxReadBatchSizeRows, maxReadBatchSizeBytes, fileBlockMeta.readSchema)
                 val (dataBuffer, dataSize, blockMeta) =
-                  readPartFile(blocksToRead, fileBlockMeta.schema, filePath, hadoopConf)
+                  readPartFile(blocksToRead, fileBlockMeta.schema, filePath, threadHadoopConf)
                 val numRows = blocksToRead.map(_.getRowCount).sum.toInt
                 hostBuffers += SingleHMBAndMeta(dataBuffer, dataSize,
                   numRows, blockMeta, fileBlockMeta.schema)
