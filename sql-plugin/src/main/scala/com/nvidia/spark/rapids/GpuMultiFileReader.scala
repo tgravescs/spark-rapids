@@ -494,33 +494,6 @@ abstract class MultiFileCloudPartitionReaderBase(
     }
   }
 
-  private def getThreadLocals(): Unit = {
-    logWarning("getting thread locals")
-    val thread = Thread.currentThread
-
-    val threadLocalsField = classOf[Thread].getDeclaredField("threadLocals")
-    threadLocalsField.setAccessible(true)
-
-    val threadLocalMapKlazz = Class.forName("java.lang.ThreadLocal$ThreadLocalMap")
-    val tableField = threadLocalMapKlazz.getDeclaredField("table")
-    tableField.setAccessible(true)
-    val table = tableField.get(threadLocalsField.get(thread)).asInstanceOf[Array[Object]]
-    val threadLocalCount = table.length
-    for (i <- 0 until threadLocalCount) {
-      val entry = table(i)
-      if (entry != null) {
-        val valueField = entry.getClass.getDeclaredField("value")
-        valueField.setAccessible(true)
-        val value = valueField.get(entry)
-        if (value != null) {
-          logWarning(s"thread entry class ${entry.getClass} local value: ${value.getClass.getName}")
-        } else {
-          logWarning(s"thread entry class ${entry.getClass} local value: null")
-        }
-      }
-    }
-  }
-
   private def initAndStartReaders(): Unit = {
     // limit the number we submit at once according to the config if set
     val limit = math.min(maxNumFileProcessed, files.length)
@@ -552,7 +525,6 @@ abstract class MultiFileCloudPartitionReaderBase(
           fcs.submit(getBatchRunner(tc, file.toRead, file.original, fileBasedHadoopConf, filters))
         tasks.add(futureRunner)
       } else {
-        getThreadLocals()
         // Add these in the order as we got them so that we can make sure
         // we process them in the same order as CPU would.
         val threadPool = MultiFileReaderThreadPool.getOrCreateThreadPool(numThreads)
