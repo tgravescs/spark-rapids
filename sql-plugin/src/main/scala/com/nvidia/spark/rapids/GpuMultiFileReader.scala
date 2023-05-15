@@ -516,7 +516,7 @@ abstract class MultiFileCloudPartitionReaderBase(
     // them all to be large
     for (i <- 0 until limit) {
       val file = files(i)
-      // if Alluxio, use the original blobstore path
+      // if Alluxio, use the original blobstore path if its present
       val filePathToRead = file.original.getOrElse(file.toRead).filePath
       val fileBasedHadoopConf = ReaderUtils.getHadoopConfForReaderThread(filePathToRead, conf)
       logDebug(s"MultiFile reader using file ${file.toRead}, orig file is ${file.original}")
