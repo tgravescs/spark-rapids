@@ -2363,7 +2363,7 @@ class MultiFileCloudParquetPartitionReader(
       var bufferStartTime = 0L
       val result = try {
         val filterStartTime = System.nanoTime()
-        val fileBlockMeta = filterFunc(file, hadoopConf)
+        val fileBlockMeta = filterFunc(file, threadHadoopConf)
         filterTime = System.nanoTime() - filterStartTime
 
         bufferStartTime = System.nanoTime()
