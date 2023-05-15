@@ -1522,6 +1522,7 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
    * @param out the output stream to receive the data
    * @param blocks block metadata from the original file that will appear in the computed file
    * @param realStartOffset starting file offset of the first block
+   * @param hadoopConf the Hadoop Configuration setup for this file specifically
    * @return updated block metadata corresponding to the output
    */
   protected def copyBlocksData(
@@ -1529,7 +1530,8 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       out: HostMemoryOutputStream,
       blocks: Seq[BlockMetaData],
       realStartOffset: Long,
-      metrics: Map[String, GpuMetric]): Seq[BlockMetaData] = {
+      metrics: Map[String, GpuMetric],
+      hadoopConf: Configuration): Seq[BlockMetaData] = {
     val startPos = out.getPos
     val filePathString: String = filePath.toString
     val remoteItems = new ArrayBuffer[CopyRange](blocks.length)
@@ -1540,7 +1542,7 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
           val columnSize = column.getTotalSize
           val outputOffset = totalBytesToCopy + startPos
           val channel = FileCache.get.getDataRangeChannel(filePathString,
-            column.getStartingPos, columnSize, conf)
+            column.getStartingPos, columnSize, hadoopConf)
           if (channel.isDefined) {
             localItems += LocalCopy(channel.get, columnSize, outputOffset)
           } else {
@@ -1647,7 +1649,7 @@ trait ParquetPartitionReaderBase extends Logging with ScanWithMetrics
       closeOnExcept(HostMemoryBuffer.allocate(estTotalSize)) { hmb =>
         val out = new HostMemoryOutputStream(hmb)
         out.write(ParquetPartitionReader.PARQUET_MAGIC)
-        val outputBlocks = copyBlocksData(filePath, out, blocks, out.getPos, metrics)
+        val outputBlocks = copyBlocksData(filePath, out, blocks, out.getPos, metrics, hadoopConf)
         val footerPos = out.getPos
         writeFooter(out, outputBlocks, clippedSchema)
         BytesUtils.writeIntLittleEndian(out, (out.getPos - footerPos).toInt)
@@ -1879,7 +1881,7 @@ class MultiFileParquetPartitionReader(
         val startBytesRead = fileSystemBytesRead()
         val outputBlocks = withResource(outhmb) { _ =>
           withResource(new HostMemoryOutputStream(outhmb)) { out =>
-            copyBlocksData(file, out, blocks, offset, metrics)
+            copyBlocksData(file, out, blocks, offset, metrics, hadoopConf)
           }
         }
         val bytesRead = fileSystemBytesRead() - startBytesRead
