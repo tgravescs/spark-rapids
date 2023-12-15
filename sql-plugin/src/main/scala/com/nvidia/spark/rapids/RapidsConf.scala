@@ -1004,7 +1004,7 @@ val GPU_COREDUMP_PIPE_PATTERN = conf("spark.rapids.gpu.coreDump.pipePattern")
 
   /** List of schemes that are always considered cloud storage schemes */
   private lazy val DEFAULT_CLOUD_SCHEMES =
-    Seq("abfs", "abfss", "dbfs", "gs", "s3", "s3a", "s3n", "wasbs", "cosn")
+    Seq("abfs", "abfss", "dbfs", "gs", "s3", "s3a", "s3n", "wasbs", "cosn", "oci")
 
   val CLOUD_SCHEMES = conf("spark.rapids.cloudSchemes")
     .doc("Comma separated list of additional URI schemes that are to be considered cloud based " +
