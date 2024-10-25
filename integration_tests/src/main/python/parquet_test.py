@@ -358,6 +358,38 @@ def test_parquet_read_roundtrip_datetime_with_legacy_rebase(spark_tmp_path, parq
         lambda spark: spark.read.parquet(data_path),
         conf=read_confs)
 
+
+@pytest.mark.skipif(is_not_utc(), reason="LEGACY datetime rebase mode is only supported for UTC timezone")
+@pytest.mark.parametrize('parquet_gens', [parquet_nested_datetime_gen], ids=idfn)
+@pytest.mark.parametrize('ts_type', parquet_ts_write_options)
+@pytest.mark.parametrize('ts_rebase_write', [('CORRECTED', 'LEGACY'), ('LEGACY', 'CORRECTED')])
+@pytest.mark.parametrize('ts_rebase_read', [('CORRECTED', 'LEGACY'), ('LEGACY', 'CORRECTED')])
+@pytest.mark.parametrize('reader_confs', reader_opt_confs)
+@pytest.mark.parametrize('v1_enabled_list', ["", "parquet"])
+def test_parquet_read_roundtrip_datetime_with_legacy_rebase_mismatch_files(spark_tmp_path, parquet_gens, ts_type,
+                                                            ts_rebase_write, ts_rebase_read,
+                                                            reader_confs, v1_enabled_list):
+    gen_list = [('_c' + str(i), gen) for i, gen in enumerate(parquet_gens)]
+    data_path = spark_tmp_path + '/PARQUET_DATA'
+    data_path2 = spark_tmp_path + '/PARQUET_DATA2'
+    write_confs = {'spark.sql.legacy.parquet.datetimeRebaseModeInWrite': 'LEGACY',
+                   'spark.sql.legacy.parquet.int96RebaseModeInWrite': 'LEGACY'}
+    with_cpu_session(
+        lambda spark: gen_df(spark, gen_list).write.parquet(data_path),
+        conf=write_confs)
+    write_confs2 = {'spark.sql.legacy.parquet.datetimeRebaseModeInWrite': 'CORRECTED',
+                   'spark.sql.legacy.parquet.int96RebaseModeInWrite': 'CORRECTED'}
+    with_cpu_session(
+        lambda spark: gen_df(spark, gen_list).write.parquet(data_path2),
+        conf=write_confs2)
+
+    read_confs = copy_and_update(reader_confs, {'spark.sql.sources.useV1SourceList': v1_enabled_list,
+                                                'spark.sql.legacy.parquet.datetimeRebaseModeInRead': 'LEGACY',
+                                                'spark.sql.legacy.parquet.int96RebaseModeInRead': 'LEGACY'})
+    assert_gpu_and_cpu_are_equal_collect(
+        lambda spark: spark.read.parquet(data_path, datapath2),
+        conf=read_confs)
+
 # This is legacy format, which is totally different from datatime legacy rebase mode.
 @pytest.mark.parametrize('parquet_gens', [[byte_gen, short_gen, decimal_gen_32bit], decimal_gens,
                                           [ArrayGen(decimal_gen_32bit, max_length=10)],
